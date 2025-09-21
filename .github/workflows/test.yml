@@ -1,39 +1,61 @@
-name: test
+name: CI
 
 on:
   push:
-    branches:
-    - master
-    - develop
   pull_request:
+  workflow_dispatch:
 
 env:
   FOUNDRY_PROFILE: ci
 
 jobs:
-  test:
+  check:
     strategy:
       fail-fast: true
 
     name: Foundry project
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
         with:
           submodules: recursive
+      
+      - name: Install Vyper
+        run: pip install vyper==0.4.1
+      
+
+      - name: Install Mamushi
+        run: pip install mamushi==0.0.8
 
       - name: Install Foundry
         uses: foundry-rs/foundry-toolchain@v1
-        with:
-          version: nightly
+      
+      - name: 'Create env file'
+        run: |
+          touch .env
+          echo ETH_RPC_URL=${{ secrets.ETH_RPC_URL }} >> .env
+
+      - name: Show Forge version
+        run: |
+          forge --version
+
+      - name: Run Forge fmt
+        run: |
+          forge fmt --check
+        id: fmt
+      
+
+      # - name: Run Mamushi
+      #   run: |
+      #     mamushi --check --line-length 100
+      #   id: mamushi
 
       - name: Run Forge build
         run: |
-          forge --version
           forge build --sizes
         id: build
 
       - name: Run Forge tests
         run: |
-          forge test -vvv --fork-url ${{ secrets.ETH_RPC_URL }}
+          forge test -vvv
         id: test

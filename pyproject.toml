@@ -1,0 +1,15 @@
+[project]
+name = "flex"
+version = "0.1.0"
+description = "A fixed-rate lending market inspired by Liquity V2"
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = [
+    "vyper==0.4.1",
+    "mamushi==0.0.8"
+]
+
+[tool.mamushi]
+line-length = 100
+safe = false
+exclude = ["lib/"]
