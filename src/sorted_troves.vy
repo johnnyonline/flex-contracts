@@ -10,8 +10,6 @@
 
         The list optionally accepts insert position hints.
 
-        The annual interest rate is stored on the Trove struct in TroveManager, not directly on the Node. // @todo -- fix
-
         A node need only be re-inserted when the borrower adjusts their interest rate. Interest rate order is preserved
         under all other system operations.
 
@@ -28,8 +26,8 @@ from interfaces import IBorrower
 
 
 struct Node:
-    nextId: uint256
-    prevId: uint256
+    next_id: uint256
+    prev_id: uint256
     exists: bool
 
 
@@ -40,12 +38,9 @@ struct Node:
 
 BORROWER: public(immutable(IBorrower))
 
-# ID of head & tail of the list. Callers should stop iterating with `get_next()` / `get_prev()` when encountering this node ID
-ROOT_NODE_ID: constant(uint256) = 0
-
-UNINITIALIZED_ID: constant(uint256) = 0
-BAD_HINT: constant(uint256) = 0
-MAX_NODES: constant(uint256) = 1000
+_ROOT_NODE_ID: constant(uint256) = 0
+_BAD_HINT: constant(uint256) = 0
+_MAX_NODES: constant(uint256) = 1000
 
 
 # ============================================================================================
@@ -54,13 +49,13 @@ MAX_NODES: constant(uint256) = 1000
 
 
 # Current size of the list
-size: uint256
+_size: uint256
 
 # Doubly linked list storage mapping node IDs to Node structs.
-# Each Node tracks its `prevId`, `nextId`, and existence flag.
-# The special entry `nodes[ROOT_NODE_ID]` anchors both ends of the list,
+# Each Node tracks its `prev_id`, `next_id`, and existence flag.
+# The special entry `nodes[_ROOT_NODE_ID]` anchors both ends of the list,
 # simplifying inserts/removals at the head, tail, in an empty list, or for a single element
-nodes: HashMap[uint256, Node]
+_nodes: HashMap[uint256, Node]
 
 
 # ============================================================================================
@@ -75,9 +70,9 @@ def __init__(borrower: address):
     """
     BORROWER = IBorrower(borrower)
 
-    # Technically this is not needed as long as ROOT_NODE_ID is 0, but it doesn't hurt
-    self.nodes[ROOT_NODE_ID].nextId = ROOT_NODE_ID
-    self.nodes[ROOT_NODE_ID].prevId = ROOT_NODE_ID
+    # Technically this is not needed as long as _ROOT_NODE_ID is 0, but it doesn't hurt
+    self._nodes[_ROOT_NODE_ID].next_id = _ROOT_NODE_ID
+    self._nodes[_ROOT_NODE_ID].prev_id = _ROOT_NODE_ID
 
 
 # ============================================================================================
@@ -87,64 +82,64 @@ def __init__(borrower: address):
 
 @external
 @view
-def is_empty() -> bool:
+def empty() -> bool:
     """
     @notice Checks if the list is empty
     @return True if the list is empty. False otherwise
     """
-    return self.size == 0
+    return self._size == 0
 
 
 @external
 @view
-def get_size() -> uint256:
+def size() -> uint256:
     """
     @notice Returns the current size of the list
     @return Current size of the list
     """
-    return self.size
+    return self._size
 
 
 @external
 @view
-def get_first() -> uint256:
+def first() -> uint256:
     """
     @notice Returns the first node in the list (node with the largest annual interest rate)
     @return ID of the first node in the list
     """
-    return self.nodes[ROOT_NODE_ID].nextId
+    return self._nodes[_ROOT_NODE_ID].next_id
 
 
 @external
 @view
-def get_last() -> uint256:
+def last() -> uint256:
     """
     @notice Returns the last node in the list (node with the smallest annual interest rate)
     @return ID of the last node in the list
     """
-    return self.nodes[ROOT_NODE_ID].prevId
+    return self._nodes[_ROOT_NODE_ID].prev_id
 
 
 @external
 @view
-def get_next(id: uint256) -> uint256:
+def next(id: uint256) -> uint256:
     """
     @notice Returns the next node (with a smaller interest rate) in the list for a given node
     @param id Node's ID
     @return ID of the next node in the list
     """
-    return self.nodes[id].nextId
+    return self._nodes[id].next_id
 
 
 @external
 @view
-def get_prev(id: uint256) -> uint256:
+def prev(id: uint256) -> uint256:
     """
     @notice Returns the previous node (with a larger interest rate) in the list for a given node
     @param id Node's ID
     @return ID of the previous node in the list
     """
-    return self.nodes[id].prevId
+    return self._nodes[id].prev_id
 
 
 @external
@@ -180,7 +175,8 @@ def valid_insert_position(annual_interest_rate: uint256, prev_id: uint256, next_
 def find_insert_position(annual_interest_rate: uint256, prev_id: uint256, next_id: uint256) -> (uint256, uint256):
     """
     @notice Find the insert position for a new node with the given interest rate
-    @dev Uses the provided (`prev_id`, `next_id`) as hints, but will always return a correct position even if they are wrong
+    @dev Uses the provided (`prev_id`, `next_id`) as hints. If they are invalid,
+         the function searches until a valid position is found or the `_MAX_NODES` iteration limit is reached
     @param annual_interest_rate New node’s annual interest rate
     @param prev_id Suggested previous node for the insert position
     @param next_id Suggested next node for the insert position
@@ -205,12 +201,12 @@ def insert(id: uint256, annual_interest_rate: uint256, prev_id: uint256, next_id
     """
     assert msg.sender == BORROWER.address, "not borrower"
     assert not self._contains(id), "trove exists"
-    assert id != ROOT_NODE_ID, "invalid id"
+    assert id != _ROOT_NODE_ID, "invalid id"
 
     self._insert_slice(id, id, annual_interest_rate, prev_id, next_id)
 
-    self.nodes[id].exists = True
-    self.size += 1
+    self._nodes[id].exists = True
+    self._size += 1
 
 
 @external
@@ -224,8 +220,8 @@ def remove(id: uint256):
 
     self._remove_slice(id, id)
 
-    self.nodes[id].exists = False  # @todo -- notice we dont remove the `nextId` and `prevId` properties here -- is this a problem?
-    self.size -= 1
+    self._nodes[id].exists = False
+    self._size -= 1
 
 
 @external
@@ -256,7 +252,7 @@ def _contains(id: uint256) -> bool:
     @param id Node's ID
     @return True if the node exists in the list. False otherwise
     """
-    return self.nodes[id].exists
+    return self._nodes[id].exists
 
 
 @internal
@@ -274,13 +270,13 @@ def _valid_insert_position(annual_interest_rate: uint256, prev_id: uint256, next
     @return True if (`prev_id`, `next_id`) is a valid insert position. False otherwise
     """
     # Ensure the nodes are adjacent
-    is_adjacent: bool = self.nodes[prev_id].nextId == next_id and self.nodes[next_id].prevId == prev_id
+    is_adjacent: bool = self._nodes[prev_id].next_id == next_id and self._nodes[next_id].prev_id == prev_id
 
     # Previous node must be ROOT or have a rate >= new rate
-    prev_ok: bool = prev_id == ROOT_NODE_ID or self._trove_annual_interest_rate(prev_id) >= annual_interest_rate
+    prev_ok: bool = prev_id == _ROOT_NODE_ID or self._trove_annual_interest_rate(prev_id) >= annual_interest_rate
 
     # Next node must be ROOT or have a rate < new rate
-    next_ok: bool = next_id == ROOT_NODE_ID or annual_interest_rate > self._trove_annual_interest_rate(next_id)
+    next_ok: bool = next_id == _ROOT_NODE_ID or annual_interest_rate > self._trove_annual_interest_rate(next_id)
 
     return is_adjacent and prev_ok and next_ok
 
@@ -290,35 +286,36 @@ def _valid_insert_position(annual_interest_rate: uint256, prev_id: uint256, next
 def _find_insert_position(annual_interest_rate: uint256, prev_id: uint256, next_id: uint256) -> (uint256, uint256):
     """
     @notice Find the insert position for a new node with the given interest rate
-    @dev Uses the provided (`prev_id`, `next_id`) as hints, but will always return a correct position even if they are wrong
+    @dev Uses the provided (`prev_id`, `next_id`) as hints. If they are invalid,
+         the function searches until a valid position is found or the `_MAX_NODES` iteration limit is reached
     @param annual_interest_rate New node’s annual interest rate
     @param prev_id Suggested previous node for the insert position
     @param next_id Suggested next node for the insert position
     @return (prev_id, next_id) A valid insert position
     """
-    if prev_id == ROOT_NODE_ID:
+    if prev_id == _ROOT_NODE_ID:
         # Position is likely near the head - descend from ROOT
-        return self._descend_list(annual_interest_rate, ROOT_NODE_ID)
+        return self._descend_list(annual_interest_rate, _ROOT_NODE_ID)
     else:
         if not self._contains(prev_id) or self._trove_annual_interest_rate(prev_id) < annual_interest_rate:
             # `prev_id` no longer valid (removed or has lower rate)
-            prev_id = BAD_HINT
+            prev_id = _BAD_HINT
 
-    if next_id == ROOT_NODE_ID:
+    if next_id == _ROOT_NODE_ID:
         # Position is likely near the tail - ascend from ROOT
-        return self._ascend_list(annual_interest_rate, ROOT_NODE_ID)
+        return self._ascend_list(annual_interest_rate, _ROOT_NODE_ID)
     else:
         if not self._contains(next_id) or annual_interest_rate <= self._trove_annual_interest_rate(next_id):
             # `next_id` no longer valid (removed or has higher rate)
-            next_id = BAD_HINT
+            next_id = _BAD_HINT
 
-    if prev_id == BAD_HINT and next_id == BAD_HINT:
+    if prev_id == _BAD_HINT and next_id == _BAD_HINT:
         # Both hints invalid - fall back to descending from head
-        return self._descend_list(annual_interest_rate, ROOT_NODE_ID)
-    elif prev_id == BAD_HINT:
+        return self._descend_list(annual_interest_rate, _ROOT_NODE_ID)
+    elif prev_id == _BAD_HINT:
         # Only `prev_id` invalid - ascend from `next_id`
         return self._ascend_list(annual_interest_rate, next_id)
-    elif next_id == BAD_HINT:
+    elif next_id == _BAD_HINT:
         # Only `next_id` invalid - descend from `prev_id`
         return self._descend_list(annual_interest_rate, prev_id)
     else:
@@ -331,16 +328,17 @@ def _find_insert_position(annual_interest_rate: uint256, prev_id: uint256, next_
 def _descend_list(annual_interest_rate: uint256, start_id: uint256) -> (uint256, uint256):
     """
     @notice Find a valid insert position by descending the list (higher --> lower rates)
+    @dev Iterates until a valid position is found or the `_MAX_NODES` limit is reached
     @param annual_interest_rate New node’s interest rate
     @param start_id Node ID to start the descent from
     @return (prev_id, next_id) valid insert position
     """
     prev_id: uint256 = start_id
-    next_id: uint256 = self.nodes[start_id].nextId
+    next_id: uint256 = self._nodes[start_id].next_id
 
     found: bool = False
 
-    for i: uint256 in range(MAX_NODES):
+    for i: uint256 in range(_MAX_NODES):
         found, prev_id, next_id = self._descend_one(annual_interest_rate, prev_id, next_id)
         if found:
             break
@@ -358,13 +356,13 @@ def _descend_one(annual_interest_rate: uint256, prev_id: uint256, next_id: uint2
     @param next_id Current next node ID
     @return (found, prev_id, next_id) `found` indicates if a valid insert position has been found
     """
-    if next_id == ROOT_NODE_ID or annual_interest_rate > self._trove_annual_interest_rate(next_id):
+    if next_id == _ROOT_NODE_ID or annual_interest_rate > self._trove_annual_interest_rate(next_id):
         # Found a valid position
         return True, prev_id, next_id
     else:
         # Move one step forward
         prev_id = next_id
-        next_id = self.nodes[next_id].nextId
+        next_id = self._nodes[next_id].next_id
         return False, prev_id, next_id
 
 
@@ -373,16 +371,17 @@ def _descend_one(annual_interest_rate: uint256, prev_id: uint256, next_id: uint2
 def _ascend_list(annual_interest_rate: uint256, start_id: uint256) -> (uint256, uint256):
     """
     @notice Find a valid insert position by ascending the list (lower --> higher rates)
+    @dev Iterates until a valid position is found or the `_MAX_NODES` limit is reached
     @param annual_interest_rate New node’s interest rate
     @param start_id Node ID to start the ascent from
     @return (prev_id, next_id) valid insert position
     """
-    prev_id: uint256 = self.nodes[start_id].prevId
+    prev_id: uint256 = self._nodes[start_id].prev_id
     next_id: uint256 = start_id
 
     found: bool = False
 
-    for i: uint256 in range(MAX_NODES):
+    for i: uint256 in range(_MAX_NODES):
         found, prev_id, next_id = self._ascend_one(annual_interest_rate, prev_id, next_id)
         if found:
             break
@@ -400,13 +399,13 @@ def _ascend_one(annual_interest_rate: uint256, prev_id: uint256, next_id: uint25
     @param next_id Current next node ID
     @return (found, prev_id, next_id) `found` indicates if a valid insert position has been found
     """
-    if prev_id == ROOT_NODE_ID or self._trove_annual_interest_rate(prev_id) >= annual_interest_rate:
+    if prev_id == _ROOT_NODE_ID or self._trove_annual_interest_rate(prev_id) >= annual_interest_rate:
         # Found a valid position
         return True, prev_id, next_id
     else:
         # Move one step backward
         next_id = prev_id
-        prev_id = self.nodes[prev_id].prevId
+        prev_id = self._nodes[prev_id].prev_id
         return False, prev_id, next_id
 
 
@@ -415,19 +414,20 @@ def _ascend_one(annual_interest_rate: uint256, prev_id: uint256, next_id: uint25
 def _descend_and_ascend_list(annual_interest_rate: uint256, descent_start_id: uint256, ascent_start_id: uint256) -> (uint256, uint256):
     """
     @notice Search for a valid insert position by alternating descent and ascent from two hints
+    @dev Iterates until a valid position is found or the `_MAX_NODES` limit is reached
     @param annual_interest_rate New node’s annual interest rate
     @param descent_start_id Node ID to start the descent from
     @param ascent_start_id Node ID to start the ascent from
     @return (prev_id, next_id) valid insert position
     """
     descent_prev: uint256 = descent_start_id
-    descent_next: uint256 = self.nodes[descent_start_id].nextId
-    ascent_prev: uint256 = self.nodes[ascent_start_id].prevId
+    descent_next: uint256 = self._nodes[descent_start_id].next_id
+    ascent_prev: uint256 = self._nodes[ascent_start_id].prev_id
     ascent_next: uint256 = ascent_start_id
 
     found: bool = False
 
-    for i: uint256 in range(MAX_NODES):
+    for i: uint256 in range(_MAX_NODES):
         found, descent_prev, descent_next = self._descend_one(annual_interest_rate, descent_prev, descent_next)
         if found:
             return descent_prev, descent_next
@@ -482,8 +482,8 @@ def _remove_slice(slice_head: uint256, slice_tail: uint256):
     @param slice_head First node ID in the slice
     @param slice_tail Last node ID in the slice
     """
-    self.nodes[self.nodes[slice_head].prevId].nextId = self.nodes[slice_tail].nextId
-    self.nodes[self.nodes[slice_tail].nextId].prevId = self.nodes[slice_head].prevId
+    self._nodes[self._nodes[slice_head].prev_id].next_id = self._nodes[slice_tail].next_id
+    self._nodes[self._nodes[slice_tail].next_id].prev_id = self._nodes[slice_head].prev_id
 
 
 @internal
@@ -518,7 +518,7 @@ def _insert_slice_into_verified_position(slice_head: uint256, slice_tail: uint25
     @param prev_id ID of previous node for the insert position
     @param next_id ID of next node for the insert position
     """
-    self.nodes[prev_id].nextId = slice_head
-    self.nodes[slice_head].prevId = prev_id
-    self.nodes[slice_tail].nextId = next_id
-    self.nodes[next_id].prevId = slice_tail
+    self._nodes[prev_id].next_id = slice_head
+    self._nodes[slice_head].prev_id = prev_id
+    self._nodes[slice_tail].next_id = next_id
+    self._nodes[next_id].prev_id = slice_tail
