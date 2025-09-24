@@ -1,17 +1,17 @@
 # @version 0.4.1
 
 """
-@title WETH --> crvUSD 
+@title tBTC --> crvUSD 
 @license MIT
 @author Flex Protocol
-@notice Swaps WETH for crvUSD
+@notice Swaps tBTC for crvUSD
 """
 
 from ethereum.ercs import IERC20
 from ethereum.ercs import IERC4626
 
 from interfaces import IExchange
-from interfaces import ICurveTricrypto as ICurvePool
+from interfaces import ICurveTwocryptoPool as ICurvePool
 
 
 # ============================================================================================
@@ -29,12 +29,12 @@ implements: IExchange
 
 # Token addresses
 _CRVUSD: constant(IERC20) = IERC20(0xf939E0A03FB07F59A73314E73794Be0E57ac1b4E)
-_WETH: constant(IERC20) = IERC20(0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2)
+_TBTC: constant(IERC20) = IERC20(0x18084fbA666a33d37592fA2633fD49a74DD93a88)
 
 # Curve pool
-_TRICRV_WETH_INDEX: constant(uint256) = 1
-_TRICRV_CRVUSD_INDEX: constant(uint256) = 0
-_TRICRV: constant(ICurvePool) = ICurvePool(0x4eBdF703948ddCEA3B11f675B4D1Fba9d2414A14)  # crvUSD/WETH/CRV
+_CURVE_POOL_TBTC_INDEX: constant(uint256) = 1
+_CURVE_POOL_CRVUSD_INDEX: constant(uint256) = 0
+_CURVE_POOL: constant(ICurvePool) = ICurvePool(0xf1F435B05D255a5dBdE37333C0f61DA6F69c6127)  # YB tBTC
 
 
 # ============================================================================================
@@ -47,8 +47,10 @@ def __init__():
     """
     @notice Initialize the contract
     """
-    # @todo -- check indexes
-    extcall _WETH.approve(_TRICRV.address, max_value(uint256), default_return_value=True)
+    assert staticcall _CURVE_POOL.coins(_CURVE_POOL_TBTC_INDEX) == _TBTC.address, "!COLLATERAL_TOKEN"
+    assert staticcall _CURVE_POOL.coins(_CURVE_POOL_CRVUSD_INDEX) == _CRVUSD.address, "!BORROW_TOKEN"
+
+    extcall _TBTC.approve(_CURVE_POOL.address, max_value(uint256), default_return_value=True)
 
 
 # ============================================================================================
@@ -73,7 +75,7 @@ def COLLATERAL_TOKEN() -> address:
     @notice Returns the address of the collateral token
     @return Address of the collateral token
     """
-    return _WETH.address
+    return _TBTC.address
 
 
 @external
@@ -84,7 +86,7 @@ def price() -> uint256:
     @dev Price is in 1e18 format
     @return Price of the collateral token in terms of borrow token
     """
-    return 0  # @todo
+    return staticcall _CURVE_POOL.price_oracle()
 
 
 # ============================================================================================
@@ -100,15 +102,14 @@ def swap(amount: uint256, receiver: address = msg.sender) -> uint256:
     @param amount Amount of collateral tokens to swap
     @return Amount of borrow tokens received
     """
-    extcall _WETH.transferFrom(msg.sender, self, amount, default_return_value=True)
+    extcall _TBTC.transferFrom(msg.sender, self, amount, default_return_value=True)
 
-    # WETH --> crvUSD
-    amount_out: uint256 = extcall _TRICRV.exchange(
-        _TRICRV_WETH_INDEX,
-        _TRICRV_CRVUSD_INDEX,
+    # tBTC --> crvUSD
+    amount_out: uint256 = extcall _CURVE_POOL.exchange(
+        _CURVE_POOL_TBTC_INDEX,
+        _CURVE_POOL_CRVUSD_INDEX,
         amount,
         0,  # min_dy
-        False,  # use_eth
         receiver  # receiver
     )
 

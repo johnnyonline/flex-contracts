@@ -147,14 +147,17 @@ def open_trove(
     # Make sure the user is ok with the upfront fee
     assert upfront_fee <= max_upfront_fee, "!max_upfront_fee"
 
-    # Increase the debt amount by the upfront fee
-    debt_amount += upfront_fee
+    # Record the debt with the upfront fee
+    debt_amount_with_fee: uint256 = debt_amount + upfront_fee
 
     # Make sure enough debt is being borrowed
-    assert debt_amount >= MIN_DEBT, "debt too low"
+    assert debt_amount_with_fee >= MIN_DEBT, "debt too low"
+
+    # Get collateral price
+    collateral_price: uint256 = staticcall EXCHANGE.price()
 
     # Calculate the collateral ratio
-    trove_collateral_ratio: uint256 = self._collateral_ratio(collateral_amount, debt_amount, self._collateral_price())
+    trove_collateral_ratio: uint256 = self._collateral_ratio(collateral_amount, debt_amount_with_fee, collateral_price)
 
     # Make sure the collateral ratio is above the minimum collateral ratio
     assert trove_collateral_ratio >= MINIMUM_COLLATERAL_RATIO, "!MCR"
@@ -162,7 +165,7 @@ def open_trove(
     # Store the trove information
     self.troves[trove_id] = Trove(
         status=Status.active,
-        debt=debt_amount,
+        debt=debt_amount_with_fee,
         collateral=collateral_amount,
         annual_interest_rate=annual_interest_rate,
         last_debt_update_time=convert(block.timestamp, uint64),
@@ -171,10 +174,10 @@ def open_trove(
 
     # Update pool accounting
     extcall POOL.mint_agg_interest_and_account_for_trove_change(
-        debt_amount, # debt_increase
+        debt_amount_with_fee, # debt_increase
         0, # debt_decrease
         0, # old_weighted_recorded_debt
-        debt_amount * annual_interest_rate, # new_weighted_recorded_debt
+        debt_amount_with_fee * annual_interest_rate, # new_weighted_recorded_debt
     )
 
     # Add the trove to the sorted troves list
@@ -236,7 +239,7 @@ def _redeem(amount: uint256, receiver: address = POOL.address):
     assert amount <= total_debt, "total_debt"
 
     # Get collateral price
-    collateral_price: uint256 = self._collateral_price()
+    collateral_price: uint256 = staticcall EXCHANGE.price()
 
     # Get the trove with the smallest annual interest rate
     trove_to_redeem: uint256 = staticcall SORTED_TROVES.last()
@@ -326,7 +329,8 @@ def _redeem(amount: uint256, receiver: address = POOL.address):
 # ============================================================================================
 
 
-# @todo -- what about borrow token price?
+@internal
+@pure
 def _collateral_ratio(collateral: uint256, debt: uint256, collateral_price: uint256) -> uint256:
     """
     """
@@ -337,6 +341,8 @@ def _collateral_ratio(collateral: uint256, debt: uint256, collateral_price: uint
         return max_value(uint256)
 
 
+@internal
+@pure
 def _calculate_interest(weighted_debt: uint256, period: uint256) -> uint256:
     return weighted_debt * period // _ONE_YEAR // _WAD
 
@@ -344,11 +350,6 @@ def _calculate_interest(weighted_debt: uint256, period: uint256) -> uint256:
 # ============================================================================================
 # Internal view functions
 # ============================================================================================
-
-
-def _collateral_price() -> uint256:
-    return 0
-    # return staticcall TRICRV.price_oracle(0)  # WETH price in crvUSD
 
 
 # ============================================================================================

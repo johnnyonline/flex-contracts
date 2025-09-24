@@ -14,5 +14,11 @@ def COLLATERAL_TOKEN() -> address:
 
 
 @external
+@view
+def price() -> uint256:
+    ...
+
+
+@external
 def swap(amount: uint256, receiver: address = msg.sender) -> uint256:
     ...

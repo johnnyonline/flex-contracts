@@ -8,6 +8,12 @@ def price_oracle(k: uint256) -> uint256:
 
 
 @external
+@view
+def coins(i: uint256) -> address:
+    ...
+
+
+@external
 def exchange(
     i: uint256,
     j: uint256,

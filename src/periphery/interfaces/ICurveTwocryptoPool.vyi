@@ -1,0 +1,24 @@
+# @version 0.4.1
+
+
+@external
+@view
+def price_oracle() -> uint256:
+    ...
+
+
+@external
+@view
+def coins(i: uint256) -> address:
+    ...
+
+
+@external
+def exchange(
+    i: uint256,
+    j: uint256,
+    dx: uint256,
+    min_dy: uint256,
+    receiver: address = msg.sender
+) -> uint256:
+    ...
