@@ -1,0 +1,19 @@
+# @version 0.4.1
+
+
+@external
+@view
+def price_oracle(k: uint256) -> uint256:
+    ...
+
+
+@external
+def exchange(
+    i: uint256,
+    j: uint256,
+    dx: uint256,
+    min_dy: uint256,
+    use_eth: bool,
+    receiver: address
+) -> uint256:
+    ...

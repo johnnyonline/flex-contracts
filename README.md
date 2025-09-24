@@ -1,6 +1,6 @@
 # Flex
 
-A fixed-rate lending protocol inspired by Liquity V2 — borrowers set their own rates, and liquidity is managed through collateral redemptions: lenders or new borrowers can redeem existing borrowers’ collateral (paying slippage and fees), starting with those at the lowest rates.
+A fixed-rate lending protocol inspired by Liquity V2 - borrowers set their own rates, and liquidity is managed through collateral redemptions: lenders or new borrowers can redeem existing borrowers’ collateral (paying slippage and fees), starting with those at the lowest rates.
 
 ## Installation
 

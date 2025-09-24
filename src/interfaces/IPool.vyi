@@ -6,6 +6,12 @@
 def approx_avg_interest_rate() -> uint256:
     ...
 
+
+@external
+@view
+def balance_of_collateral() -> uint256:
+    ...
+
 @external
 def mint_agg_interest_and_account_for_trove_change(debt_increase: uint256, debt_decrease: uint256, old_weighted_recorded_debt: uint256, new_weighted_recorded_debt: uint256):
     ...
@@ -13,4 +19,9 @@ def mint_agg_interest_and_account_for_trove_change(debt_increase: uint256, debt_
 
 @external
 def account_for_received_collateral(amount: uint256):
+    ...
+
+
+@external
+def mint_agg_interest() -> uint256:
     ...

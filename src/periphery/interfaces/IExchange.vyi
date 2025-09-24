@@ -1,0 +1,18 @@
+# @version 0.4.1
+
+
+@external
+@view
+def BORROW_TOKEN() -> address:
+    ...
+
+
+@external
+@view
+def COLLATERAL_TOKEN() -> address:
+    ...
+
+
+@external
+def swap(amount: uint256, receiver: address = msg.sender) -> uint256:
+    ...

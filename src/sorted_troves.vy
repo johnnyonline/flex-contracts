@@ -18,7 +18,7 @@
 """
 
 from interfaces import IBorrower
-
+# @todo -- remove the whole `slice` thing
 
 # ============================================================================================
 # Structs
