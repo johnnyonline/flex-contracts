@@ -1,11 +1,14 @@
 # @version 0.4.1
 # @todo -- instead of the whole zombie thing. redeem a borrower completely if a redemption would bring them below some threshold
 # @todo -- improve funcs naming
+
 """
-@title Sorted Troves
+@title Trove Manager
 @license MIT
 @author Flex Protocol
-@notice todo
+@notice Core contract that manages all Troves. Handles opening, closing, and updating borrower positions,
+        accrues interest, maintains aggregate debt accounting, and coordinates redemptions with the Lender
+        and sorted_troves contracts.
 """
 
 from ethereum.ercs import IERC20
@@ -38,7 +41,7 @@ struct Trove:
     collateral: uint256
     annual_interest_rate: uint256
     last_debt_update_time: uint64
-    last_interest_rate_adj_time: uint64
+    last_interest_rate_adj_time: uint64 # @todo -- do we need both of these?
 
 
 # ============================================================================================
@@ -70,12 +73,19 @@ UPFRONT_INTEREST_PERIOD: public(constant(uint256)) = 7 * 24 * 60 * 60  # 7 days
 # Storage
 # ============================================================================================
 
+# Total outstanding system debt
+total_debt: public(uint256)
 
-agg_recorded_debt: public(uint256)
-agg_weighted_debt_sum: public(uint256)
-last_agg_update_time: public(uint256)
+# Sum of individual trove debts weighted by their annual interest rates
+total_weighted_debt: public(uint256)
+
+# Last timestamp when `total_debt` and `total_weighted_debt` were updated
+last_debt_update_time: public(uint256)
+
+# Total collateral tokens currently held by the contract
 collateral_balance: public(uint256)
 
+# trove ID --> Trove info
 troves: public(HashMap[uint256, Trove])
 
 
@@ -131,19 +141,33 @@ def open_trove(
     max_upfront_fee: uint256
 ) -> uint256:
     """
+    @notice Open a new Trove with specified collateral, debt, and interest rate
+    @param owner Address that will own the Trove and receive the borrowed tokens
+    @param owner_index Unique index to allow multiple Troves per owner
+    @param collateral_amount Amount of collateral tokens to deposit
+    @param debt_amount Amount of debt to issue before the upfront fee
+    @param upper_hint Suggested upper neighbor in `sorted_troves`
+    @param lower_hint Suggested lower neighbor in `sorted_troves`
+    @param annual_interest_rate Fixed annual interest rate to pay on the debt
+    @param max_upfront_fee Maximum upfront fee the caller is willing to pay
+    @return trove_id Unique identifier for the new Trove
     """
+    # Make sure collateral and debt amounts are non-zero
+    assert collateral_amount > 0, "!collateral"
+    assert debt_amount > 0, "!debt"
+
     # Make sure the annual interest rate is within bounds    
     assert annual_interest_rate >= MIN_ANNUAL_INTEREST_RATE, "rate too low"
     assert annual_interest_rate <= MAX_ANNUAL_INTEREST_RATE, "rate too high"
 
-    # Generate trove ID
+    # Generate the trove ID
     trove_id: uint256 = convert(keccak256(abi_encode(msg.sender, owner, owner_index)), uint256)
 
     # Make sure the trove doesn't already exist
     assert self.troves[trove_id].status == Status.nonExistent, "trove exists"
 
     # Calculate the upfront fee using the average interest rate of all troves
-    avg_interest_rate: uint256 = self._approx_avg_interest_rate()
+    avg_interest_rate: uint256 = self._approx_avg_interest_rate(debt_amount, annual_interest_rate)
     upfront_fee: uint256 = self._calculate_interest(debt_amount * avg_interest_rate, UPFRONT_INTEREST_PERIOD)
 
     # Make sure the user is ok with the upfront fee
@@ -155,11 +179,11 @@ def open_trove(
     # Make sure enough debt is being borrowed
     assert debt_amount_with_fee >= MIN_DEBT, "debt too low"
 
-    # Get collateral price
+    # Get the collateral price
     collateral_price: uint256 = staticcall EXCHANGE.price()
 
     # Calculate the collateral ratio
-    trove_collateral_ratio: uint256 = self._collateral_ratio(collateral_amount, debt_amount_with_fee, collateral_price)
+    trove_collateral_ratio: uint256 = self._calculate_collateral_ratio(collateral_amount, debt_amount_with_fee, collateral_price)
 
     # Make sure the collateral ratio is above the minimum collateral ratio
     assert trove_collateral_ratio >= MINIMUM_COLLATERAL_RATIO, "!MCR"
@@ -174,12 +198,12 @@ def open_trove(
         last_interest_rate_adj_time=convert(block.timestamp, uint64)
     )
 
-    # Update aggregate accounting
-    self._mint_agg_interest_and_account_for_trove_change(
+    # Accrue interest on the total debt and update accounting
+    self._accrue_interest_and_account_for_trove_change(
         debt_amount_with_fee, # debt_increase
         0, # debt_decrease
-        0, # old_weighted_recorded_debt
-        debt_amount_with_fee * annual_interest_rate, # new_weighted_recorded_debt
+        0, # old_weighted_debt
+        debt_amount_with_fee * annual_interest_rate, # new_weighted_debt
     )
 
     # Add the trove to the sorted troves list
@@ -190,7 +214,7 @@ def open_trove(
         lower_hint
     )
 
-    # Pull collateral tokens from caller
+    # Pull the collateral tokens from caller
     extcall COLLATERAL_TOKEN.transferFrom(msg.sender, self, collateral_amount, default_return_value=True)
 
     # Record the received collateral
@@ -204,7 +228,7 @@ def open_trove(
         # Redeem the difference
         self._redeem(debt_amount - available_liquidity, owner)
 
-        # Transfer whatever is left in the lender
+        # Transfer whatever we have in the lender
         if available_liquidity > 0:
             extcall BORROW_TOKEN.transferFrom(LENDER, owner, available_liquidity, default_return_value=True)
     else:
@@ -220,8 +244,12 @@ def open_trove(
 
 
 @external
-def redeem(amount: uint256, max_iterations: uint256):
+def redeem(amount: uint256):
     """
+    @notice Attempt to free the specified amount of borrow tokens by selling collateral
+    @dev Can only be called by the Lender contract
+    @dev Swap sandwich protection is the caller's responsibility
+    @param amount Desired amount of borrow tokens to free
     """
     # Make sure the caller is the lender
     assert msg.sender == LENDER, "!lender"
@@ -233,14 +261,18 @@ def redeem(amount: uint256, max_iterations: uint256):
 @internal
 def _redeem(amount: uint256, receiver: address = LENDER):
     """
+    @notice Internal implementation of `redeem`
+    @dev Swap sandwich protection is the caller's responsibility
+    @param amount Target amount of borrow tokens to free
+    @param receiver Address to receive the resulting borrow tokens
     """
-    # Mint the aggregate interest so that the total recorded debt is up to date
-    total_debt: uint256 = self._mint_agg_interest()
+    # Accrue interest on the total debt and get the updated figure
+    total_debt: uint256 = self._accrue_interest()
 
     # Make sure we're not trying to redeem more than the total debt
     assert amount <= total_debt, "total_debt"
 
-    # Get collateral price
+    # Get the collateral price
     collateral_price: uint256 = staticcall EXCHANGE.price()
 
     # Get the trove with the smallest annual interest rate
@@ -249,11 +281,11 @@ def _redeem(amount: uint256, receiver: address = LENDER):
     # Cache the amount of debt we need to free
     remaining_debt_to_free: uint256 = amount
 
-    # Cache the total changes we're making so that later we can update the aggregate accounting
+    # Cache the total changes we're making so that later we can update the accounting
     total_debt_decrease: uint256 = 0
     total_collateral_decrease: uint256 = 0
-    total_new_weighted_recorded_debt: uint256 = 0
-    total_old_weighted_recorded_debt: uint256 = 0
+    total_new_weighted_debt: uint256 = 0
+    total_old_weighted_debt: uint256 = 0
 
     # Loop through as many Troves as we're allowed or until we redeem all the debt we need
     for _: uint256 in range(_MAX_ITERATIONS):
@@ -281,9 +313,9 @@ def _redeem(amount: uint256, receiver: address = LENDER):
         trove_new_debt: uint256 = trove_debt_after_interest - debt_to_free
         trove_new_collateral: uint256 = trove.collateral - collateral_to_redeem
 
-        # Calculate the Trove's old and new weighted recorded debt
-        trove_old_weighted_recorded_debt: uint256 = trove_debt_before_interest * trove.annual_interest_rate
-        trove_new_weighted_recorded_debt: uint256 = trove_new_debt * trove.annual_interest_rate
+        # Calculate the Trove's old and new weighted debt
+        trove_old_weighted_debt: uint256 = trove_debt_before_interest * trove.annual_interest_rate
+        trove_new_weighted_debt: uint256 = trove_new_debt * trove.annual_interest_rate
 
         # Update the Trove's information
         trove.debt = trove_new_debt
@@ -294,9 +326,9 @@ def _redeem(amount: uint256, receiver: address = LENDER):
         total_debt_decrease += debt_to_free
         total_collateral_decrease += collateral_to_redeem
 
-        # Increment the total new and old weighted recorded debt
-        total_new_weighted_recorded_debt += trove_new_weighted_recorded_debt
-        total_old_weighted_recorded_debt += trove_old_weighted_recorded_debt
+        # Increment the total old and new weighted debt
+        total_old_weighted_debt += trove_old_weighted_debt
+        total_new_weighted_debt += trove_new_weighted_debt
 
         # Update the remaining debt to free
         remaining_debt_to_free -= debt_to_free
@@ -308,16 +340,19 @@ def _redeem(amount: uint256, receiver: address = LENDER):
         # Get the next Trove to redeem
         trove_to_redeem = staticcall SORTED_TROVES.prev(trove_to_redeem)
 
-    # Update aggregate accounting
-    self._mint_agg_interest_and_account_for_trove_change(
+    # Accrue interest on the total debt and update accounting
+    self._accrue_interest_and_account_for_trove_change(
         0, # debt_increase
         total_debt_decrease, # debt_decrease
-        total_old_weighted_recorded_debt, # old_weighted_recorded_debt
-        total_new_weighted_recorded_debt, # new_weighted_recorded_debt
+        total_old_weighted_debt, # old_weighted_debt
+        total_new_weighted_debt, # new_weighted_debt
     )
 
     # Make sure we don't try to redeem more collateral than we can
     assert total_collateral_decrease <= self.collateral_balance, "rekt"  # This should never happen
+
+    # Update the contract's recorded collateral balance
+    self.collateral_balance -= total_collateral_decrease
 
     # Swap the collateral to borrow token and transfer it to the receiver
     extcall EXCHANGE.swap(total_collateral_decrease, receiver)
@@ -330,18 +365,26 @@ def _redeem(amount: uint256, receiver: address = LENDER):
 
 @internal
 @pure
-def _collateral_ratio(collateral: uint256, debt: uint256, collateral_price: uint256) -> uint256:
+def _calculate_collateral_ratio(collateral: uint256, debt: uint256, collateral_price: uint256) -> uint256:
     """
+    @notice Calculate the collateral ratio given collateral, debt, and collateral price
+    @param collateral The amount of collateral tokens
+    @param debt The amount of debt
+    @param collateral_price The price of one collateral token
+    @return collateral_ratio The collateral ratio
     """
-    if debt > 0:
-        return collateral * collateral_price // debt
-    else:
-        return max_value(uint256)
+    return collateral * collateral_price // debt
 
 
 @internal
 @pure
 def _calculate_interest(weighted_debt: uint256, period: uint256) -> uint256:
+    """
+    @notice Calculate the interest accrued on weighted debt over a given period
+    @param weighted_debt The debt weighted by the annual interest rate
+    @param period The time period over which interest is calculated (in seconds)
+    @return interest The interest accrued over the period
+    """
     return weighted_debt * period // _ONE_YEAR // _WAD
 
 
@@ -352,8 +395,20 @@ def _calculate_interest(weighted_debt: uint256, period: uint256) -> uint256:
 
 @internal
 @view
-def _approx_avg_interest_rate() -> uint256: // @todo -- here
-    return 0
+def _approx_avg_interest_rate(debt_amount: uint256, annual_interest_rate: uint256) -> uint256:
+    """
+    @notice Approximate the new average annual interest rate after adding a Trove with specified debt and rate
+    @param debt_amount The debt of the new Trove
+    @param annual_interest_rate The annual interest rate of the new Trove
+    @return new_avg_interest_rate The approximated new average annual interest rate
+    """
+    # Total debt after adding the new debt
+    new_total_debt: uint256 = self.total_debt + debt_amount
+
+    # Total weighted debt after adding the new weighted debt
+    new_total_weighted_debt: uint256 = self.total_weighted_debt + (debt_amount * annual_interest_rate)
+
+    return new_total_weighted_debt // new_total_debt
 
 
 # ============================================================================================
@@ -362,28 +417,39 @@ def _approx_avg_interest_rate() -> uint256: // @todo -- here
 
 
 @internal
-def _mint_agg_interest_and_account_for_trove_change(
+def _accrue_interest_and_account_for_trove_change(
     debt_increase: uint256,
     debt_decrease: uint256,
-    old_weighted_recorded_debt: uint256,
-    new_weighted_recorded_debt: uint256
+    old_weighted_debt: uint256,
+    new_weighted_debt: uint256
 ):
-    # Update aggregate recorded debt
-    new_agg_recorded_debt: uint256 = self.agg_recorded_debt
-    new_agg_recorded_debt += self._mint_agg_interest()
-    new_agg_recorded_debt += debt_increase
-    new_agg_recorded_debt -= debt_decrease
-    self.agg_recorded_debt = new_agg_recorded_debt
+    """
+    @notice Accrue interest on the total debt and update total debt and total weighted debt accounting
+    @param debt_increase Amount of debt to add to the total debt
+    @param debt_decrease Amount of debt to subtract from the total debt
+    @param old_weighted_debt Amount of weighted debt to subtract from the total weighted debt
+    @param new_weighted_debt Amount of weighted debt to add to the total weighted debt
+    """
+    # Update total debt
+    new_total_debt: uint256 = self.total_debt
+    new_total_debt += self._accrue_interest()
+    new_total_debt += debt_increase
+    new_total_debt -= debt_decrease
+    self.total_debt = new_total_debt
 
-    # Update aggregate weighted debt sum
-    new_agg_weighted_debt_sum: uint256 = self.agg_weighted_debt_sum
-    new_agg_weighted_debt_sum += new_weighted_recorded_debt
-    new_agg_weighted_debt_sum -= old_weighted_recorded_debt
-    self.agg_weighted_debt_sum = new_agg_weighted_debt_sum
+    # Update total weighted debt
+    new_total_weighted_debt: uint256 = self.total_weighted_debt
+    new_total_weighted_debt += new_weighted_debt
+    new_total_weighted_debt -= old_weighted_debt
+    self.total_weighted_debt = new_total_weighted_debt
 
 
 @internal
-def _mint_agg_interest() -> uint256:
+def _accrue_interest() -> uint256:
+    """
+    @notice Accrue interest on the total debt based on the elapsed time since the last update
+    @return new_total_debt The updated total debt after accruing interest
+    """
     # @todo -- use ceiling
     # We use the ceiling of the division here to ensure positive error, while we use regular floor division
     # when calculating the interest accrued by individual Troves.
@@ -391,18 +457,15 @@ def _mint_agg_interest() -> uint256:
     # even if all Trove debt is repaid. The difference should be small and it should scale with the number of
     # interest minting events.
     # Calculate the pending aggregate interest
-    pending_agg_interest: uint256 = (
-        self.agg_weighted_debt_sum * (block.timestamp - self.last_agg_update_time)) // (_ONE_YEAR * _WAD
-    )
+    pending_agg_interest: uint256 = (self.total_weighted_debt * (block.timestamp - self.last_debt_update_time)) // (_ONE_YEAR * _WAD)
 
-    # Calculate the new aggregate recorded debt after interest
-    new_agg_recorded_debt: uint256 = self.agg_recorded_debt + pending_agg_interest
+    # Calculate the new total debt after interest
+    new_total_debt: uint256 = self.total_debt + pending_agg_interest
 
-    # Update the last aggregate update time
-    self.last_agg_update_time = block.timestamp
+    # Update the total debt
+    self.total_debt = new_total_debt
 
-    # Update the aggregate recorded debt
-    self.agg_recorded_debt = new_agg_recorded_debt
+    # Update the last debt update time
+    self.last_debt_update_time = block.timestamp
 
-    # return self.agg_recorded_debt += pending_agg_interest // @todo -- can we do something like this instead?
-    return new_agg_recorded_debt
+    return new_total_debt
