@@ -1,5 +1,6 @@
 # @version 0.4.1
 # @todo -- instead of the whole zombie thing. redeem a borrower completely if a redemption would bring them below some threshold
+# @todo -- improve funcs naming
 """
 @title Sorted Troves
 @license MIT
@@ -11,7 +12,6 @@ from ethereum.ercs import IERC20
 
 from periphery.interfaces import IExchange
 
-from interfaces import IPool
 from interfaces import ISortedTroves
 
 
@@ -48,7 +48,6 @@ struct Trove:
 
 LENDER: public(immutable(address))
 
-POOL: public(immutable(IPool))
 EXCHANGE: public(immutable(IExchange))
 SORTED_TROVES: public(immutable(ISortedTroves))
 
@@ -72,6 +71,11 @@ UPFRONT_INTEREST_PERIOD: public(constant(uint256)) = 7 * 24 * 60 * 60  # 7 days
 # ============================================================================================
 
 
+agg_recorded_debt: public(uint256)
+agg_weighted_debt_sum: public(uint256)
+last_agg_update_time: public(uint256)
+collateral_balance: public(uint256)
+
 troves: public(HashMap[uint256, Trove])
 
 
@@ -83,14 +87,12 @@ troves: public(HashMap[uint256, Trove])
 @deploy
 def __init__(
     lender: address,
-    pool: address,
     exchange: address,
     sorted_troves: address,
     borrow_token: address,
     collateral_token: address
 ):
     LENDER = lender
-    POOL = IPool(pool)
     EXCHANGE = IExchange(exchange)
     SORTED_TROVES = ISortedTroves(sorted_troves)
     BORROW_TOKEN = IERC20(borrow_token)
@@ -141,7 +143,7 @@ def open_trove(
     assert self.troves[trove_id].status == Status.nonExistent, "trove exists"
 
     # Calculate the upfront fee using the average interest rate of all troves
-    avg_interest_rate: uint256 = staticcall POOL.approx_avg_interest_rate()
+    avg_interest_rate: uint256 = self._approx_avg_interest_rate()
     upfront_fee: uint256 = self._calculate_interest(debt_amount * avg_interest_rate, UPFRONT_INTEREST_PERIOD)
 
     # Make sure the user is ok with the upfront fee
@@ -172,8 +174,8 @@ def open_trove(
         last_interest_rate_adj_time=convert(block.timestamp, uint64)
     )
 
-    # Update pool accounting
-    extcall POOL.mint_agg_interest_and_account_for_trove_change(
+    # Update aggregate accounting
+    self._mint_agg_interest_and_account_for_trove_change(
         debt_amount_with_fee, # debt_increase
         0, # debt_decrease
         0, # old_weighted_recorded_debt
@@ -188,26 +190,26 @@ def open_trove(
         lower_hint
     )
 
-    # Pull collateral tokens from sender to the pool
-    extcall COLLATERAL_TOKEN.transferFrom(msg.sender, POOL.address, collateral_amount, default_return_value=True)
+    # Pull collateral tokens from caller
+    extcall COLLATERAL_TOKEN.transferFrom(msg.sender, self, collateral_amount, default_return_value=True)
 
-    # Let the pool know about the received collateral
-    extcall POOL.account_for_received_collateral(collateral_amount)
+    # Record the received collateral
+    self.collateral_balance += collateral_amount
 
-    # Check how much borrow token liquidity the pool has
-    available_liquidity: uint256 = staticcall BORROW_TOKEN.balanceOf(POOL.address)
+    # Check how much borrow token liquidity the lender has
+    available_liquidity: uint256 = staticcall BORROW_TOKEN.balanceOf(LENDER)
 
     # If there's not enough liquidity, redeem the difference. Otherwise just transfer the full amount
     if debt_amount > available_liquidity:
         # Redeem the difference
         self._redeem(debt_amount - available_liquidity, owner)
 
-        # Transfer whatever is left in the pool
+        # Transfer whatever is left in the lender
         if available_liquidity > 0:
-            extcall BORROW_TOKEN.transferFrom(POOL.address, owner, available_liquidity, default_return_value=True)
+            extcall BORROW_TOKEN.transferFrom(LENDER, owner, available_liquidity, default_return_value=True)
     else:
         # Transfer the full amount
-        extcall BORROW_TOKEN.transferFrom(POOL.address, owner, debt_amount, default_return_value=True)
+        extcall BORROW_TOKEN.transferFrom(LENDER, owner, debt_amount, default_return_value=True)
 
     return trove_id
 
@@ -224,16 +226,16 @@ def redeem(amount: uint256, max_iterations: uint256):
     # Make sure the caller is the lender
     assert msg.sender == LENDER, "!lender"
 
-    # Redeem collateral equal to `amount` of debt and transfer the borrow tokens to the pool
+    # Redeem collateral equal to `amount` of debt and transfer the borrow tokens to the lender
     self._redeem(amount)
 
 
 @internal
-def _redeem(amount: uint256, receiver: address = POOL.address):
+def _redeem(amount: uint256, receiver: address = LENDER):
     """
     """
     # Mint the aggregate interest so that the total recorded debt is up to date
-    total_debt: uint256 = extcall POOL.mint_agg_interest()
+    total_debt: uint256 = self._mint_agg_interest()
 
     # Make sure we're not trying to redeem more than the total debt
     assert amount <= total_debt, "total_debt"
@@ -306,22 +308,19 @@ def _redeem(amount: uint256, receiver: address = POOL.address):
         # Get the next Trove to redeem
         trove_to_redeem = staticcall SORTED_TROVES.prev(trove_to_redeem)
 
-    # Update global accounting
-    extcall POOL.mint_agg_interest_and_account_for_trove_change(
+    # Update aggregate accounting
+    self._mint_agg_interest_and_account_for_trove_change(
         0, # debt_increase
         total_debt_decrease, # debt_decrease
         total_old_weighted_recorded_debt, # old_weighted_recorded_debt
         total_new_weighted_recorded_debt, # new_weighted_recorded_debt
     )
 
-    collateral_to_swap: uint256 = total_collateral_decrease
-    collateral_balance: uint256 = staticcall POOL.balance_of_collateral()
-
     # Make sure we don't try to redeem more collateral than we can
-    assert collateral_to_swap <= collateral_balance, "rekt"  # This should never happen
+    assert total_collateral_decrease <= self.collateral_balance, "rekt"  # This should never happen
 
     # Swap the collateral to borrow token and transfer it to the receiver
-    extcall EXCHANGE.swap(collateral_to_swap, receiver)
+    extcall EXCHANGE.swap(total_collateral_decrease, receiver)
 
 
 # ============================================================================================
@@ -337,7 +336,6 @@ def _collateral_ratio(collateral: uint256, debt: uint256, collateral_price: uint
     if debt > 0:
         return collateral * collateral_price // debt
     else:
-        # Represents "infinite" CR
         return max_value(uint256)
 
 
@@ -352,6 +350,59 @@ def _calculate_interest(weighted_debt: uint256, period: uint256) -> uint256:
 # ============================================================================================
 
 
+@internal
+@view
+def _approx_avg_interest_rate() -> uint256: // @todo -- here
+    return 0
+
+
 # ============================================================================================
 # Internal mutative functions
 # ============================================================================================
+
+
+@internal
+def _mint_agg_interest_and_account_for_trove_change(
+    debt_increase: uint256,
+    debt_decrease: uint256,
+    old_weighted_recorded_debt: uint256,
+    new_weighted_recorded_debt: uint256
+):
+    # Update aggregate recorded debt
+    new_agg_recorded_debt: uint256 = self.agg_recorded_debt
+    new_agg_recorded_debt += self._mint_agg_interest()
+    new_agg_recorded_debt += debt_increase
+    new_agg_recorded_debt -= debt_decrease
+    self.agg_recorded_debt = new_agg_recorded_debt
+
+    # Update aggregate weighted debt sum
+    new_agg_weighted_debt_sum: uint256 = self.agg_weighted_debt_sum
+    new_agg_weighted_debt_sum += new_weighted_recorded_debt
+    new_agg_weighted_debt_sum -= old_weighted_recorded_debt
+    self.agg_weighted_debt_sum = new_agg_weighted_debt_sum
+
+
+@internal
+def _mint_agg_interest() -> uint256:
+    # @todo -- use ceiling
+    # We use the ceiling of the division here to ensure positive error, while we use regular floor division
+    # when calculating the interest accrued by individual Troves.
+    # This ensures that `system debt >= sum(trove debt)` always holds, and thus system debt won't turn negative
+    # even if all Trove debt is repaid. The difference should be small and it should scale with the number of
+    # interest minting events.
+    # Calculate the pending aggregate interest
+    pending_agg_interest: uint256 = (
+        self.agg_weighted_debt_sum * (block.timestamp - self.last_agg_update_time)) // (_ONE_YEAR * _WAD
+    )
+
+    # Calculate the new aggregate recorded debt after interest
+    new_agg_recorded_debt: uint256 = self.agg_recorded_debt + pending_agg_interest
+
+    # Update the last aggregate update time
+    self.last_agg_update_time = block.timestamp
+
+    # Update the aggregate recorded debt
+    self.agg_recorded_debt = new_agg_recorded_debt
+
+    # return self.agg_recorded_debt += pending_agg_interest // @todo -- can we do something like this instead?
+    return new_agg_recorded_debt
