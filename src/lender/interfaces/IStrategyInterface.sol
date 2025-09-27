@@ -1,8 +1,9 @@
 // SPDX-License-Identifier: AGPL-3.0
-pragma solidity ^0.8.18;
+pragma solidity 0.8.23;
 
 import {IStrategy} from "@tokenized-strategy/interfaces/IStrategy.sol";
 
 interface IStrategyInterface is IStrategy {
-//TODO: Add your specific implementation interface in here.
-}
+    //TODO: Add your specific implementation interface in here.
+
+    }

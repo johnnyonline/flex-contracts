@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0
-pragma solidity ^0.8.18;
+pragma solidity 0.8.23;
 
 import {AprOracleBase} from "@periphery/AprOracle/AprOracleBase.sol";
 
@@ -26,7 +26,10 @@ contract StrategyAprOracle is AprOracleBase {
      * @param _delta The difference in debt.
      * @return . The expected apr for the strategy represented as 1e18.
      */
-    function aprAfterDebtChange(address _strategy, int256 _delta) external view override returns (uint256) {
+    function aprAfterDebtChange(
+        address _strategy,
+        int256 _delta
+    ) external view override returns (uint256) {
         // TODO: Implement any necessary logic to return the most accurate
         //      APR estimation for the strategy.
         return 1e17;

@@ -41,10 +41,20 @@ interface ISortedTroves {
     // Mutative functions
     // ============================================================================================
 
-    function insert(uint256 id, uint256 annual_interest_rate, uint256 prev_id, uint256 next_id) external;
+    function insert(
+        uint256 id,
+        uint256 annual_interest_rate,
+        uint256 prev_id,
+        uint256 next_id
+    ) external;
     function remove(
         uint256 id
     ) external;
-    function re_insert(uint256 id, uint256 new_annual_interest_rate, uint256 prev_id, uint256 next_id) external;
+    function re_insert(
+        uint256 id,
+        uint256 new_annual_interest_rate,
+        uint256 prev_id,
+        uint256 next_id
+    ) external;
 
 }

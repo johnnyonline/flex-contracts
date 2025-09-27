@@ -2,6 +2,7 @@
 pragma solidity 0.8.23;
 
 import {ISortedTroves} from "./interfaces/ISortedTroves.sol";
+import {ITroveManager} from "./interfaces/ITroveManager.sol";
 
 import "forge-std/Script.sol";
 
@@ -23,6 +24,7 @@ contract Deploy is Script {
     address public deployer;
 
     ISortedTroves public sortedTroves;
+    ITroveManager public troveManager;
 
     function run() public {
         uint256 _pk = isTest ? 42_069 : vm.envUint("DEPLOYER_PRIVATE_KEY");
@@ -35,6 +37,23 @@ contract Deploy is Script {
         vm.startBroadcast(_pk);
 
         sortedTroves = ISortedTroves(deployCode("sorted_troves"));
+        // lender: address,
+        // exchange: address,
+        // sorted_troves: address,
+        // borrow_token: address,
+        // collateral_token: address
+        troveManager = ITroveManager(
+            deployCode(
+                "trove_manager",
+                abi.encode(
+                    address(0), // lender
+                    address(0), // exchange
+                    address(sortedTroves),
+                    address(0), // borrow_token
+                    address(0) // collateral_token
+                )
+            )
+        );
 
         if (isTest) {
             vm.label({account: address(sortedTroves), newLabel: "SortedTroves"});

@@ -3,7 +3,6 @@
 # @todo -- improve funcs naming
 # @todo -- make sure caller is owner or on behalf of owner
 # @todo -- add events
-# @todo -- here -- lender -- start tests
 """
 @title Trove Manager
 @license MIT
@@ -113,16 +112,21 @@ def __init__(
 
 
 # ============================================================================================
-# view
+# View
+# ============================================================================================
+
+# ============================================================================================
+# Sync Total Debt
 # ============================================================================================
 
 
-# @external
-# @view
-# def get_trove_annual_interest_rate(trove_id: uint256) -> uint256:
-#     """
-#     """
-#     return self.troves[trove_id].annual_interest_rate
+@external
+def sync_total_debt() -> uint256:
+    """
+    @notice Accrue interest on the total debt and return the updated figure
+    @return The updated total debt after accruing interest
+    """
+    return self._sync_total_debt()
 
 
 # ============================================================================================
@@ -483,7 +487,7 @@ def _redeem(amount: uint256, receiver: address = LENDER) -> uint256:
     @return amount The actual amount of borrow tokens freed
     """
     # Accrue interest on the total debt and get the updated figure
-    total_debt: uint256 = self._accrue_interest()
+    total_debt: uint256 = self._sync_total_debt()
 
     # Make sure we're not trying to redeem more than the total debt
     assert amount <= total_debt, "total_debt"
@@ -672,7 +676,7 @@ def _accrue_interest_and_account_for_trove_change(
     @param new_weighted_debt Amount of weighted debt to add to the total weighted debt
     """
     # Update total debt
-    new_total_debt: uint256 = self._accrue_interest()
+    new_total_debt: uint256 = self._sync_total_debt()
     new_total_debt += debt_increase
     new_total_debt -= debt_decrease
     self.total_debt = new_total_debt
@@ -685,9 +689,9 @@ def _accrue_interest_and_account_for_trove_change(
 
 
 @internal
-def _accrue_interest() -> uint256:
+def _sync_total_debt() -> uint256:
     """
-    @notice Accrue interest on the total debt based on the elapsed time since the last update
+    @notice Accrue interest on the total debt and return the updated figure
     @return new_total_debt The updated total debt after accruing interest
     """
     # @todo -- use ceiling

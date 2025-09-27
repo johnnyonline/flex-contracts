@@ -23,7 +23,11 @@ abstract contract Base is Deploy, Test {
         run();
     }
 
-    function airdrop(address _token, address _to, uint256 _amount) public {
+    function airdrop(
+        address _token,
+        address _to,
+        uint256 _amount
+    ) public {
         _token == address(0) ? vm.deal(_to, _amount) : deal({token: _token, to: _to, give: _amount});
     }
 
