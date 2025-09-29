@@ -1,8 +1,14 @@
 // SPDX-License-Identifier: MIT
 pragma solidity 0.8.23;
 
+import {IERC20} from "@openzeppelin/contracts/token/ERC20/ERC20.sol";
+
+import {IExchange} from "./interfaces/IExchange.sol";
 import {ISortedTroves} from "./interfaces/ISortedTroves.sol";
 import {ITroveManager} from "./interfaces/ITroveManager.sol";
+
+import {ILender} from "../src/lender/interfaces/ILender.sol";
+import {Lender} from "../src/lender/Lender.sol";
 
 import "forge-std/Script.sol";
 
@@ -23,8 +29,19 @@ contract Deploy is Script {
     bool public isTest;
     address public deployer;
 
+    IExchange public exchange;
     ISortedTroves public sortedTroves;
     ITroveManager public troveManager;
+
+    ILender public lender;
+
+    address public management = address(420_420);
+    address public emergencyAdmin = address(69_420);
+    address public performanceFeeRecipient = address(420_69_420);
+    address public keeper = address(69_69);
+
+    IERC20 public borrowToken = IERC20(0xf939E0A03FB07F59A73314E73794Be0E57ac1b4E); // crvUSD
+    IERC20 public collateralToken = IERC20(0x18084fbA666a33d37592fA2633fD49a74DD93a88); // tBTC
 
     function run() public {
         uint256 _pk = isTest ? 42_069 : vm.envUint("DEPLOYER_PRIVATE_KEY");
@@ -36,24 +53,28 @@ contract Deploy is Script {
 
         vm.startBroadcast(_pk);
 
-        sortedTroves = ISortedTroves(deployCode("sorted_troves"));
-        // lender: address,
-        // exchange: address,
-        // sorted_troves: address,
-        // borrow_token: address,
-        // collateral_token: address
+        uint256 _nonce = vm.getNonce(deployer);
+        address _lenderAddress = computeCreateAddress(deployer, _nonce + 3);
+        address _troveManagerAddress = computeCreateAddress(deployer, _nonce + 2);
+
+        exchange = IExchange(deployCode("tbtc"));
+        sortedTroves = ISortedTroves(deployCode("sorted_troves", abi.encode(_troveManagerAddress)));
         troveManager = ITroveManager(
             deployCode(
                 "trove_manager",
                 abi.encode(
-                    address(0), // lender
-                    address(0), // exchange
+                    _lenderAddress,
+                    address(exchange),
                     address(sortedTroves),
-                    address(0), // borrow_token
-                    address(0) // collateral_token
+                    address(borrowToken),
+                    address(collateralToken)
                 )
             )
         );
+        require(address(troveManager) == _troveManagerAddress, "!troveManagerAddress");
+
+        lender = deployLender();
+        require(address(lender) == _lenderAddress, "!lenderAddress");
 
         if (isTest) {
             vm.label({account: address(sortedTroves), newLabel: "SortedTroves"});
@@ -65,4 +86,11 @@ contract Deploy is Script {
         vm.stopBroadcast();
     }
 
+    function deployLender() public returns (ILender _lender) {
+        _lender = ILender(address(new Lender(address(borrowToken), address(troveManager), "Lender Strategy")));
+        _lender.setPerformanceFeeRecipient(performanceFeeRecipient);
+        _lender.setKeeper(keeper);
+        _lender.setPendingManagement(management);
+        _lender.setEmergencyAdmin(emergencyAdmin);
+    }
 }

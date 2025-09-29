@@ -1,7 +1,0 @@
-# @version 0.4.1
-
-
-@external
-@view
-def trove_annual_interest_rate(trove_id: uint256) -> uint256:
-    ...

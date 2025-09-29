@@ -17,7 +17,7 @@
         https://github.com/liquity/bold/blob/main/contracts/src/SortedTroves.sol
 """
 
-from interfaces import IBorrower
+from interfaces import ITroveManager
 # @todo -- remove the whole `slice` thing
 
 # ============================================================================================
@@ -36,7 +36,7 @@ struct Node:
 # ============================================================================================
 
 
-BORROWER: public(immutable(IBorrower))
+TROVE_MANAGER: public(immutable(ITroveManager))
 
 _ROOT_NODE_ID: constant(uint256) = 0
 _BAD_HINT: constant(uint256) = 0
@@ -64,11 +64,11 @@ _nodes: HashMap[uint256, Node]
 
 
 @deploy
-def __init__(borrower: address):
+def __init__(trove_manager: address):
     """
     @notice Initialize the contract
     """
-    BORROWER = IBorrower(borrower)
+    TROVE_MANAGER = ITroveManager(trove_manager)
 
     # Technically this is not needed as long as _ROOT_NODE_ID is 0, but it doesn't hurt
     self._nodes[_ROOT_NODE_ID].next_id = _ROOT_NODE_ID
@@ -199,7 +199,7 @@ def insert(id: uint256, annual_interest_rate: uint256, prev_id: uint256, next_id
     @param prev_id ID of previous Trove for the insert position
     @param next_id ID of next Trove for the insert position
     """
-    assert msg.sender == BORROWER.address, "not borrower"
+    assert msg.sender == TROVE_MANAGER.address, "not trove manager"
     assert not self._contains(id), "trove exists"
     assert id != _ROOT_NODE_ID, "invalid id"
 
@@ -215,7 +215,7 @@ def remove(id: uint256):
     @notice Remove a Trove from the list
     @param id Trove's ID
     """
-    assert msg.sender == BORROWER.address, "not borrower"
+    assert msg.sender == TROVE_MANAGER.address, "not trove manager"
     assert self._contains(id), "trove does not exist"
 
     self._remove_slice(id, id)
@@ -233,7 +233,7 @@ def re_insert(id: uint256, new_annual_interest_rate: uint256, prev_id: uint256, 
     @param prev_id ID of previous Trove for the new insert position
     @param next_id ID of next Trove for the new insert position
     """
-    assert msg.sender == BORROWER.address, "not borrower"
+    assert msg.sender == TROVE_MANAGER.address, "not trove manager"
     assert self._contains(id), "trove does not exist"
 
     self._re_insert_slice(id, id, new_annual_interest_rate, prev_id, next_id)
@@ -446,7 +446,7 @@ def _trove_annual_interest_rate(trove_id: uint256) -> uint256:
     @notice Internal helper to get the annual interest rate of a node
     @param trove_id Trove's id
     """
-    return staticcall BORROWER.trove_annual_interest_rate(trove_id)
+    return staticcall TROVE_MANAGER.trove_annual_interest_rate(trove_id)
 
 
 # ============================================================================================

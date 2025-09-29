@@ -25,10 +25,9 @@ from interfaces import ISortedTroves
 
 
 flag Status:
-    nonExistent
-    active
-    closed
-    liquidated
+    ACTIVE
+    CLOSED
+    LIQUIDATED
 
 
 # ============================================================================================
@@ -112,11 +111,25 @@ def __init__(
 
 
 # ============================================================================================
-# View
+# External view functions
 # ============================================================================================
 
+
+@external
+@view
+def calculate_upfront_fee(debt_amount: uint256, annual_interest_rate: uint256) -> uint256:
+    """
+    @notice Calculate the upfront fee for borrowing a specified amount of debt at a given annual interest rate
+    @dev The fee represents prepaid interest over `UPFRONT_INTEREST_PERIOD` using the system's average rate after the new debt
+    @param debt_amount The amount of debt to be borrowed
+    @param annual_interest_rate The annual interest rate for the debt
+    @return upfront_fee The calculated upfront fee
+    """
+    return self._calculate_upfront_fee(debt_amount, annual_interest_rate)
+
+
 # ============================================================================================
-# Sync Total Debt
+# Sync total debt
 # ============================================================================================
 
 
@@ -130,7 +143,7 @@ def sync_total_debt() -> uint256:
 
 
 # ============================================================================================
-# Open Trove
+# Open trove
 # ============================================================================================
 
 
@@ -171,7 +184,7 @@ def open_trove(
     trove_id: uint256 = convert(keccak256(abi_encode(msg.sender, owner, owner_index)), uint256)
 
     # Make sure the trove doesn't already exist
-    assert self.troves[trove_id].status == Status.nonExistent, "trove exists"
+    assert self.troves[trove_id].status == empty(Status), "trove exists"
 
     # Calculate the upfront fee and make sure the user is ok with it
     upfront_fee: uint256 = self._calculate_upfront_fee(debt_amount, annual_interest_rate, max_upfront_fee)
@@ -199,7 +212,7 @@ def open_trove(
         last_debt_update_time=convert(block.timestamp, uint64),
         last_interest_rate_adj_time=convert(block.timestamp, uint64),
         owner=owner,
-        status=Status.active
+        status=Status.ACTIVE
     )
 
     # Accrue interest on the total debt and update accounting
@@ -231,7 +244,7 @@ def open_trove(
 
 
 # ============================================================================================
-# Adjust Trove
+# Adjust trove
 # ============================================================================================
 
 
@@ -249,7 +262,7 @@ def add_collateral(trove_id: uint256, collateral_change: uint256):
     trove: Trove = self.troves[trove_id]
 
     # Make sure the Trove is active
-    assert trove.status == Status.active, "!active"
+    assert trove.status == Status.ACTIVE, "!active"
 
     # Make sure the caller has enough collateral tokens
     assert staticcall COLLATERAL_TOKEN.balanceOf(msg.sender) >= collateral_change, "!balance"
@@ -278,7 +291,7 @@ def remove_collateral(trove_id: uint256, collateral_change: uint256):
     trove: Trove = self.troves[trove_id]
 
     # Make sure the Trove is active
-    assert trove.status == Status.active, "!active"
+    assert trove.status == Status.ACTIVE, "!active"
 
     # Make sure the Trove has enough collateral
     assert trove.collateral >= collateral_change, "!collateral in trove"
@@ -322,7 +335,7 @@ def borrow(trove_id: uint256, debt_amount: uint256, max_upfront_fee: uint256, mi
     trove: Trove = self.troves[trove_id]
 
     # Make sure the Trove is active
-    assert trove.status == Status.active, "!active"
+    assert trove.status == Status.ACTIVE, "!active"
 
     # Calculate the upfront fee and make sure the user is ok with it
     upfront_fee: uint256 = self._calculate_upfront_fee(debt_amount, trove.annual_interest_rate, max_upfront_fee)
@@ -384,7 +397,7 @@ def repay(trove_id: uint256, debt_amount: uint256):
     trove: Trove = self.troves[trove_id]
 
     # Make sure the Trove is active
-    assert trove.status == Status.active, "!active"
+    assert trove.status == Status.ACTIVE, "!active"
 
     # Get the Trove's debt after accruing interest
     trove_debt_after_interest: uint256 = self._trove_debt_after_interest(trove)
@@ -441,7 +454,7 @@ def repay(trove_id: uint256, debt_amount: uint256):
 
 
 # ============================================================================================
-# Close Trove
+# Close trove
 # ============================================================================================
 
 
@@ -449,7 +462,7 @@ def repay(trove_id: uint256, debt_amount: uint256):
 
 
 # ============================================================================================
-# Liquidate Trove
+# Liquidate trove
 # ============================================================================================
 
 
@@ -488,9 +501,6 @@ def _redeem(amount: uint256, receiver: address = LENDER) -> uint256:
     """
     # Accrue interest on the total debt and get the updated figure
     total_debt: uint256 = self._sync_total_debt()
-
-    # Make sure we're not trying to redeem more than the total debt
-    assert amount <= total_debt, "total_debt"
 
     # Get the collateral price
     collateral_price: uint256 = staticcall EXCHANGE.price()
@@ -614,7 +624,11 @@ def _calculate_interest(weighted_debt: uint256, period: uint256) -> uint256:
 
 @internal
 @view
-def _calculate_upfront_fee(debt_amount: uint256, annual_interest_rate: uint256, max_upfront_fee: uint256) -> uint256:
+def _calculate_upfront_fee(
+    debt_amount: uint256,
+    annual_interest_rate: uint256,
+    max_upfront_fee: uint256 = max_value(uint256)
+) -> uint256:
     """
     @notice Calculate the upfront fee for borrowing a specified amount of debt at a given annual interest rate
     @dev Make sure the calculated fee does not exceed `max_upfront_fee`

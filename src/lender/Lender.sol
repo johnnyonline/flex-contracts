@@ -27,6 +27,9 @@ contract Lender is BaseHealthCheck {
     ) BaseHealthCheck(_asset, _name) {
         TROVE_MANAGER = ITroveManager(_troveManager);
         require(TROVE_MANAGER.BORROW_TOKEN() == _asset, "!TROVE_MANAGER");
+
+        // Max approve TroveManager to pull borrow token
+        asset.forceApprove(_troveManager, type(uint256).max);
     }
 
     // ============================================================================================
