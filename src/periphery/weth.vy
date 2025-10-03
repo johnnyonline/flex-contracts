@@ -100,6 +100,11 @@ def swap(amount: uint256, receiver: address = msg.sender) -> uint256:
     @param amount Amount of collateral tokens to swap
     @return Amount of borrow tokens received
     """
+    # Do nothing on zero amount
+    if amount == 0:
+        return 0
+
+    # Pull WETH from the caller
     extcall _WETH.transferFrom(msg.sender, self, amount, default_return_value=True)
 
     # WETH --> crvUSD

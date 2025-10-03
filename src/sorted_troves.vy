@@ -446,7 +446,8 @@ def _trove_annual_interest_rate(trove_id: uint256) -> uint256:
     @notice Internal helper to get the annual interest rate of a node
     @param trove_id Trove's id
     """
-    return staticcall TROVE_MANAGER.trove_annual_interest_rate(trove_id)
+    trove: ITroveManager.Trove = staticcall TROVE_MANAGER.troves(trove_id)
+    return trove.annual_interest_rate
 
 
 # ============================================================================================

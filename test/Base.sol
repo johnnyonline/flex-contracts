@@ -11,6 +11,7 @@ abstract contract Base is Deploy, Test {
 
     address public userLender = address(420);
     address public userBorrower = address(69);
+    address public anotherUserBorrower = address(555);
 
     // Fuzz lend amount from 0.001 of 1e18 coin up to 10 million of a 1e18 coin
     uint256 public maxFuzzAmount = 10_000_000 ether;
@@ -70,11 +71,10 @@ abstract contract Base is Deploy, Test {
         airdrop(address(collateralToken), _user, _collateralAmount);
 
         // Open a trove
-        vm.startPrank(userBorrower);
+        vm.startPrank(_user);
         collateralToken.approve(address(troveManager), _collateralAmount);
         _troveId = troveManager.open_trove(
-            userBorrower, // owner
-            block.timestamp, // owner_index
+            block.timestamp, // index
             _collateralAmount, // collateral_amount
             _borrowAmount, // debt_amount
             0, // upper_hint

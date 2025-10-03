@@ -8,6 +8,7 @@ interface ITroveManager {
     // ============================================================================================
 
     enum Status {
+        none,
         active,
         closed,
         liquidated
@@ -71,8 +72,7 @@ interface ITroveManager {
     // ============================================================================================
 
     function open_trove(
-        address owner,
-        uint256 owner_index,
+        uint256 index,
         uint256 collateral_amount,
         uint256 debt_amount,
         uint256 upper_hint,
