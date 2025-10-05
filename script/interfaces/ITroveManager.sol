@@ -10,6 +10,7 @@ interface ITroveManager {
     enum Status {
         none,
         active,
+        fully_redeemed,
         closed,
         liquidated
     }

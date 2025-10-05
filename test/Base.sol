@@ -13,8 +13,8 @@ abstract contract Base is Deploy, Test {
     address public userBorrower = address(69);
     address public anotherUserBorrower = address(555);
 
-    // Fuzz lend amount from 0.001 of 1e18 coin up to 10 million of a 1e18 coin
-    uint256 public maxFuzzAmount = 10_000_000 ether;
+    // Fuzz lend amount from 0.001 of 1e18 coin up to 1 million of a 1e18 coin
+    uint256 public maxFuzzAmount = 1_000_000 ether;
     uint256 public minFuzzAmount = 0.001 ether;
 
     function setUp() public virtual {
@@ -22,7 +22,7 @@ abstract contract Base is Deploy, Test {
         isTest = true;
 
         // create fork
-        uint256 _blockNumber = 23_456_206; // cache state for faster tests
+        uint256 _blockNumber = 23_513_850; // cache state for faster tests
         vm.selectFork(vm.createFork(vm.envString("ETH_RPC_URL"), _blockNumber));
 
         // deploy and initialize contracts

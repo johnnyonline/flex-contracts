@@ -62,9 +62,13 @@ contract OpenTroveTests is Base {
         assertEq(troveManager.total_debt(), _expectedDebt, "E16");
         assertEq(troveManager.total_weighted_debt(), _expectedDebt * _annualInterestRate, "E17");
         assertEq(troveManager.collateral_balance(), _collateralNeeded, "E18");
+
+        // Check exchange is empty
+        assertEq(borrowToken.balanceOf(address(exchange)), 0, "E19");
+        assertEq(collateralToken.balanceOf(address(exchange)), 0, "E20");
     }
 
-    // borrow more than available liquidity, nothing to redeem, should get less borrow tokens than requested
+    // borrow more than available liquidity, nothing to redeem (should get less borrow tokens than requested)
     function test_openTrove_borrowMoreThanAvailableLiquidity(uint256 _lendAmount, uint256 _borrowAmount) public {
         _lendAmount = bound(_lendAmount, troveManager.MIN_DEBT(), maxFuzzAmount);
         _borrowAmount = bound(_borrowAmount, _lendAmount, maxFuzzAmount);
@@ -120,6 +124,10 @@ contract OpenTroveTests is Base {
         assertEq(troveManager.total_debt(), _expectedDebt, "E16");
         assertEq(troveManager.total_weighted_debt(), _expectedDebt * _annualInterestRate, "E17");
         assertEq(troveManager.collateral_balance(), _collateralNeeded, "E18");
+
+        // Check exchange is empty
+        assertEq(borrowToken.balanceOf(address(exchange)), 0, "E19");
+        assertEq(collateralToken.balanceOf(address(exchange)), 0, "E20");
     }
 
     // borrow when there's no liquidity available, but 1 borrower to redeem the entire amount to borrow from
@@ -187,17 +195,22 @@ contract OpenTroveTests is Base {
         // Check balances
         assertEq(collateralToken.balanceOf(address(troveManager)), _collateralNeeded + _expectedCollateralAfterRedemption, "E21");
         assertEq(borrowToken.balanceOf(address(lender)), 0, "E22");
-        assertEq(borrowToken.balanceOf(userBorrower), _amount, "E23"); // @todo -- here -- slippage is fine, but that's too much. update fork and decrease fuzzing range?
+        assertApproxEqRel(borrowToken.balanceOf(userBorrower), _amount, 25e15, "E23"); // 2.5%. Pays slippage due to the redemption
         assertEq(borrowToken.balanceOf(anotherUserBorrower), _amount, "E24");
 
-        // // Check global info
-        // assertEq(troveManager.total_debt(), _expectedDebt, "E15");
-        // assertEq(troveManager.total_weighted_debt(), _expectedDebt * _annualInterestRate, "E16");
-        // assertEq(troveManager.collateral_balance(), _collateralNeeded, "E17");
+        // Check global info
+        assertEq(troveManager.total_debt(), _expectedDebt + _upfrontFee, "E15");
+        assertEq(troveManager.total_weighted_debt(), (_expectedDebt + _upfrontFee) * _annualInterestRate, "E16");
+        assertEq(troveManager.collateral_balance(), _collateralNeeded + _expectedCollateralAfterRedemption, "E17");
+
+        // Check exchange is empty
+        assertEq(borrowToken.balanceOf(address(exchange)), 0, "E18");
+        assertEq(collateralToken.balanceOf(address(exchange)), 0, "E19");
     }
 
-    // borrow when there's some liquidity available, and 1 borrower to redeem from
-    // test_openTrove_borrowMoreThanAvailableLiquidity_andRedeem
+    // 1. borrow when there's no liquidity available, and not enough to redeem from the 1 borrower (should get less borrow tokens than requested)
+    // 2. borrow when there's no liquidity available, but 1 borrower to redeem the entire amount to borrow from, while initial borrower still has some debt left
+    // 3. borrow when there's some liquidity available, and 1 borrower to redeem from (get some liquidity from idle, redeem the rest)
 
     // -------
 

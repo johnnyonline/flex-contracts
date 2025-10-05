@@ -26,6 +26,7 @@ from interfaces import ISortedTroves
 
 flag Status:
     ACTIVE
+    FULLY_REDEEMED
     CLOSED
     LIQUIDATED
 
@@ -491,6 +492,123 @@ def redeem(amount: uint256) -> uint256:
     return self._redeem(amount)
 
 
+# @internal
+# def _redeem(amount: uint256) -> uint256:
+#     """
+#     @notice Internal implementation of `redeem`
+#     @dev Swap sandwich protection is the caller's responsibility
+#     @param amount Target amount of borrow tokens to free
+#     @return amount The actual amount of borrow tokens freed
+#     """
+#     # Accrue interest on the total debt and get the updated figure
+#     total_debt: uint256 = self._sync_total_debt()
+
+#     # Get the collateral price
+#     collateral_price: uint256 = staticcall EXCHANGE.price()
+
+#     # Get the trove with the smallest annual interest rate
+#     trove_to_redeem: uint256 = staticcall SORTED_TROVES.last()
+
+#     # Cache the amount of debt we need to free
+#     remaining_debt_to_free: uint256 = amount
+
+#     # Cache the total changes we're making so that later we can update the accounting
+#     total_debt_decrease: uint256 = 0
+#     total_collateral_decrease: uint256 = 0
+#     total_new_weighted_debt: uint256 = 0
+#     total_old_weighted_debt: uint256 = 0
+
+#     # Loop through as many Troves as we're allowed or until we redeem all the debt we need
+#     for _: uint256 in range(_MAX_ITERATIONS):
+#         print("iteration: _", _, hardhat_compat=True)
+
+#         # Cache Trove info
+#         trove: Trove = self.troves[trove_to_redeem]
+
+#         # Don't want to redeem a borrower's own Trove
+#         if msg.sender != trove.owner:
+#             # Get the Trove's debt after accruing interest
+#             trove_debt_after_interest: uint256 = self._trove_debt_after_interest(trove)
+
+#             # Determine the amount to be freed
+#             debt_to_free: uint256 = min(remaining_debt_to_free, trove_debt_after_interest)
+
+#             # @todo -- if debt_to_free leaves the trove below min debt, redeem the whole trove?
+#             # // Make Trove zombie if it's tiny (and it wasn’t already), in order to prevent griefing future (normal, sequential) redemptions
+#             # if (newDebt < MIN_DEBT) {
+#             #     if (!_singleRedemption.isZombieTrove) {
+#             #         Troves[_singleRedemption.troveId].status = Status.zombie;
+#             #         if (isTroveInBatch) {
+#             #             sortedTroves.removeFromBatch(_singleRedemption.troveId);
+#             #         } else {
+#             #             sortedTroves.remove(_singleRedemption.troveId);
+#             #         }
+#             #         // If it’s a partial redemption, let’s store a pointer to it so it’s used first in the next one
+#             #         if (newDebt > 0) {
+#             #             lastZombieTroveId = _singleRedemption.troveId;
+#             #         }
+#             #     } else if (newDebt == 0) {
+#             #         // Reset last zombie trove pointer if the previous one was fully redeemed now
+#             #         lastZombieTroveId = 0;
+#             #     }
+#             # }
+
+#             # Get the amount of collateral equal to `debt_to_free`
+#             collateral_to_redeem: uint256 = debt_to_free * _WAD // collateral_price
+
+#             # Decrease the debt and collateral of the current Trove according to the amounts redeemed
+#             trove_new_debt: uint256 = trove_debt_after_interest - debt_to_free
+#             trove_new_collateral: uint256 = trove.collateral - collateral_to_redeem
+
+#             # Calculate the Trove's old and new weighted debt
+#             trove_old_weighted_debt: uint256 = trove.debt * trove.annual_interest_rate
+#             trove_new_weighted_debt: uint256 = trove_new_debt * trove.annual_interest_rate
+
+#             # Update the Trove's info
+#             trove.debt = trove_new_debt
+#             trove.collateral = trove_new_collateral
+#             trove.last_debt_update_time = convert(block.timestamp, uint64)
+
+#             # Save changes to storage
+#             self.troves[trove_to_redeem] = trove
+
+#             # Increment the total debt and collateral decrease
+#             total_debt_decrease += debt_to_free
+#             total_collateral_decrease += collateral_to_redeem
+
+#             # Increment the total old and new weighted debt
+#             total_old_weighted_debt += trove_old_weighted_debt
+#             total_new_weighted_debt += trove_new_weighted_debt
+
+#             # Update the remaining debt to free
+#             remaining_debt_to_free -= debt_to_free
+
+#             # Check if we freed all the debt we wanted
+#             if remaining_debt_to_free == 0:
+#                 break
+
+#         # Get the next Trove to redeem
+#         trove_to_redeem = staticcall SORTED_TROVES.prev(trove_to_redeem)
+
+#         # If we reached the end of the list, break
+#         if trove_to_redeem == 0:
+#             break
+
+#     # Accrue interest on the total debt and update accounting
+#     self._accrue_interest_and_account_for_trove_change(
+#         0, # debt_increase
+#         total_debt_decrease, # debt_decrease
+#         total_old_weighted_debt, # old_weighted_debt
+#         total_new_weighted_debt, # new_weighted_debt
+#     )
+
+#     # Update the contract's recorded collateral balance
+#     self.collateral_balance -= total_collateral_decrease
+
+#     # Swap the collateral to borrow token and transfer it to the caller. Does nothing on zero amount
+#     return extcall EXCHANGE.swap(total_collateral_decrease, msg.sender)
+
+
 @internal
 def _redeem(amount: uint256) -> uint256:
     """
@@ -532,13 +650,27 @@ def _redeem(amount: uint256) -> uint256:
             # Determine the amount to be freed
             debt_to_free: uint256 = min(remaining_debt_to_free, trove_debt_after_interest)
 
-            # @todo -- if debt_to_free leaves the trove below min debt, redeem the whole trove?
+            # Calculate the Trove's new debt amount
+            trove_new_debt: uint256 = trove_debt_after_interest - debt_to_free
+
+            # If the new debt would be below the minimum, redeem the whole trove
+            if trove_new_debt < MIN_DEBT:
+                # Zero out the trove's debt
+                trove_new_debt = 0
+
+                # Free the entire debt after interest
+                debt_to_free = trove_debt_after_interest
+
+                # Mark the trove as redeemed
+                trove.status = Status.FULLY_REDEEMED
+
+                # Remove from sorted list
+                extcall SORTED_TROVES.remove(trove_to_redeem)
 
             # Get the amount of collateral equal to `debt_to_free`
             collateral_to_redeem: uint256 = debt_to_free * _WAD // collateral_price
 
-            # Decrease the debt and collateral of the current Trove according to the amounts redeemed
-            trove_new_debt: uint256 = trove_debt_after_interest - debt_to_free
+            # Calculate the Trove's new collateral amount
             trove_new_collateral: uint256 = trove.collateral - collateral_to_redeem
 
             # Calculate the Trove's old and new weighted debt
@@ -562,7 +694,7 @@ def _redeem(amount: uint256) -> uint256:
             total_new_weighted_debt += trove_new_weighted_debt
 
             # Update the remaining debt to free
-            remaining_debt_to_free -= debt_to_free
+            remaining_debt_to_free -= min(debt_to_free, remaining_debt_to_free)
 
             # Check if we freed all the debt we wanted
             if remaining_debt_to_free == 0:
