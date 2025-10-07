@@ -538,10 +538,10 @@ def _redeem(amount: uint256) -> uint256:
             trove_new_debt: uint256 = trove_debt_after_interest - debt_to_free
 
             # Don't allow partial redemptions that would leave the Trove below the minimum debt
-            assert trove_new_debt == 0 or trove_new_debt >= MIN_DEBT, "!trove_new_debt" # @todo -- here
+            assert trove_new_debt == 0 or trove_new_debt >= MIN_DEBT, "!trove_new_debt"
 
-            # If the new debt would be below the minimum, redeem the whole trove
-            if trove_new_debt < MIN_DEBT:
+            # If the Trove is fully redeemed, mark it as such and remove it from the sorted list
+            if trove_new_debt == 0:
                 # Zero out the trove's debt
                 trove_new_debt = 0
 
@@ -607,7 +607,6 @@ def _redeem(amount: uint256) -> uint256:
 
     # Swap the collateral to borrow token and transfer it to the caller. Does nothing on zero amount
     return extcall EXCHANGE.swap(total_collateral_decrease, msg.sender)
-    # @todo here -- if we redeem -- we're sending too much -- allow only to max redeem? yes
 
 
 # ============================================================================================
