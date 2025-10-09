@@ -17,6 +17,9 @@ abstract contract Base is Deploy, Test {
     uint256 public maxFuzzAmount = 1_000_000 ether;
     uint256 public minFuzzAmount = 0.001 ether;
 
+    uint256 public DEFAULT_ANNUAL_INTEREST_RATE;
+    uint256 public DEFAULT_TARGET_COLLATERAL_RATIO;
+
     function setUp() public virtual {
         // notify deplyment script that this is a test
         isTest = true;
@@ -31,6 +34,10 @@ abstract contract Base is Deploy, Test {
         // Set up Lender
         vm.prank(management);
         lender.acceptManagement();
+
+        // Set up "constants" for tests
+        DEFAULT_ANNUAL_INTEREST_RATE = troveManager.MIN_ANNUAL_INTEREST_RATE() * 2; // 1%
+        DEFAULT_TARGET_COLLATERAL_RATIO = troveManager.MINIMUM_COLLATERAL_RATIO() * 110 / 100; // 10% above MCR
     }
 
     function airdrop(

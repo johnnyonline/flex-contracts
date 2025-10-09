@@ -1,5 +1,4 @@
 # @version 0.4.1
-# @todo -- instead of the whole zombie thing. redeem a borrower completely if a redemption would bring them below some threshold
 # @todo -- improve funcs naming
 # @todo -- make sure caller is owner or on behalf of owner // add transfer trove ownership (make sure can't transfer ownership to self/lender)
 # @todo -- add events
@@ -195,7 +194,7 @@ def open_trove(
     debt_amount_with_fee: uint256 = debt_amount + upfront_fee
 
     # Make sure enough debt is being borrowed
-    assert debt_amount_with_fee >= MIN_DEBT, "debt too low"
+    assert debt_amount_with_fee > MIN_DEBT, "debt too low"
 
     # Get the collateral price
     collateral_price: uint256 = staticcall EXCHANGE.price()
@@ -265,9 +264,6 @@ def add_collateral(trove_id: uint256, collateral_change: uint256):
 
     # Make sure the Trove is active
     assert trove.status == Status.ACTIVE, "!active"
-
-    # Make sure the caller has enough collateral tokens
-    assert staticcall COLLATERAL_TOKEN.balanceOf(msg.sender) >= collateral_change, "!balance"
 
     # Update the Trove's collateral info
     self.troves[trove_id].collateral += collateral_change
@@ -351,9 +347,6 @@ def borrow(trove_id: uint256, debt_amount: uint256, max_upfront_fee: uint256, mi
     # Calculate the new debt amount
     new_debt: uint256 = trove_debt_after_interest + debt_amount_with_fee
 
-    # Make sure enough debt is being borrowed
-    assert new_debt >= MIN_DEBT, "rekt"  # This should never happen
-
     # Get the collateral price
     collateral_price: uint256 = staticcall EXCHANGE.price()
 
@@ -405,28 +398,13 @@ def repay(trove_id: uint256, debt_amount: uint256):
     trove_debt_after_interest: uint256 = self._trove_debt_after_interest(trove)
 
     # Calculate the maximum allowable repayment to keep the Trove above the minimum debt
-    max_repayment: uint256 = trove_debt_after_interest - MIN_DEBT if trove_debt_after_interest > MIN_DEBT else 0
+    max_repayment: uint256 = trove_debt_after_interest - MIN_DEBT  # Assumes `trove_debt_after_interest > MIN_DEBT`
 
     # Scale down the repayment amount if necessary
     debt_to_repay: uint256 = min(debt_amount, max_repayment)
 
-    # Make sure the caller has enough borrow tokens
-    assert staticcall BORROW_TOKEN.balanceOf(msg.sender) >= debt_to_repay, "!balance"
-
     # Calculate the new debt amount
     new_debt: uint256 = trove_debt_after_interest - debt_to_repay
-
-    # Make sure enough debt is being borrowed
-    assert new_debt >= MIN_DEBT, "rekt"  # This should never happen
-
-    # Get the collateral price
-    collateral_price: uint256 = staticcall EXCHANGE.price()
-
-    # Calculate the collateral ratio
-    collateral_ratio: uint256 = self._calculate_collateral_ratio(trove.collateral, new_debt, collateral_price)
-
-    # Make sure the new collateral ratio is above the minimum collateral ratio
-    assert collateral_ratio >= MINIMUM_COLLATERAL_RATIO, "!MCR" # This should never happen as well
 
     # Cache the Trove's old debt for global accounting
     old_debt: uint256 = trove.debt
