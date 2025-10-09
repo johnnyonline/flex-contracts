@@ -9,25 +9,18 @@ contract RepayTests is Base {
         Base.setUp();
     }
 
-    // @todo -- here
-
-    function test_removeCollateralFromActiveTrove(uint256 _amount, uint256 _collateralToRemove) public {
-        _amount = bound(_amount, troveManager.MIN_DEBT(), maxFuzzAmount);
+    // 1. lend
+    // 2. borrow all available liquidity
+    // 3. repay up to min debt
+    function test_repay(uint256 _amount, uint256 _amountToRepay) public {
+        _amount = bound(_amount, troveManager.MIN_DEBT() * 150 / 100, maxFuzzAmount); // At least 50% above min debt so we have something to repay
+        _amountToRepay = bound(_amountToRepay, _amount / 100, _amount - troveManager.MIN_DEBT()); // Make sure we leave at least min debt
 
         // Lend some from lender
         mintAndDepositIntoLender(userLender, _amount);
 
         // Calculate how much collateral is needed for the borrow amount
         uint256 _collateralNeeded = _amount * DEFAULT_TARGET_COLLATERAL_RATIO / exchange.price();
-
-        // Make sure we don't try to remove too much collateral
-        uint256 _maxCollateralToRemove = _collateralNeeded - (_amount * troveManager.MINIMUM_COLLATERAL_RATIO() / exchange.price());
-
-        // Decrease a touch
-        _maxCollateralToRemove = _maxCollateralToRemove * 99 / 100;
-
-        // Bound collateral to remove
-        _collateralToRemove = bound(_collateralToRemove, 1, _maxCollateralToRemove);
 
         // Calculate expected debt (borrow amount + upfront fee)
         uint256 _expectedDebt = _amount + troveManager.calculate_upfront_fee(_amount, DEFAULT_ANNUAL_INTEREST_RATE);
@@ -69,22 +62,24 @@ contract RepayTests is Base {
         assertEq(borrowToken.balanceOf(address(exchange)), 0, "E20");
         assertEq(collateralToken.balanceOf(address(exchange)), 0, "E21");
 
-        // Finally remove collateral
-        vm.prank(userBorrower);
-        troveManager.remove_collateral(_troveId, _collateralToRemove);
+        // Finally repay the trove back down to min debt
+        vm.startPrank(userBorrower);
+        borrowToken.approve(address(troveManager), _amountToRepay);
+        troveManager.repay(_troveId, _amountToRepay);
+        vm.stopPrank();
 
         // Check everything again
 
         // Check trove info
         _trove = troveManager.troves(_troveId);
-        assertEq(_trove.debt, _expectedDebt, "E22");
-        assertEq(_trove.collateral, _collateralNeeded - _collateralToRemove, "E23");
+        assertEq(_trove.debt, _expectedDebt - _amountToRepay, "E22");
+        assertEq(_trove.collateral, _collateralNeeded, "E23");
         assertEq(_trove.annual_interest_rate, DEFAULT_ANNUAL_INTEREST_RATE, "E24");
         assertEq(_trove.last_debt_update_time, block.timestamp, "E25");
         assertEq(_trove.last_interest_rate_adj_time, block.timestamp, "E26");
         assertEq(_trove.owner, userBorrower, "E27");
         assertEq(uint256(_trove.status), uint256(ITroveManager.Status.active), "E28");
-        assertLt(_trove.collateral * exchange.price() / _trove.debt, DEFAULT_TARGET_COLLATERAL_RATIO, "E29");
+        assertGt(_trove.collateral * exchange.price() / _trove.debt, DEFAULT_TARGET_COLLATERAL_RATIO, "E29");
 
         // Check sorted troves
         assertFalse(sortedTroves.empty(), "E30");
@@ -94,17 +89,17 @@ contract RepayTests is Base {
         assertTrue(sortedTroves.contains(_troveId), "E34");
 
         // Check balances
-        assertEq(collateralToken.balanceOf(address(troveManager)), _collateralNeeded - _collateralToRemove, "E35");
+        assertEq(collateralToken.balanceOf(address(troveManager)), _collateralNeeded, "E35");
         assertEq(collateralToken.balanceOf(address(troveManager)), troveManager.collateral_balance(), "E36");
-        assertEq(collateralToken.balanceOf(address(userBorrower)), _collateralToRemove, "E37");
+        assertEq(collateralToken.balanceOf(address(userBorrower)), 0, "E37");
         assertEq(borrowToken.balanceOf(address(troveManager)), 0, "E38");
-        assertEq(borrowToken.balanceOf(address(lender)), 0, "E39");
-        assertEq(borrowToken.balanceOf(userBorrower), _amount, "E40");
+        assertEq(borrowToken.balanceOf(address(lender)), _amountToRepay, "E39");
+        assertEq(borrowToken.balanceOf(userBorrower), _amount - _amountToRepay, "E40");
 
         // Check global info
-        assertEq(troveManager.total_debt(), _expectedDebt, "E41");
-        assertEq(troveManager.total_weighted_debt(), _expectedDebt * DEFAULT_ANNUAL_INTEREST_RATE, "E42");
-        assertEq(troveManager.collateral_balance(), _collateralNeeded - _collateralToRemove, "E43");
+        assertEq(troveManager.total_debt(), _expectedDebt - _amountToRepay, "E41");
+        assertEq(troveManager.total_weighted_debt(), (_expectedDebt - _amountToRepay) * DEFAULT_ANNUAL_INTEREST_RATE, "E42");
+        assertEq(troveManager.collateral_balance(), _collateralNeeded, "E43");
 
         // Check exchange is empty
         assertEq(borrowToken.balanceOf(address(exchange)), 0, "E44");
