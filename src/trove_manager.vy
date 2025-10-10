@@ -480,13 +480,20 @@ def _redeem(amount: uint256) -> uint256:
     @return amount The actual amount of borrow tokens freed
     """
     # Accrue interest on the total debt and get the updated figure
-    total_debt: uint256 = self._sync_total_debt()
+    self._sync_total_debt()
 
     # Get the collateral price
     collateral_price: uint256 = staticcall EXCHANGE.price()
 
-    # Get the trove with the smallest annual interest rate
-    trove_to_redeem: uint256 = staticcall SORTED_TROVES.last()
+    # Track if we're using a zombie trove from a previous redemption
+    is_zombie_trove: bool = False // @todo -- here
+
+    # Use zombie trove from previous redemption if it exists
+    if self.zombie_trove_id != 0:
+        is_zombie_trove = True
+        trove_to_redeem: uint256 = self.zombie_trove_id
+    else:
+        trove_to_redeem: uint256 = staticcall SORTED_TROVES.last()
 
     # Cache the amount of debt we need to free
     remaining_debt_to_free: uint256 = amount
@@ -515,22 +522,23 @@ def _redeem(amount: uint256) -> uint256:
             # Calculate the Trove's new debt amount
             trove_new_debt: uint256 = trove_debt_after_interest - debt_to_free
 
-            # Don't allow partial redemptions that would leave the Trove below the minimum debt
-            assert trove_new_debt == 0 or trove_new_debt >= MIN_DEBT, "!trove_new_debt"
+            # If trove would be left with debt below the minimum, handle the zombie path
+            if trove_new_debt < MIN_DEBT:
+                # If the trove is not already a zombie trove, we need to mark it as such
+                if not is_zombie_trove:
+                    # Mark trove as zombie
+                    trove.status = Status.ZOMBIE
 
-            # If the Trove is fully redeemed, mark it as such and remove it from the sorted list
-            if trove_new_debt == 0:
-                # Zero out the trove's debt
-                trove_new_debt = 0
+                    # Remove trove from sorted list
+                    extcall SORTED_TROVES.remove(trove_to_redeem)
 
-                # Free the entire debt after interest
-                debt_to_free = trove_debt_after_interest
+                    # If it's a partial redemption, record it so we know to continue with it next time
+                    if trove_new_debt > 0:
+                        self.zombie_trove_id = trove_to_redeem
 
-                # Mark the trove as redeemed
-                trove.status = Status.FULLY_REDEEMED
-
-                # Remove from sorted list
-                extcall SORTED_TROVES.remove(trove_to_redeem)
+                # If we fully redeemed a trove, reset the zombie trove id variable
+                else if trove_new_debt == 0:
+                    self.zombie_trove_id = 0
 
             # Get the amount of collateral equal to `debt_to_free`
             collateral_to_redeem: uint256 = debt_to_free * _WAD // collateral_price
@@ -565,12 +573,15 @@ def _redeem(amount: uint256) -> uint256:
             if remaining_debt_to_free == 0:
                 break
 
-        # Get the next Trove to redeem
-        trove_to_redeem = staticcall SORTED_TROVES.prev(trove_to_redeem)
+        # Get the next trove to redeem
+        trove_to_redeem = staticcall SORTED_TROVES.last() if is_zombie_trove else staticcall SORTED_TROVES.prev(trove_to_redeem)
 
         # If we reached the end of the list, break
         if trove_to_redeem == 0:
             break
+
+        # Reset the `is_zombie_trove` flag
+        is_zombie_trove = False
 
     # Accrue interest on the total debt and update accounting
     self._accrue_interest_and_account_for_trove_change(

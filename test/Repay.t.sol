@@ -108,8 +108,7 @@ contract RepayTests is Base {
 
     // ------- @todo
 
-    // function test_removeCollateral_zeroCollateral
-    // function test_removeCollateral_troveNotActive
-    // function test_removeCollateral_insufficientCollateralInTrove
-    // function test_removeCollateral_belowMCR
+    // function test_repay_amountScalesDownToMinDebt
+    // function test_repay_zeroAmount
+    // function test_repay_troveNotActive
 }

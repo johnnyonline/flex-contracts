@@ -33,7 +33,7 @@ contract Lender is BaseHealthCheck {
     }
 
     // ============================================================================================
-    // Internal Mutative Functions
+    // Internal mutative functions
     // ============================================================================================
 
     /// @inheritdoc BaseStrategy
