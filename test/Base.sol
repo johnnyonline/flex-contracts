@@ -74,24 +74,14 @@ abstract contract Base is Deploy, Test {
         uint256 _borrowAmount,
         uint256 _annualInterestRate
     ) public returns (uint256 _troveId) {
-        return _mintAndOpenTrove(_user, _collateralAmount, _borrowAmount, _annualInterestRate, false);
-    }
-
-    function mintAndOpenTrove_revertOnMinDebt(
-        address _user,
-        uint256 _collateralAmount,
-        uint256 _borrowAmount,
-        uint256 _annualInterestRate
-    ) public returns (uint256 _troveId) {
-        _mintAndOpenTrove(_user, _collateralAmount, _borrowAmount, _annualInterestRate, true);
+        return _mintAndOpenTrove(_user, _collateralAmount, _borrowAmount, _annualInterestRate);
     }
 
     function _mintAndOpenTrove(
         address _user,
         uint256 _collateralAmount,
         uint256 _borrowAmount,
-        uint256 _annualInterestRate,
-        bool _shouldRevert
+        uint256 _annualInterestRate
     ) internal returns (uint256 _troveId) {
         // Airdrop some collateral to borrower
         airdrop(address(collateralToken), _user, _collateralAmount);
@@ -99,7 +89,6 @@ abstract contract Base is Deploy, Test {
         // Open a trove
         vm.startPrank(_user);
         collateralToken.approve(address(troveManager), _collateralAmount);
-        if (_shouldRevert) vm.expectRevert("!trove_new_debt");
         _troveId = troveManager.open_trove(
             block.timestamp, // index
             _collateralAmount, // collateral_amount

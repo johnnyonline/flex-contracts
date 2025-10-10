@@ -10,7 +10,7 @@ interface ITroveManager {
     enum Status {
         none,
         active,
-        fully_redeemed,
+        zombie,
         closed,
         liquidated
     }
@@ -48,6 +48,7 @@ interface ITroveManager {
     // Storage
     // ============================================================================================
 
+    function zombie_trove_id() external view returns (uint256);
     function total_debt() external view returns (uint256);
     function total_weighted_debt() external view returns (uint256);
     function last_debt_update_time() external view returns (uint256);
