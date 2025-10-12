@@ -524,8 +524,101 @@ def adjust_interest_rate(
 # Close trove
 # ============================================================================================
 
+# @todo -- test closing a zombire trove with non 0 debt and with 0 debt
+@external
+def close_trove(trove_id: uint256):
+    """
+    @notice Close an existing Trove by repaying all its debt and withdrawing all its collateral
+    @param trove_id Unique identifier of the Trove
+    """
+    # Cache Trove info
+    trove: Trove = self.troves[trove_id]
+
+    # Make sure the Trove is active
+    assert trove.status == Status.ACTIVE, "!active"
+
+    # Get the Trove's debt after accruing interest
+    trove_debt_after_interest: uint256 = self._trove_debt_after_interest(trove)
+
+    # Cache the Trove's old info for global accounting
+    old_trove: Trove = trove
+
+    # Delete all Trove info and mark it as closed
+    trove = empty(Trove)
+    trove.status = Status.CLOSED
+
+    # Save changes to storage
+    self.troves[trove_id] = trove
+
+    # Update the contract's recorded collateral balance
+    self.collateral_balance -= old_trove.collateral
+
+    # Accrue interest on the total debt and update accounting
+    self._accrue_interest_and_account_for_trove_change(
+        0, # debt_increase
+        trove_debt_after_interest, # debt_decrease
+        old_trove.debt * old_trove.annual_interest_rate, # old_weighted_debt
+        0 # new_weighted_debt
+    )
+
+    # Remove from sorted list
+    extcall SORTED_TROVES.remove(trove_id)
+
+    # Pull the borrow tokens from caller and transfer them to the lender
+    extcall BORROW_TOKEN.transferFrom(msg.sender, LENDER, trove_debt_after_interest, default_return_value=True)
+
+    # Transfer the collateral tokens to caller
+    extcall COLLATERAL_TOKEN.transfer(msg.sender, old_trove.collateral, default_return_value=True)
+
 
 # @todo -- here
+# @todo -- test closing a zombire trove with non 0 debt and with 0 debt
+@external
+def close_zombie_trove(trove_id: uint256):
+    """
+    @notice Close a zombie Trove by repaying all its debt (if it has any) and withdrawing all its collateral
+    @param trove_id Unique identifier of the Trove
+    """
+    # Cache Trove info
+    trove: Trove = self.troves[trove_id]
+
+    # Make sure the Trove is zombie
+    assert trove.status == Status.ZOMBIE, "!zombie"
+
+    # Cache the Trove's old info for global accounting
+    old_trove: Trove = trove
+
+    # Delete all Trove info and mark it as closed
+    trove = empty(Trove)
+    trove.status = Status.CLOSED
+
+    # Save changes to storage
+    self.troves[trove_id] = trove
+
+    # If Trove is the current zombie trove, reset the `zombie_trove_id` variable
+    if self.zombie_trove_id == trove_id:
+        self.zombie_trove_id = 0
+
+    # Update the contract's recorded collateral balance
+    self.collateral_balance -= old_trove.collateral
+
+    if old_trove.debt > 0:
+        # Get the Trove's debt after accruing interest
+        trove_debt_after_interest: uint256 = self._trove_debt_after_interest(old_trove)
+
+        # Accrue interest on the total debt and update accounting
+        self._accrue_interest_and_account_for_trove_change(
+            0, # debt_increase
+            trove_debt_after_interest, # debt_decrease
+            old_trove.debt * old_trove.annual_interest_rate, # old_weighted_debt
+            0 # new_weighted_debt
+        )
+
+        # Pull the borrow tokens from caller and transfer them to the lender
+        extcall BORROW_TOKEN.transferFrom(msg.sender, LENDER, trove_debt_after_interest, default_return_value=True)
+
+    # Transfer the collateral tokens to caller
+    extcall COLLATERAL_TOKEN.transfer(msg.sender, old_trove.collateral, default_return_value=True)
 
 
 # ============================================================================================
