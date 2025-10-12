@@ -43,6 +43,8 @@ interface ITroveManager {
     function MAX_ANNUAL_INTEREST_RATE() external view returns (uint256);
     function MINIMUM_COLLATERAL_RATIO() external view returns (uint256);
     function UPFRONT_INTEREST_PERIOD() external view returns (uint256);
+    function INTEREST_RATE_ADJ_COOLDOWN() external view returns (uint256);
+
 
     // ============================================================================================
     // Storage
@@ -105,6 +107,13 @@ interface ITroveManager {
     function repay(
         uint256 trove_id,
         uint256 debt_amount
+    ) external;
+    function adjust_interest_rate(
+        uint256 trove_id,
+        uint256 new_annual_interest_rate,
+        uint256 prev_id,
+        uint256 next_id,
+        uint256 max_upfront_fee
     ) external;
 
     // ============================================================================================

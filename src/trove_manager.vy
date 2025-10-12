@@ -40,7 +40,7 @@ struct Trove:
     collateral: uint256
     annual_interest_rate: uint256
     last_debt_update_time: uint64
-    last_interest_rate_adj_time: uint64 # @todo -- do we need both of these?
+    last_interest_rate_adj_time: uint64
     owner: address
     status: Status
 
@@ -68,6 +68,7 @@ MIN_ANNUAL_INTEREST_RATE: public(constant(uint256)) = _ONE_PCT // 2  # 0.5%
 MAX_ANNUAL_INTEREST_RATE: public(constant(uint256)) = 250 * _ONE_PCT  # 250%
 MINIMUM_COLLATERAL_RATIO: public(constant(uint256)) = 110 * _ONE_PCT  # 110% // @todo -- make this configurable
 UPFRONT_INTEREST_PERIOD: public(constant(uint256)) = 7 * 24 * 60 * 60  # 7 days
+INTEREST_RATE_ADJ_COOLDOWN: public(constant(uint256)) = 7 * 24 * 60 * 60  # 7 days
 
 
 # ============================================================================================
@@ -433,9 +434,90 @@ def repay(trove_id: uint256, debt_amount: uint256):
     extcall BORROW_TOKEN.transferFrom(msg.sender, LENDER, debt_to_repay, default_return_value=True)
 
 
-# @external
-# def adjust_interest_rate(
-# @todo
+@external
+def adjust_interest_rate(
+    trove_id: uint256,
+    new_annual_interest_rate: uint256,
+    prev_id: uint256,
+    next_id: uint256,
+    max_upfront_fee: uint256
+):
+    """
+    @notice Adjust the annual interest rate of an existing Trove
+    @param trove_id Unique identifier of the Trove
+    @param new_annual_interest_rate New fixed annual interest rate to pay on the debt
+    @param prev_id ID of previous Trove for the new insert position
+    @param next_id ID of next Trove for the new insert position
+    """
+    # Make sure the annual interest rate is within bounds
+    assert new_annual_interest_rate >= MIN_ANNUAL_INTEREST_RATE, "rate too low"
+    assert new_annual_interest_rate <= MAX_ANNUAL_INTEREST_RATE, "rate too high"
+
+    # Cache Trove info
+    trove: Trove = self.troves[trove_id]
+
+    # Make sure the Trove is active
+    assert trove.status == Status.ACTIVE, "!active"
+
+    # Make sure user is actually changing his rate
+    assert new_annual_interest_rate != trove.annual_interest_rate, "!new rate"
+
+    # Get the Trove's debt after accruing interest
+    trove_debt_after_interest: uint256 = self._trove_debt_after_interest(trove)
+
+    # Initialize the new debt amount variable. We will charge an upfront fee only if the user is adjusting their rate prematurely
+    new_debt: uint256 = trove_debt_after_interest
+
+    # Initialize the upfront fee variable. We will need to increase the global debt by this amount if we charge it
+    upfront_fee: uint256 = 0
+
+    # Apply upfront fee on premature adjustments and check collateral ratio
+    if block.timestamp < convert(trove.last_interest_rate_adj_time, uint256) + INTEREST_RATE_ADJ_COOLDOWN:
+        # Calculate the upfront fee and make sure the user is ok with it
+        upfront_fee = self._calculate_upfront_fee(new_debt, new_annual_interest_rate, max_upfront_fee)
+
+        # Charge the upfront fee
+        new_debt += upfront_fee
+
+        # Get the collateral price
+        collateral_price: uint256 = staticcall EXCHANGE.price()
+
+        # Calculate the collateral ratio
+        collateral_ratio: uint256 = self._calculate_collateral_ratio(trove.collateral, new_debt, collateral_price)
+
+        # Make sure the new collateral ratio is above the minimum collateral ratio
+        assert collateral_ratio >= MINIMUM_COLLATERAL_RATIO, "!MCR"
+
+    # Cache the Trove's old debt and interest rate for global accounting
+    old_debt: uint256 = trove.debt
+    old_annual_interest_rate: uint256 = trove.annual_interest_rate
+
+    # Update the Trove's interest rate and last adjustment time
+    trove.annual_interest_rate = new_annual_interest_rate
+    trove.last_interest_rate_adj_time = convert(block.timestamp, uint64)
+
+    # Update the Trove's debt info to reflect accrued interest
+    trove.debt = new_debt
+    trove.last_debt_update_time = convert(block.timestamp, uint64)
+
+    # Save changes to storage
+    self.troves[trove_id] = trove
+
+    # Accrue interest on the total debt and update accounting
+    self._accrue_interest_and_account_for_trove_change(
+        upfront_fee, # debt_increase
+        0, # debt_decrease
+        old_debt * old_annual_interest_rate, # old_weighted_debt
+        new_debt * new_annual_interest_rate # new_weighted_debt
+    )
+
+    # Reinsert the Trove in the sorted list at its new position
+    extcall SORTED_TROVES.re_insert(
+        trove_id,
+        new_annual_interest_rate,
+        prev_id,
+        next_id
+    )
 
 
 # ============================================================================================
@@ -443,7 +525,7 @@ def repay(trove_id: uint256, debt_amount: uint256):
 # ============================================================================================
 
 
-# @todo
+# @todo -- here
 
 
 # ============================================================================================
@@ -707,6 +789,7 @@ def _accrue_interest_and_account_for_trove_change(
     @param old_weighted_debt Amount of weighted debt to subtract from the total weighted debt
     @param new_weighted_debt Amount of weighted debt to add to the total weighted debt
     """
+    # @todo -- check debt_increase/decrease and old/new_weighted_debt are not 0
     # Update total debt
     new_total_debt: uint256 = self._sync_total_debt()
     new_total_debt += debt_increase
