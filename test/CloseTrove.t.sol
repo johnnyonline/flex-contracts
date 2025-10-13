@@ -56,10 +56,11 @@ contract CloseTroveTests is Base {
         assertEq(troveManager.total_debt(), _expectedDebt, "E18");
         assertEq(troveManager.total_weighted_debt(), _expectedDebt * DEFAULT_ANNUAL_INTEREST_RATE, "E18");
         assertEq(troveManager.collateral_balance(), _collateralNeeded, "E19");
+        assertEq(troveManager.zombie_trove_id(), 0, "E20");
 
         // Check exchange is empty
-        assertEq(borrowToken.balanceOf(address(exchange)), 0, "E20");
-        assertEq(collateralToken.balanceOf(address(exchange)), 0, "E21");
+        assertEq(borrowToken.balanceOf(address(exchange)), 0, "E21");
+        assertEq(collateralToken.balanceOf(address(exchange)), 0, "E22");
 
         // Airdrop the the expected debt to the borrower
         airdrop(address(borrowToken), userBorrower, _expectedDebt);
@@ -74,36 +75,37 @@ contract CloseTroveTests is Base {
 
         // Check trove info
         _trove = troveManager.troves(_troveId);
-        assertEq(_trove.debt, 0, "E22");
-        assertEq(_trove.collateral, 0, "E23");
-        assertEq(_trove.annual_interest_rate, 0, "E24");
-        assertEq(_trove.last_debt_update_time, 0, "E25");
-        assertEq(_trove.last_interest_rate_adj_time, 0, "E26");
-        assertEq(_trove.owner, address(0), "E27");
-        assertEq(uint256(_trove.status), 4, "E28"); // Closed
+        assertEq(_trove.debt, 0, "E23");
+        assertEq(_trove.collateral, 0, "E24");
+        assertEq(_trove.annual_interest_rate, 0, "E25");
+        assertEq(_trove.last_debt_update_time, 0, "E26");
+        assertEq(_trove.last_interest_rate_adj_time, 0, "E27");
+        assertEq(_trove.owner, address(0), "E28");
+        assertEq(uint256(_trove.status), 4, "E30"); // Closed
 
         // Check sorted troves
-        assertTrue(sortedTroves.empty(), "E29");
-        assertEq(sortedTroves.size(), 0, "E30");
-        assertEq(sortedTroves.first(), 0, "E31");
-        assertEq(sortedTroves.last(), 0, "E32");
-        assertFalse(sortedTroves.contains(_troveId), "E33");
+        assertTrue(sortedTroves.empty(), "E31");
+        assertEq(sortedTroves.size(), 0, "E32");
+        assertEq(sortedTroves.first(), 0, "E33");
+        assertEq(sortedTroves.last(), 0, "E34");
+        assertFalse(sortedTroves.contains(_troveId), "E35");
 
         // Check balances
-        assertEq(collateralToken.balanceOf(address(troveManager)), 0, "E34");
-        assertEq(collateralToken.balanceOf(address(troveManager)), troveManager.collateral_balance(), "E35");
-        assertEq(collateralToken.balanceOf(address(userBorrower)), _collateralNeeded, "E36");
-        assertEq(borrowToken.balanceOf(address(troveManager)), 0, "E37");
-        assertGe(borrowToken.balanceOf(address(lender)), _expectedDebt, "E38");
-        assertEq(borrowToken.balanceOf(userBorrower), 0, "E39");
+        assertEq(collateralToken.balanceOf(address(troveManager)), 0, "E36");
+        assertEq(collateralToken.balanceOf(address(troveManager)), troveManager.collateral_balance(), "E37");
+        assertEq(collateralToken.balanceOf(address(userBorrower)), _collateralNeeded, "E38");
+        assertEq(borrowToken.balanceOf(address(troveManager)), 0, "E39");
+        assertGe(borrowToken.balanceOf(address(lender)), _expectedDebt, "E40");
+        assertEq(borrowToken.balanceOf(userBorrower), 0, "E41");
 
         // Check global info
-        assertEq(troveManager.total_debt(), 0, "E41");
-        assertEq(troveManager.total_weighted_debt(), 0, "E42");
-        assertEq(troveManager.collateral_balance(), 0, "E43");
+        assertEq(troveManager.total_debt(), 0, "E42");
+        assertEq(troveManager.total_weighted_debt(), 0, "E43");
+        assertEq(troveManager.collateral_balance(), 0, "E44");
+        assertEq(troveManager.zombie_trove_id(), 0, "E45");
 
         // Check exchange is empty
-        assertEq(borrowToken.balanceOf(address(exchange)), 0, "E44");
-        assertEq(collateralToken.balanceOf(address(exchange)), 0, "E45");
+        assertEq(borrowToken.balanceOf(address(exchange)), 0, "E46");
+        assertEq(collateralToken.balanceOf(address(exchange)), 0, "E47");
     }
 }

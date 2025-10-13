@@ -57,10 +57,11 @@ contract RepayTests is Base {
         assertEq(troveManager.total_debt(), _expectedDebt, "E18");
         assertEq(troveManager.total_weighted_debt(), _expectedDebt * DEFAULT_ANNUAL_INTEREST_RATE, "E18");
         assertEq(troveManager.collateral_balance(), _collateralNeeded, "E19");
+        assertEq(troveManager.zombie_trove_id(), 0, "E20");
 
         // Check exchange is empty
-        assertEq(borrowToken.balanceOf(address(exchange)), 0, "E20");
-        assertEq(collateralToken.balanceOf(address(exchange)), 0, "E21");
+        assertEq(borrowToken.balanceOf(address(exchange)), 0, "E21");
+        assertEq(collateralToken.balanceOf(address(exchange)), 0, "E22");
 
         // Finally repay the trove back down to min debt
         vm.startPrank(userBorrower);
@@ -100,10 +101,11 @@ contract RepayTests is Base {
         assertEq(troveManager.total_debt(), _expectedDebt - _amountToRepay, "E41");
         assertEq(troveManager.total_weighted_debt(), (_expectedDebt - _amountToRepay) * DEFAULT_ANNUAL_INTEREST_RATE, "E42");
         assertEq(troveManager.collateral_balance(), _collateralNeeded, "E43");
+        assertEq(troveManager.zombie_trove_id(), 0, "E44");
 
         // Check exchange is empty
-        assertEq(borrowToken.balanceOf(address(exchange)), 0, "E44");
-        assertEq(collateralToken.balanceOf(address(exchange)), 0, "E45");
+        assertEq(borrowToken.balanceOf(address(exchange)), 0, "E45");
+        assertEq(collateralToken.balanceOf(address(exchange)), 0, "E46");
     }
 
     // ------- @todo
