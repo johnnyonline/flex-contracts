@@ -38,10 +38,10 @@ interface ITroveManager {
     function SORTED_TROVES() external view returns (address);
     function BORROW_TOKEN() external view returns (address);
     function COLLATERAL_TOKEN() external view returns (address);
+    function MINIMUM_COLLATERAL_RATIO() external view returns (uint256);
     function MIN_DEBT() external view returns (uint256);
     function MIN_ANNUAL_INTEREST_RATE() external view returns (uint256);
     function MAX_ANNUAL_INTEREST_RATE() external view returns (uint256);
-    function MINIMUM_COLLATERAL_RATIO() external view returns (uint256);
     function UPFRONT_INTEREST_PERIOD() external view returns (uint256);
     function INTEREST_RATE_ADJ_COOLDOWN() external view returns (uint256);
 
@@ -64,6 +64,7 @@ interface ITroveManager {
     // ============================================================================================
 
     function get_upfront_fee(uint256 debt_amount, uint256 annual_interest_rate) external view returns (uint256);
+    function get_trove_debt_after_interest(uint256 trove_id) external view returns (uint256);
 
     // ============================================================================================
     // Sync total debt

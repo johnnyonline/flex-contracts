@@ -35,6 +35,8 @@ contract Deploy is Script {
 
     ILender public lender;
 
+    uint256 public minimumCollateralRatio = 110 * 1e16; // 110%
+
     address public management = address(420_420);
     address public emergencyAdmin = address(69_420);
     address public performanceFeeRecipient = address(420_69_420);
@@ -67,7 +69,8 @@ contract Deploy is Script {
                     address(exchange),
                     address(sortedTroves),
                     address(borrowToken),
-                    address(collateralToken)
+                    address(collateralToken),
+                    minimumCollateralRatio
                 )
             )
         );

@@ -1,7 +1,6 @@
 # @version 0.4.1
 # @todo -- make sure caller is owner or on behalf of owner // add transfer trove ownership (make sure can't transfer ownership to self/lender)
 # @todo -- add events
-# @todo -- add view functions to view pending interest etc (CR?...)
 """
 @title Trove Manager
 @license MIT
@@ -58,10 +57,11 @@ SORTED_TROVES: public(immutable(ISortedTroves))
 BORROW_TOKEN: public(immutable(IERC20))
 COLLATERAL_TOKEN: public(immutable(IERC20))
 
+MINIMUM_COLLATERAL_RATIO: public(immutable(uint256))  # e.g., `110 * _ONE_PCT` for 110%
+
 MIN_DEBT: public(constant(uint256)) = 1000 * 10 ** 18
 MIN_ANNUAL_INTEREST_RATE: public(constant(uint256)) = _ONE_PCT // 2  # 0.5%
 MAX_ANNUAL_INTEREST_RATE: public(constant(uint256)) = 250 * _ONE_PCT  # 250%
-MINIMUM_COLLATERAL_RATIO: public(constant(uint256)) = 110 * _ONE_PCT  # 110% // @todo -- pass in constructor
 UPFRONT_INTEREST_PERIOD: public(constant(uint256)) = 7 * 24 * 60 * 60  # 7 days
 INTEREST_RATE_ADJ_COOLDOWN: public(constant(uint256)) = 7 * 24 * 60 * 60  # 7 days
 
@@ -107,13 +107,15 @@ def __init__(
     exchange: address,
     sorted_troves: address,
     borrow_token: address,
-    collateral_token: address
+    collateral_token: address,
+    minimum_collateral_ratio: uint256
 ):
     LENDER = lender
     EXCHANGE = IExchange(exchange)
     SORTED_TROVES = ISortedTroves(sorted_troves)
     BORROW_TOKEN = IERC20(borrow_token)
     COLLATERAL_TOKEN = IERC20(collateral_token)
+    MINIMUM_COLLATERAL_RATIO = minimum_collateral_ratio
 
     extcall COLLATERAL_TOKEN.approve(exchange, max_value(uint256), default_return_value=True)
 
@@ -134,6 +136,17 @@ def get_upfront_fee(debt_amount: uint256, annual_interest_rate: uint256) -> uint
     @return upfront_fee The calculated upfront fee
     """
     return self._get_upfront_fee(debt_amount, annual_interest_rate)
+
+
+@external
+@view
+def get_trove_debt_after_interest(trove_id: uint256) -> uint256:
+    """
+    @notice Calculate the Trove's debt after accruing interest
+    @param trove_id Unique identifier of the Trove
+    @return trove_debt_after_interest The Trove's debt after accruing interest
+    """
+    return self._get_trove_debt_after_interest(self.troves[trove_id])
 
 
 # ============================================================================================
@@ -880,7 +893,6 @@ def _accrue_interest_and_account_for_trove_change(
     @param old_weighted_debt Amount of weighted debt to subtract from the total weighted debt
     @param new_weighted_debt Amount of weighted debt to add to the total weighted debt
     """
-    # @todo -- check debt_increase/decrease and old/new_weighted_debt are not 0
     # Update total debt
     new_total_debt: uint256 = self._sync_total_debt()
     new_total_debt += debt_increase
