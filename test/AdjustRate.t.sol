@@ -23,7 +23,7 @@ contract AdjustRateTests is Base {
         uint256 _collateralNeeded = _amount * DEFAULT_TARGET_COLLATERAL_RATIO / exchange.price();
 
         // Calculate expected debt (borrow amount + upfront fee)
-        uint256 _expectedDebt = _amount + troveManager.calculate_upfront_fee(_amount, DEFAULT_ANNUAL_INTEREST_RATE);
+        uint256 _expectedDebt = _amount + troveManager.get_upfront_fee(_amount, DEFAULT_ANNUAL_INTEREST_RATE);
 
         // Open a trove
         uint256 _troveId = mintAndOpenTrove(userBorrower, _collateralNeeded, _amount, DEFAULT_ANNUAL_INTEREST_RATE);
@@ -126,7 +126,7 @@ contract AdjustRateTests is Base {
         uint256 _collateralNeeded = _amount * DEFAULT_TARGET_COLLATERAL_RATIO / exchange.price();
 
         // Calculate expected debt (borrow amount + upfront fee)
-        uint256 _expectedDebt = _amount + troveManager.calculate_upfront_fee(_amount, DEFAULT_ANNUAL_INTEREST_RATE);
+        uint256 _expectedDebt = _amount + troveManager.get_upfront_fee(_amount, DEFAULT_ANNUAL_INTEREST_RATE);
 
         // Open a trove
         uint256 _troveId = mintAndOpenTrove(userBorrower, _collateralNeeded, _amount, DEFAULT_ANNUAL_INTEREST_RATE);
@@ -174,7 +174,7 @@ contract AdjustRateTests is Base {
 
         // Calculate second expected debt with interest accumulated
         uint256 _interestOnFirstDebt = _expectedDebt * DEFAULT_ANNUAL_INTEREST_RATE * (block.timestamp - _trove.last_debt_update_time) / (365 days * 1e18);
-        uint256 _secondExpectedDebt = _expectedDebt + _interestOnFirstDebt + troveManager.calculate_upfront_fee(_expectedDebt + _interestOnFirstDebt, _newAnnualInterestRate);
+        uint256 _secondExpectedDebt = _expectedDebt + _interestOnFirstDebt + troveManager.get_upfront_fee(_expectedDebt + _interestOnFirstDebt, _newAnnualInterestRate);
 
         // Finally adjust the rate
         vm.prank(userBorrower);
@@ -236,7 +236,7 @@ contract AdjustRateTests is Base {
         uint256 _collateralNeeded = _borrowAmount * DEFAULT_TARGET_COLLATERAL_RATIO / exchange.price();
 
         // Calculate expected debt (borrow amount + upfront fee)
-        uint256 _expectedDebt = _borrowAmount + troveManager.calculate_upfront_fee(_borrowAmount, DEFAULT_ANNUAL_INTEREST_RATE);
+        uint256 _expectedDebt = _borrowAmount + troveManager.get_upfront_fee(_borrowAmount, DEFAULT_ANNUAL_INTEREST_RATE);
 
         // Open a trove from first borrower
         uint256 _troveId = mintAndOpenTrove(userBorrower, _collateralNeeded, _borrowAmount, DEFAULT_ANNUAL_INTEREST_RATE);

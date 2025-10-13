@@ -63,7 +63,7 @@ interface ITroveManager {
     // External view functions
     // ============================================================================================
 
-    function calculate_upfront_fee(uint256 debt_amount, uint256 annual_interest_rate) external view returns (uint256);
+    function get_upfront_fee(uint256 debt_amount, uint256 annual_interest_rate) external view returns (uint256);
 
     // ============================================================================================
     // Sync total debt

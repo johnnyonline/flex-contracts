@@ -1,9 +1,7 @@
 # @version 0.4.1
-# @todo -- improve funcs naming
 # @todo -- make sure caller is owner or on behalf of owner // add transfer trove ownership (make sure can't transfer ownership to self/lender)
 # @todo -- add events
 # @todo -- add view functions to view pending interest etc (CR?...)
-# @todo -- add `zombie_trove_id` checks to all tests
 """
 @title Trove Manager
 @license MIT
@@ -60,17 +58,17 @@ SORTED_TROVES: public(immutable(ISortedTroves))
 BORROW_TOKEN: public(immutable(IERC20))
 COLLATERAL_TOKEN: public(immutable(IERC20))
 
-_WAD: constant(uint256) = 10 ** 18
-_ONE_PCT: constant(uint256) = _WAD // 100
-_MAX_ITERATIONS: constant(uint256) = 1000
-_ONE_YEAR: constant(uint256) = 365 * 60 * 60 * 24
-
 MIN_DEBT: public(constant(uint256)) = 1000 * 10 ** 18
 MIN_ANNUAL_INTEREST_RATE: public(constant(uint256)) = _ONE_PCT // 2  # 0.5%
 MAX_ANNUAL_INTEREST_RATE: public(constant(uint256)) = 250 * _ONE_PCT  # 250%
 MINIMUM_COLLATERAL_RATIO: public(constant(uint256)) = 110 * _ONE_PCT  # 110% // @todo -- pass in constructor
 UPFRONT_INTEREST_PERIOD: public(constant(uint256)) = 7 * 24 * 60 * 60  # 7 days
 INTEREST_RATE_ADJ_COOLDOWN: public(constant(uint256)) = 7 * 24 * 60 * 60  # 7 days
+
+_WAD: constant(uint256) = 10 ** 18
+_ONE_PCT: constant(uint256) = _WAD // 100
+_MAX_ITERATIONS: constant(uint256) = 1000
+_ONE_YEAR: constant(uint256) = 365 * 60 * 60 * 24
 
 
 # ============================================================================================
@@ -127,7 +125,7 @@ def __init__(
 
 @external
 @view
-def calculate_upfront_fee(debt_amount: uint256, annual_interest_rate: uint256) -> uint256:
+def get_upfront_fee(debt_amount: uint256, annual_interest_rate: uint256) -> uint256:
     """
     @notice Calculate the upfront fee for borrowing a specified amount of debt at a given annual interest rate
     @dev The fee represents prepaid interest over `UPFRONT_INTEREST_PERIOD` using the system's average rate after the new debt
@@ -135,7 +133,7 @@ def calculate_upfront_fee(debt_amount: uint256, annual_interest_rate: uint256) -
     @param annual_interest_rate The annual interest rate for the debt
     @return upfront_fee The calculated upfront fee
     """
-    return self._calculate_upfront_fee(debt_amount, annual_interest_rate)
+    return self._get_upfront_fee(debt_amount, annual_interest_rate)
 
 
 # ============================================================================================
@@ -196,7 +194,7 @@ def open_trove(
     assert self.troves[trove_id].status == empty(Status), "trove exists"
 
     # Calculate the upfront fee and make sure the user is ok with it
-    upfront_fee: uint256 = self._calculate_upfront_fee(debt_amount, annual_interest_rate, max_upfront_fee)
+    upfront_fee: uint256 = self._get_upfront_fee(debt_amount, annual_interest_rate, max_upfront_fee)
 
     # Record the debt with the upfront fee
     debt_amount_with_fee: uint256 = debt_amount + upfront_fee
@@ -303,7 +301,7 @@ def remove_collateral(trove_id: uint256, collateral_change: uint256):
     assert trove.collateral >= collateral_change, "!collateral in trove"
 
     # Get the Trove's debt after accruing interest
-    trove_debt_after_interest: uint256 = self._trove_debt_after_interest(trove)
+    trove_debt_after_interest: uint256 = self._get_trove_debt_after_interest(trove)
 
     # Get the collateral price
     collateral_price: uint256 = staticcall EXCHANGE.price()
@@ -344,13 +342,13 @@ def borrow(trove_id: uint256, debt_amount: uint256, max_upfront_fee: uint256, mi
     assert trove.status == Status.ACTIVE, "!active"
 
     # Calculate the upfront fee and make sure the user is ok with it
-    upfront_fee: uint256 = self._calculate_upfront_fee(debt_amount, trove.annual_interest_rate, max_upfront_fee)
+    upfront_fee: uint256 = self._get_upfront_fee(debt_amount, trove.annual_interest_rate, max_upfront_fee)
 
     # Record the debt with the upfront fee
     debt_amount_with_fee: uint256 = debt_amount + upfront_fee
 
     # Get the Trove's debt after accruing interest
-    trove_debt_after_interest: uint256 = self._trove_debt_after_interest(trove)
+    trove_debt_after_interest: uint256 = self._get_trove_debt_after_interest(trove)
 
     # Calculate the new debt amount
     new_debt: uint256 = trove_debt_after_interest + debt_amount_with_fee
@@ -403,7 +401,7 @@ def repay(trove_id: uint256, debt_amount: uint256):
     assert trove.status == Status.ACTIVE, "!active"
 
     # Get the Trove's debt after accruing interest
-    trove_debt_after_interest: uint256 = self._trove_debt_after_interest(trove)
+    trove_debt_after_interest: uint256 = self._get_trove_debt_after_interest(trove)
 
     # Calculate the maximum allowable repayment to keep the Trove above the minimum debt
     max_repayment: uint256 = trove_debt_after_interest - MIN_DEBT  # Assumes `trove_debt_after_interest > MIN_DEBT`
@@ -465,7 +463,7 @@ def adjust_interest_rate(
     assert new_annual_interest_rate != trove.annual_interest_rate, "!new rate"
 
     # Get the Trove's debt after accruing interest
-    trove_debt_after_interest: uint256 = self._trove_debt_after_interest(trove)
+    trove_debt_after_interest: uint256 = self._get_trove_debt_after_interest(trove)
 
     # Initialize the new debt amount variable. We will charge an upfront fee only if the user is adjusting their rate prematurely
     new_debt: uint256 = trove_debt_after_interest
@@ -476,7 +474,7 @@ def adjust_interest_rate(
     # Apply upfront fee on premature adjustments and check collateral ratio
     if block.timestamp < convert(trove.last_interest_rate_adj_time, uint256) + INTEREST_RATE_ADJ_COOLDOWN:
         # Calculate the upfront fee and make sure the user is ok with it
-        upfront_fee = self._calculate_upfront_fee(new_debt, new_annual_interest_rate, max_upfront_fee)
+        upfront_fee = self._get_upfront_fee(new_debt, new_annual_interest_rate, max_upfront_fee)
 
         # Charge the upfront fee
         new_debt += upfront_fee
@@ -540,7 +538,7 @@ def close_trove(trove_id: uint256):
     assert trove.status == Status.ACTIVE, "!active"
 
     # Get the Trove's debt after accruing interest
-    trove_debt_after_interest: uint256 = self._trove_debt_after_interest(trove)
+    trove_debt_after_interest: uint256 = self._get_trove_debt_after_interest(trove)
 
     # Cache the Trove's old info for global accounting
     old_trove: Trove = trove
@@ -604,7 +602,7 @@ def close_zombie_trove(trove_id: uint256):
 
     if old_trove.debt > 0:
         # Get the Trove's debt after accruing interest
-        trove_debt_after_interest: uint256 = self._trove_debt_after_interest(old_trove)
+        trove_debt_after_interest: uint256 = self._get_trove_debt_after_interest(old_trove)
 
         # Accrue interest on the total debt and update accounting
         self._accrue_interest_and_account_for_trove_change(
@@ -696,7 +694,7 @@ def _redeem(amount: uint256) -> uint256:
         # Don't want to redeem a borrower's own Trove
         if msg.sender != trove.owner:
             # Get the Trove's debt after accruing interest
-            trove_debt_after_interest: uint256 = self._trove_debt_after_interest(trove)
+            trove_debt_after_interest: uint256 = self._get_trove_debt_after_interest(trove)
 
             # Determine the amount to be freed
             debt_to_free: uint256 = min(remaining_debt_to_free, trove_debt_after_interest)
@@ -800,7 +798,7 @@ def _calculate_collateral_ratio(collateral: uint256, debt: uint256, collateral_p
 
 @internal
 @pure
-def _calculate_interest(weighted_debt: uint256, period: uint256) -> uint256:
+def _calculate_accrued_interest(weighted_debt: uint256, period: uint256) -> uint256:
     """
     @notice Calculate the interest accrued on weighted debt over a given period
     @param weighted_debt The debt weighted by the annual interest rate
@@ -817,7 +815,7 @@ def _calculate_interest(weighted_debt: uint256, period: uint256) -> uint256:
 
 @internal
 @view
-def _calculate_upfront_fee(
+def _get_upfront_fee(
     debt_amount: uint256,
     annual_interest_rate: uint256,
     max_upfront_fee: uint256 = max_value(uint256)
@@ -841,7 +839,7 @@ def _calculate_upfront_fee(
     avg_interest_rate: uint256 = new_total_weighted_debt // new_total_debt
 
     # Calculate the upfront fee using the average interest rate
-    upfront_fee: uint256 = self._calculate_interest(debt_amount * avg_interest_rate, UPFRONT_INTEREST_PERIOD)
+    upfront_fee: uint256 = self._calculate_accrued_interest(debt_amount * avg_interest_rate, UPFRONT_INTEREST_PERIOD)
 
     # Make sure the user is ok with the upfront fee
     assert upfront_fee <= max_upfront_fee, "!max_upfront_fee"
@@ -851,13 +849,13 @@ def _calculate_upfront_fee(
 
 @internal
 @view
-def _trove_debt_after_interest(trove: Trove) -> uint256:
+def _get_trove_debt_after_interest(trove: Trove) -> uint256:
     """
     @notice Calculate the Trove's debt after accruing interest
     @param trove The Trove struct
     @return trove_debt_after_interest The Trove's debt after accruing interest
     """
-    return trove.debt + self._calculate_interest(
+    return trove.debt + self._calculate_accrued_interest(
         trove.debt * trove.annual_interest_rate,  # trove_weighted_debt
         block.timestamp - convert(trove.last_debt_update_time, uint256)  # period since last update
     )

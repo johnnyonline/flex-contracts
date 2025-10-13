@@ -22,7 +22,7 @@ contract OpenTroveTests is Base {
         uint256 _collateralNeeded = _borrowAmount * DEFAULT_TARGET_COLLATERAL_RATIO / exchange.price();
 
         // Calculate expected debt (borrow amount + upfront fee)
-        uint256 _expectedDebt = _borrowAmount + troveManager.calculate_upfront_fee(_borrowAmount, DEFAULT_ANNUAL_INTEREST_RATE);
+        uint256 _expectedDebt = _borrowAmount + troveManager.get_upfront_fee(_borrowAmount, DEFAULT_ANNUAL_INTEREST_RATE);
 
         // Open a trove
         uint256 _troveId = mintAndOpenTrove(userBorrower, _collateralNeeded, _borrowAmount, DEFAULT_ANNUAL_INTEREST_RATE);
@@ -76,7 +76,7 @@ contract OpenTroveTests is Base {
         uint256 _collateralNeeded = _borrowAmount * DEFAULT_TARGET_COLLATERAL_RATIO / exchange.price();
 
         // Calculate expected debt (borrow amount + upfront fee)
-        uint256 _expectedDebt = _borrowAmount + troveManager.calculate_upfront_fee(_borrowAmount, DEFAULT_ANNUAL_INTEREST_RATE);
+        uint256 _expectedDebt = _borrowAmount + troveManager.get_upfront_fee(_borrowAmount, DEFAULT_ANNUAL_INTEREST_RATE);
 
         // Cache the available liquidity
         uint256 _availableLiquidity = borrowToken.balanceOf(address(lender));
@@ -139,13 +139,13 @@ contract OpenTroveTests is Base {
         assertEq(borrowToken.balanceOf(address(lender)), 0, "E0");
 
         // Calculate expected debt (borrow amount + upfront fee)
-        uint256 _expectedDebt = _amount + troveManager.calculate_upfront_fee(_amount, DEFAULT_ANNUAL_INTEREST_RATE);
+        uint256 _expectedDebt = _amount + troveManager.get_upfront_fee(_amount, DEFAULT_ANNUAL_INTEREST_RATE);
         uint256 _expectedCollateralAfterRedemption = _collateralNeeded - (_expectedDebt * 1e18 / exchange.price());
 
         // Second amount is slightly more than the first amount, just enough to cover the upfront fee
-        uint256 _secondAmount = _amount + troveManager.calculate_upfront_fee(_amount, DEFAULT_ANNUAL_INTEREST_RATE);
+        uint256 _secondAmount = _amount + troveManager.get_upfront_fee(_amount, DEFAULT_ANNUAL_INTEREST_RATE);
         uint256 _secondCollateralNeeded = _secondAmount * DEFAULT_TARGET_COLLATERAL_RATIO / exchange.price();
-        uint256 _secondExpectedDebt = _secondAmount + troveManager.calculate_upfront_fee(_secondAmount, DEFAULT_ANNUAL_INTEREST_RATE);
+        uint256 _secondExpectedDebt = _secondAmount + troveManager.get_upfront_fee(_secondAmount, DEFAULT_ANNUAL_INTEREST_RATE);
 
         // Open a trove and redeem from the other borrower
         uint256 _troveId = mintAndOpenTrove(userBorrower, _secondCollateralNeeded, _secondAmount, DEFAULT_ANNUAL_INTEREST_RATE);
@@ -221,15 +221,15 @@ contract OpenTroveTests is Base {
 
         // Second amount is slightly more than the first amount, not too much more though, to leave the first borrower above min debt
         uint256 _secondAmount = _firstAmount * 110 / 100; // 10% more
-        _secondAmount += troveManager.calculate_upfront_fee(_secondAmount, DEFAULT_ANNUAL_INTEREST_RATE);
+        _secondAmount += troveManager.get_upfront_fee(_secondAmount, DEFAULT_ANNUAL_INTEREST_RATE);
         uint256 _secondCollateralNeeded = _secondAmount * DEFAULT_TARGET_COLLATERAL_RATIO / exchange.price();
-        uint256 _secondExpectedDebt = _secondAmount + troveManager.calculate_upfront_fee(_secondAmount, DEFAULT_ANNUAL_INTEREST_RATE);
+        uint256 _secondExpectedDebt = _secondAmount + troveManager.get_upfront_fee(_secondAmount, DEFAULT_ANNUAL_INTEREST_RATE);
 
         // Open a trove and redeem from the other borrower
         uint256 _troveId = mintAndOpenTrove(userBorrower, _secondCollateralNeeded, _secondAmount, DEFAULT_ANNUAL_INTEREST_RATE);
 
         // Calculate expected debt (borrow amount + upfront fee - redeemed debt)
-        uint256 _expectedDebt = _amount - _secondAmount + troveManager.calculate_upfront_fee(_firstAmount, DEFAULT_ANNUAL_INTEREST_RATE);
+        uint256 _expectedDebt = _amount - _secondAmount + troveManager.get_upfront_fee(_firstAmount, DEFAULT_ANNUAL_INTEREST_RATE);
 
         // Calculate expected collateral after redemption (only need to redeem the difference between the two amounts)
         uint256 _expectedCollateralAfterRedemption = _collateralNeeded - ((_secondAmount - _firstAmount) * 1e18 / exchange.price());
@@ -293,7 +293,7 @@ contract OpenTroveTests is Base {
         _secondAmount = bound(_secondAmount, troveManager.MIN_DEBT(), _amount);
 
         // Calculate expected upfront fee for the first borrower
-        uint256 _expectedUpfrontFee = troveManager.calculate_upfront_fee(_amount, DEFAULT_ANNUAL_INTEREST_RATE);
+        uint256 _expectedUpfrontFee = troveManager.get_upfront_fee(_amount, DEFAULT_ANNUAL_INTEREST_RATE);
 
         // Delta between the two amounts should be at most min debt minus upfront fee so that the 1st borrower ends up below min debt
         vm.assume(_amount - _secondAmount < troveManager.MIN_DEBT() - _expectedUpfrontFee);
@@ -323,13 +323,13 @@ contract OpenTroveTests is Base {
         uint256 _troveId = mintAndOpenTrove(userBorrower, _secondCollateralNeeded, _secondAmount, DEFAULT_ANNUAL_INTEREST_RATE);
 
         // Calculate expected debt (borrow amount + upfront fee - redeemed debt)
-        uint256 _expectedDebt = _amount - _secondAmount + troveManager.calculate_upfront_fee(_amount, DEFAULT_ANNUAL_INTEREST_RATE);
+        uint256 _expectedDebt = _amount - _secondAmount + troveManager.get_upfront_fee(_amount, DEFAULT_ANNUAL_INTEREST_RATE);
 
         // Calculate expected collateral after redemption (only need to redeem the difference between the two amounts)
         uint256 _expectedCollateralAfterRedemption = _collateralNeeded - (_secondAmount * 1e18 / exchange.price());
 
         // Calculate expected debt for the second borrower
-        uint256 _secondExpectedDebt = _secondAmount + troveManager.calculate_upfront_fee(_secondAmount, DEFAULT_ANNUAL_INTEREST_RATE);
+        uint256 _secondExpectedDebt = _secondAmount + troveManager.get_upfront_fee(_secondAmount, DEFAULT_ANNUAL_INTEREST_RATE);
 
         // Make sure there's no liquidity left in the lender
         assertEq(borrowToken.balanceOf(address(lender)), 0, "E1");
