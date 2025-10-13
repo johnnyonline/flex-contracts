@@ -123,6 +123,9 @@ interface ITroveManager {
     function close_trove(
         uint256 trove_id
     ) external;
+    function close_zombie_trove(
+        uint256 trove_id
+    ) external;
 
     // ============================================================================================
     // Redeem

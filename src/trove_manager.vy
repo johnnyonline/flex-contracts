@@ -2,11 +2,13 @@
 # @todo -- improve funcs naming
 # @todo -- make sure caller is owner or on behalf of owner // add transfer trove ownership (make sure can't transfer ownership to self/lender)
 # @todo -- add events
+# @todo -- add view functions to view pending interest etc (CR?...)
+# @todo -- add `zombie_trove_id` checks to all tests
 """
 @title Trove Manager
 @license MIT
-@author Flex Protocol
-@notice Core contract that manages all Troves. Handles opening, closing, and updating borrower positions,
+@author Flex Meow
+@notice Core contract that manages all Troves. Handles opening, closing, liquidating, and updating borrower positions,
         accrues interest, maintains aggregate debt accounting, and coordinates redemptions with the Lender
         and sorted_troves contracts
 """
@@ -66,7 +68,7 @@ _ONE_YEAR: constant(uint256) = 365 * 60 * 60 * 24
 MIN_DEBT: public(constant(uint256)) = 1000 * 10 ** 18
 MIN_ANNUAL_INTEREST_RATE: public(constant(uint256)) = _ONE_PCT // 2  # 0.5%
 MAX_ANNUAL_INTEREST_RATE: public(constant(uint256)) = 250 * _ONE_PCT  # 250%
-MINIMUM_COLLATERAL_RATIO: public(constant(uint256)) = 110 * _ONE_PCT  # 110% // @todo -- make this configurable
+MINIMUM_COLLATERAL_RATIO: public(constant(uint256)) = 110 * _ONE_PCT  # 110% // @todo -- pass in constructor
 UPFRONT_INTEREST_PERIOD: public(constant(uint256)) = 7 * 24 * 60 * 60  # 7 days
 INTEREST_RATE_ADJ_COOLDOWN: public(constant(uint256)) = 7 * 24 * 60 * 60  # 7 days
 
@@ -524,7 +526,7 @@ def adjust_interest_rate(
 # Close trove
 # ============================================================================================
 
-# @todo -- test closing a zombire trove with non 0 debt and with 0 debt
+
 @external
 def close_trove(trove_id: uint256):
     """
@@ -571,8 +573,6 @@ def close_trove(trove_id: uint256):
     extcall COLLATERAL_TOKEN.transfer(msg.sender, old_trove.collateral, default_return_value=True)
 
 
-# @todo -- here
-# @todo -- test closing a zombire trove with non 0 debt and with 0 debt
 @external
 def close_zombie_trove(trove_id: uint256):
     """

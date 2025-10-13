@@ -3,7 +3,7 @@
 """
 @title Sorted Troves
 @license MIT
-@author Flex Protocol
+@author Flex Meow
 @notice A sorted doubly linked list with nodes sorted in descending order.
         Nodes map to active Troves in the system - the ID property is the address of a Trove owner.
         Nodes are ordered according to the borrower's chosen annual interest rate.
