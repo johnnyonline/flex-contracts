@@ -223,7 +223,7 @@ def remove(trove_id: uint256):
 
     self._remove(trove_id)
 
-    self._nodes[trove_id].exists = False
+    self._nodes[trove_id] = empty(Node)
     self._size -= 1
 
 
