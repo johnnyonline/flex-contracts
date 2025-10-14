@@ -4,7 +4,7 @@
 """
 @title Trove Manager
 @license MIT
-@author Flex Meow
+@author Flex
 @notice Core contract that manages all Troves. Handles opening, closing, liquidating, and updating borrower positions,
         accrues interest, maintains aggregate debt accounting, and coordinates redemptions with the Lender
         and sorted_troves contracts

@@ -18,13 +18,13 @@ interface ISortedTroves {
     function first() external view returns (uint256);
     function last() external view returns (uint256);
     function next(
-        uint256 id
+        uint256 trove_id
     ) external view returns (uint256);
     function prev(
-        uint256 id
+        uint256 trove_id
     ) external view returns (uint256);
     function contains(
-        uint256 id
+        uint256 trove_id
     ) external view returns (bool);
     function valid_insert_position(
         uint256 annual_interest_rate,
@@ -42,16 +42,16 @@ interface ISortedTroves {
     // ============================================================================================
 
     function insert(
-        uint256 id,
+        uint256 trove_id,
         uint256 annual_interest_rate,
         uint256 prev_id,
         uint256 next_id
     ) external;
     function remove(
-        uint256 id
+        uint256 trove_id
     ) external;
     function re_insert(
-        uint256 id,
+        uint256 trove_id,
         uint256 new_annual_interest_rate,
         uint256 prev_id,
         uint256 next_id

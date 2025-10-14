@@ -3,7 +3,7 @@
 """
 @title Sorted Troves
 @license MIT
-@author Flex Meow
+@author Flex
 @notice A sorted doubly linked list with nodes sorted in descending order.
         Nodes map to active Troves in the system - the ID property is the address of a Trove owner.
         Nodes are ordered according to the borrower's chosen annual interest rate.
@@ -18,7 +18,6 @@
 """
 
 from interfaces import ITroveManager
-# @todo -- remove the whole `slice` thing
 
 # ============================================================================================
 # Structs
@@ -71,8 +70,12 @@ def __init__(trove_manager: address):
     TROVE_MANAGER = ITroveManager(trove_manager)
 
     # Technically this is not needed as long as _ROOT_NODE_ID is 0, but it doesn't hurt
-    self._nodes[_ROOT_NODE_ID].next_id = _ROOT_NODE_ID
-    self._nodes[_ROOT_NODE_ID].prev_id = _ROOT_NODE_ID
+    node: Node = empty(Node)
+    node.next_id = _ROOT_NODE_ID
+    node.prev_id = _ROOT_NODE_ID
+
+    # Save to storage
+    self._nodes[_ROOT_NODE_ID] = node
 
 
 # ============================================================================================
@@ -191,52 +194,52 @@ def find_insert_position(annual_interest_rate: uint256, prev_id: uint256, next_i
 
 
 @external
-def insert(id: uint256, annual_interest_rate: uint256, prev_id: uint256, next_id: uint256):
+def insert(trove_id: uint256, annual_interest_rate: uint256, prev_id: uint256, next_id: uint256):
     """
     @notice Add a Trove to the list
-    @param id Trove's ID
+    @param trove_id Trove's ID
     @param annual_interest_rate Trove's annual interest rate
     @param prev_id ID of previous Trove for the insert position
     @param next_id ID of next Trove for the insert position
     """
     assert msg.sender == TROVE_MANAGER.address, "not trove manager"
-    assert not self._contains(id), "trove exists"
-    assert id != _ROOT_NODE_ID, "invalid id"
+    assert not self._contains(trove_id), "trove exists"
+    assert trove_id != _ROOT_NODE_ID, "invalid id"
 
-    self._insert_slice(id, id, annual_interest_rate, prev_id, next_id)
+    self._insert(trove_id, annual_interest_rate, prev_id, next_id)
 
-    self._nodes[id].exists = True
+    self._nodes[trove_id].exists = True
     self._size += 1
 
 
 @external
-def remove(id: uint256):
+def remove(trove_id: uint256):
     """
     @notice Remove a Trove from the list
-    @param id Trove's ID
+    @param trove_id Trove's ID
     """
     assert msg.sender == TROVE_MANAGER.address, "not trove manager"
-    assert self._contains(id), "trove does not exist"
+    assert self._contains(trove_id), "trove does not exist"
 
-    self._remove_slice(id, id)
+    self._remove(trove_id)
 
-    self._nodes[id].exists = False
+    self._nodes[trove_id].exists = False
     self._size -= 1
 
 
 @external
-def re_insert(id: uint256, new_annual_interest_rate: uint256, prev_id: uint256, next_id: uint256):
+def re_insert(trove_id: uint256, new_annual_interest_rate: uint256, prev_id: uint256, next_id: uint256):
     """
     @notice Re-insert a Trove at a new position based on its new annual interest rate
-    @param id Trove's ID
+    @param trove_id Trove's ID
     @param new_annual_interest_rate Trove's new annual interest rate
     @param prev_id ID of previous Trove for the new insert position
     @param next_id ID of next Trove for the new insert position
     """
     assert msg.sender == TROVE_MANAGER.address, "not trove manager"
-    assert self._contains(id), "trove does not exist"
+    assert self._contains(trove_id), "trove does not exist"
 
-    self._re_insert_slice(id, id, new_annual_interest_rate, prev_id, next_id)
+    self._re_insert(trove_id, new_annual_interest_rate, prev_id, next_id)
 
 
 # ============================================================================================
@@ -246,13 +249,13 @@ def re_insert(id: uint256, new_annual_interest_rate: uint256, prev_id: uint256, 
 
 @internal
 @view
-def _contains(id: uint256) -> bool:
+def _contains(trove_id: uint256) -> bool:
     """
     @notice Checks if the list contains a node
-    @param id Node's ID
+    @param trove_id Node's ID
     @return True if the node exists in the list. False otherwise
     """
-    return self._nodes[id].exists
+    return self._nodes[trove_id].exists
 
 
 @internal
@@ -456,14 +459,13 @@ def _trove_annual_interest_rate(trove_id: uint256) -> uint256:
 
 
 @internal
-def _insert_slice(slice_head: uint256, slice_tail: uint256, annual_interest_rate: uint256, prev_id: uint256, next_id: uint256):
+def _insert(trove_id: uint256, annual_interest_rate: uint256, prev_id: uint256, next_id: uint256):
     """
-    @notice Insert a slice of nodes between `prev_id` and `next_id`
+    @notice Insert a node between `prev_id` and `next_id`
     @dev If (`prev_id`, `next_id`) is not a valid insert position for
          the given `annual_interest_rate`, a valid position is found first
-    @param slice_head First node ID in the slice
-    @param slice_tail Last node ID in the slice
-    @param annual_interest_rate Interest rate for the slice
+    @param trove_id Trove's id
+    @param annual_interest_rate Interest rate for the Trove
     @param prev_id ID of previous node for the insert position
     @param next_id ID of next node for the insert position
     """
@@ -471,31 +473,29 @@ def _insert_slice(slice_head: uint256, slice_tail: uint256, annual_interest_rate
         # If the provided hint is invalid, find it ourselves
         prev_id, next_id = self._find_insert_position(annual_interest_rate, prev_id, next_id)
 
-    self._insert_slice_into_verified_position(slice_head, slice_tail, prev_id, next_id)
+    self._insert_into_verified_position(trove_id, prev_id, next_id)
 
 
 @internal
-def _remove_slice(slice_head: uint256, slice_tail: uint256):
+def _remove(trove_id: uint256):
     """
-    @notice Remove a slice of nodes from the list while keeping the removed nodes connected to each other
-    @dev The removed nodes remain linked to each other so they can be reinserted later with `_insert_slice()`.
-         Passing the same ID for both `slice_head` and `slice_tail` removes a single node
-    @param slice_head First node ID in the slice
-    @param slice_tail Last node ID in the slice
+    @notice Remove a node from the list while keeping the removed nodes connected to each other
+    @dev The removed nodes remain linked to each other so they can be reinserted later with `_insert()`
+    @param trove_id Trove's id
     """
-    self._nodes[self._nodes[slice_head].prev_id].next_id = self._nodes[slice_tail].next_id
-    self._nodes[self._nodes[slice_tail].next_id].prev_id = self._nodes[slice_head].prev_id
+    trove_to_remove: Node = self._nodes[trove_id]
+    self._nodes[trove_to_remove.prev_id].next_id = trove_to_remove.next_id
+    self._nodes[trove_to_remove.next_id].prev_id = trove_to_remove.prev_id
 
 
 @internal
-def _re_insert_slice(slice_head: uint256, slice_tail: uint256, annual_interest_rate: uint256, prev_id: uint256, next_id: uint256):
+def _re_insert(trove_id: uint256, annual_interest_rate: uint256, prev_id: uint256, next_id: uint256):
     """
-    @notice Re-insert a slice of nodes at a new position based on `annual_interest_rate`
+    @notice Re-insert a node at a new position based on `annual_interest_rate`
     @dev If (`prev_id`, `next_id`) is not a valid insert position for
          the given `annual_interest_rate`, a valid position is found first
-    @param slice_head First node ID in the slice
-    @param slice_tail Last node ID in the slice
-    @param annual_interest_rate New interest rate for the slice
+    @param trove_id Trove's id
+    @param annual_interest_rate New interest rate for the Trove
     @param prev_id Suggested previous node ID
     @param next_id Suggested next node ID
     """
@@ -504,22 +504,21 @@ def _re_insert_slice(slice_head: uint256, slice_tail: uint256, annual_interest_r
         prev_id, next_id = self._find_insert_position(annual_interest_rate, prev_id, next_id)
 
     # Re-insert only if the new position is different from the current one
-    if next_id != slice_head and prev_id != slice_tail:
-        self._remove_slice(slice_head, slice_tail)
-        self._insert_slice_into_verified_position(slice_head, slice_tail, prev_id, next_id)
+    if next_id != trove_id and prev_id != trove_id:
+        self._remove(trove_id)
+        self._insert_into_verified_position(trove_id, prev_id, next_id)
 
 
 @internal
-def _insert_slice_into_verified_position(slice_head: uint256, slice_tail: uint256, prev_id: uint256, next_id: uint256):
+def _insert_into_verified_position(trove_id: uint256, prev_id: uint256, next_id: uint256):
     """
-    @notice Insert a slice of nodes between `prev_id` and `next_id`
+    @notice Insert a node between `prev_id` and `next_id`
     @dev Assumes (`prev_id`, `next_id`) is a valid insert position
-    @param slice_head First node ID in the slice
-    @param slice_tail Last node ID in the slice
+    @param trove_id Trove's id
     @param prev_id ID of previous node for the insert position
     @param next_id ID of next node for the insert position
     """
-    self._nodes[prev_id].next_id = slice_head
-    self._nodes[slice_head].prev_id = prev_id
-    self._nodes[slice_tail].next_id = next_id
-    self._nodes[next_id].prev_id = slice_tail
+    self._nodes[prev_id].next_id = trove_id
+    self._nodes[trove_id].prev_id = prev_id
+    self._nodes[trove_id].next_id = next_id
+    self._nodes[next_id].prev_id = trove_id
