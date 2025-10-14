@@ -200,10 +200,10 @@ def open_trove(
     assert annual_interest_rate >= MIN_ANNUAL_INTEREST_RATE, "rate too low"
     assert annual_interest_rate <= MAX_ANNUAL_INTEREST_RATE, "rate too high"
 
-    # Generate the trove ID
+    # Generate the Trove ID
     trove_id: uint256 = convert(keccak256(abi_encode(msg.sender, index)), uint256)
 
-    # Make sure the trove doesn't already exist
+    # Make sure the Trove doesn't already exist
     assert self.troves[trove_id].status == empty(Status), "trove exists"
 
     # Calculate the upfront fee and make sure the user is ok with it
@@ -224,7 +224,7 @@ def open_trove(
     # Make sure the collateral ratio is above the minimum collateral ratio
     assert trove_collateral_ratio >= MINIMUM_COLLATERAL_RATIO, "!MCR"
 
-    # Store the trove info
+    # Store the Trove info
     self.troves[trove_id] = Trove(
         debt=debt_amount_with_fee,
         collateral=collateral_amount,
@@ -246,7 +246,7 @@ def open_trove(
     # Record the received collateral
     self.collateral_balance += collateral_amount
 
-    # Add the trove to the sorted troves list
+    # Add the Trove to the sorted troves list
     extcall SORTED_TROVES.insert(
         trove_id,
         annual_interest_rate,
@@ -339,7 +339,7 @@ def remove_collateral(trove_id: uint256, collateral_change: uint256):
 @external
 def borrow(trove_id: uint256, debt_amount: uint256, max_upfront_fee: uint256, min_debt_out: uint256):
     """
-    @notice Borrow more tokens against an existing Trove
+    @notice Borrow more tokens from an existing Trove
     @param trove_id Unique identifier of the Trove
     @param debt_amount Amount of additional debt to issue before the upfront fee
     @param max_upfront_fee Maximum upfront fee the caller is willing to pay
@@ -679,10 +679,10 @@ def _redeem(amount: uint256) -> uint256:
     # Initialize the `is_zombie_trove` flag
     is_zombie_trove: bool = False
 
-    # Initialize the trove to redeem variable
+    # Initialize the Trove to redeem variable
     trove_to_redeem: uint256 = self.zombie_trove_id
 
-    # Use zombie trove from previous redemption if it exists. Otherwise get the trove with the lowest interest rate
+    # Use zombie Trove from previous redemption if it exists. Otherwise get the Trove with the lowest interest rate
     if trove_to_redeem != 0:
         is_zombie_trove = True
     else:
