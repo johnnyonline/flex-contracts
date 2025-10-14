@@ -3,7 +3,7 @@
 """
 @title tBTC --> crvUSD 
 @license MIT
-@author Flex Protocol
+@author Flex
 @notice Swaps tBTC for crvUSD
 """
 

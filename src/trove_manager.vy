@@ -666,7 +666,6 @@ def _redeem(amount: uint256) -> uint256:
     """
     @notice Internal implementation of `redeem`
     @dev Swap sandwich protection is the caller's responsibility
-    @dev Does not allow partial redemptions that would leave a Trove below the minimum debt
     @param amount Target amount of borrow tokens to free
     @return amount The actual amount of borrow tokens freed
     """

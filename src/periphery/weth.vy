@@ -3,7 +3,7 @@
 """
 @title WETH --> crvUSD 
 @license MIT
-@author Flex Protocol
+@author Flex
 @notice Swaps WETH for crvUSD
 """
 
