@@ -1,5 +1,4 @@
 # @version 0.4.1
-# @todo -- make sure caller is owner or on behalf of owner // add transfer trove ownership (make sure can't transfer ownership to self/lender)
 # @todo -- add events
 """
 @title Trove Manager
@@ -164,6 +163,42 @@ def sync_total_debt() -> uint256:
 
 
 # ============================================================================================
+# Ownership
+# ============================================================================================
+# @todo
+
+
+@external
+def transfer_ownership(new_owner: address):
+    """
+    @notice Transfer ownership of a Trove to a new owner
+    @dev New owner must call `accept_ownership` to finalize the transfer
+    @param new_owner The address of the new owner
+    """
+    pass
+
+
+@external
+def accept_ownership():
+    """
+    @notice Accept ownership of a Trove
+    @dev Can only be called by the new owner
+    """
+    pass
+
+
+@external
+def force_transfer_ownership(trove_id: uint256, new_owner: address):
+    """
+    @notice Force transfer ownership of a Trove to a new owner
+    @dev Does not require acceptance by the new owner
+    @param trove_id Unique identifier of the Trove
+    @param new_owner The address of the new owner
+    """
+    pass
+
+
+# ============================================================================================
 # Open trove
 # ============================================================================================
 
@@ -281,6 +316,9 @@ def add_collateral(trove_id: uint256, collateral_change: uint256):
     # Cache Trove info
     trove: Trove = self.troves[trove_id]
 
+    # Make sure the caller is the owner of the Trove
+    assert trove.owner == msg.sender, "!owner"
+
     # Make sure the Trove is active
     assert trove.status == Status.ACTIVE, "!active"
 
@@ -306,6 +344,9 @@ def remove_collateral(trove_id: uint256, collateral_change: uint256):
 
     # Cache Trove info
     trove: Trove = self.troves[trove_id]
+
+    # Make sure the caller is the owner of the Trove
+    assert trove.owner == msg.sender, "!owner"
 
     # Make sure the Trove is active
     assert trove.status == Status.ACTIVE, "!active"
@@ -350,6 +391,9 @@ def borrow(trove_id: uint256, debt_amount: uint256, max_upfront_fee: uint256, mi
 
     # Cache Trove info
     trove: Trove = self.troves[trove_id]
+
+    # Make sure the caller is the owner of the Trove
+    assert trove.owner == msg.sender, "!owner"
 
     # Make sure the Trove is active
     assert trove.status == Status.ACTIVE, "!active"
@@ -410,6 +454,9 @@ def repay(trove_id: uint256, debt_amount: uint256):
     # Cache Trove info
     trove: Trove = self.troves[trove_id]
 
+    # Make sure the caller is the owner of the Trove
+    assert trove.owner == msg.sender, "!owner"
+
     # Make sure the Trove is active
     assert trove.status == Status.ACTIVE, "!active"
 
@@ -468,6 +515,9 @@ def adjust_interest_rate(
 
     # Cache Trove info
     trove: Trove = self.troves[trove_id]
+
+    # Make sure the caller is the owner of the Trove
+    assert trove.owner == msg.sender, "!owner"
 
     # Make sure the Trove is active
     assert trove.status == Status.ACTIVE, "!active"
@@ -547,6 +597,9 @@ def close_trove(trove_id: uint256):
     # Cache Trove info
     trove: Trove = self.troves[trove_id]
 
+    # Make sure the caller is the owner of the Trove
+    assert trove.owner == msg.sender, "!owner"
+
     # Make sure the Trove is active
     assert trove.status == Status.ACTIVE, "!active"
 
@@ -592,6 +645,9 @@ def close_zombie_trove(trove_id: uint256):
     """
     # Cache Trove info
     trove: Trove = self.troves[trove_id]
+
+    # Make sure the caller is the owner of the Trove
+    assert trove.owner == msg.sender, "!owner"
 
     # Make sure the Trove is zombie
     assert trove.status == Status.ZOMBIE, "!zombie"
