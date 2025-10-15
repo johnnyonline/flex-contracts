@@ -1,5 +1,5 @@
 # @version 0.4.1
-# @todo -- add events
+
 """
 @title Trove Manager
 @license MIT
@@ -14,6 +14,71 @@ from ethereum.ercs import IERC20
 from periphery.interfaces import IExchange
 
 from interfaces import ISortedTroves
+
+
+# ============================================================================================
+# Events
+# ============================================================================================
+
+
+event OpenTrove:
+    trove_id: uint256
+    owner: address
+    collateral_amount: uint256
+    debt_amount: uint256
+    upfront_fee: uint256
+    annual_interest_rate: uint256
+
+event AddCollateral:
+    trove_id: uint256
+    owner: address
+    collateral_amount: uint256
+
+event RemoveCollateral:
+    trove_id: uint256
+    owner: address
+    collateral_amount: uint256
+
+event Borrow:
+    trove_id: uint256
+    owner: address
+    debt_amount: uint256
+    upfront_fee: uint256
+
+event Repay:
+    trove_id: uint256
+    owner: address
+    debt_amount: uint256
+
+event AdjustInterestRate:
+    trove_id: uint256
+    owner: address
+    new_annual_interest_rate: uint256
+    upfront_fee: uint256
+
+event CloseTrove:
+    trove_id: uint256
+    owner: address
+    collateral_amount: uint256
+    debt_amount: uint256
+
+event CloseZombieTrove:
+    trove_id: uint256
+    owner: address
+    collateral_amount: uint256
+    debt_amount: uint256
+
+event LiquidateTrove:
+    trove_id: uint256
+    liquidator: address
+    collateral_amount: uint256
+    debt_amount: uint256
+
+event Redeem:
+    redeemer: address
+    collateral_amount: uint256
+    debt_amount: uint256
+    debt_amount_out: uint256
 
 
 # ============================================================================================
@@ -295,6 +360,16 @@ def open_trove(
     # Deliver borrow tokens to the caller, redeem if liquidity is insufficient
     self._transfer_borrow_tokens(debt_amount, min_debt_out)
 
+    # Emit event
+    log OpenTrove(
+        trove_id=trove_id,
+        owner=msg.sender,
+        collateral_amount=collateral_amount,
+        debt_amount=debt_amount,
+        upfront_fee=upfront_fee,
+        annual_interest_rate=annual_interest_rate
+    )
+
     return trove_id
 
 
@@ -330,6 +405,13 @@ def add_collateral(trove_id: uint256, collateral_change: uint256):
 
     # Pull the collateral tokens from caller
     extcall COLLATERAL_TOKEN.transferFrom(msg.sender, self, collateral_change, default_return_value=True)
+
+    # Emit event
+    log AddCollateral(
+        trove_id=trove_id,
+        owner=msg.sender,
+        collateral_amount=collateral_change
+    )
 
 
 @external
@@ -375,6 +457,13 @@ def remove_collateral(trove_id: uint256, collateral_change: uint256):
 
     # Transfer the collateral tokens to caller
     extcall COLLATERAL_TOKEN.transfer(msg.sender, collateral_change, default_return_value=True)
+
+    # Emit event
+    log RemoveCollateral(
+        trove_id=trove_id,
+        owner=msg.sender,
+        collateral_amount=collateral_change
+    )
 
 
 @external
@@ -440,6 +529,14 @@ def borrow(trove_id: uint256, debt_amount: uint256, max_upfront_fee: uint256, mi
     # Deliver borrow tokens to the caller, redeem if liquidity is insufficient
     self._transfer_borrow_tokens(debt_amount, min_debt_out)
 
+    # Emit event
+    log Borrow(
+        trove_id=trove_id,
+        owner=msg.sender,
+        debt_amount=new_debt,
+        upfront_fee=upfront_fee
+    )
+
 
 @external
 def repay(trove_id: uint256, debt_amount: uint256):
@@ -492,6 +589,13 @@ def repay(trove_id: uint256, debt_amount: uint256):
 
     # Pull the borrow tokens from caller and transfer them to the lender
     extcall BORROW_TOKEN.transferFrom(msg.sender, LENDER, debt_to_repay, default_return_value=True)
+
+    # Emit event
+    log Repay(
+        trove_id=trove_id,
+        owner=msg.sender,
+        debt_amount=debt_to_repay
+    )
 
 
 @external
@@ -582,6 +686,14 @@ def adjust_interest_rate(
         next_id
     )
 
+    # Emit event
+    log AdjustInterestRate(
+        trove_id=trove_id,
+        owner=msg.sender,
+        new_annual_interest_rate=new_annual_interest_rate,
+        upfront_fee=upfront_fee
+    )
+
 
 # ============================================================================================
 # Close trove
@@ -636,6 +748,14 @@ def close_trove(trove_id: uint256):
     # Transfer the collateral tokens to caller
     extcall COLLATERAL_TOKEN.transfer(msg.sender, old_trove.collateral, default_return_value=True)
 
+    # Emit event
+    log CloseTrove(
+        trove_id=trove_id,
+        owner=msg.sender,
+        collateral_amount=old_trove.collateral,
+        debt_amount=trove_debt_after_interest
+    )
+
 
 @external
 def close_zombie_trove(trove_id: uint256):
@@ -669,9 +789,12 @@ def close_zombie_trove(trove_id: uint256):
     # Update the contract's recorded collateral balance
     self.collateral_balance -= old_trove.collateral
 
+    # Initialize the Trove's debt after interest variable
+    trove_debt_after_interest: uint256 = 0
+
     if old_trove.debt > 0:
         # Get the Trove's debt after accruing interest
-        trove_debt_after_interest: uint256 = self._get_trove_debt_after_interest(old_trove)
+        trove_debt_after_interest = self._get_trove_debt_after_interest(old_trove)
 
         # Accrue interest on the total debt and update accounting
         self._accrue_interest_and_account_for_trove_change(
@@ -686,6 +809,14 @@ def close_zombie_trove(trove_id: uint256):
 
     # Transfer the collateral tokens to caller
     extcall COLLATERAL_TOKEN.transfer(msg.sender, old_trove.collateral, default_return_value=True)
+
+    # Emit event
+    log CloseZombieTrove(
+        trove_id=trove_id,
+        owner=msg.sender,
+        collateral_amount=old_trove.collateral,
+        debt_amount=trove_debt_after_interest
+    )
 
 
 # ============================================================================================
@@ -757,6 +888,14 @@ def liquidate_trove(trove_id: uint256):
 
     # Transfer the collateral tokens to caller
     extcall COLLATERAL_TOKEN.transfer(msg.sender, old_trove.collateral, default_return_value=True)
+
+    # Emit event
+    log LiquidateTrove(
+        trove_id=trove_id,
+        liquidator=msg.sender,
+        collateral_amount=old_trove.collateral,
+        debt_amount=trove_debt_after_interest,
+    )
 
 
 # ============================================================================================
@@ -904,7 +1043,17 @@ def _redeem(amount: uint256) -> uint256:
     self.collateral_balance -= total_collateral_decrease
 
     # Swap the collateral to borrow token and transfer it to the caller. Does nothing on zero amount
-    return extcall EXCHANGE.swap(total_collateral_decrease, msg.sender)
+    borrow_token_out: uint256 = extcall EXCHANGE.swap(total_collateral_decrease, msg.sender)
+
+    # Emit event
+    log Redeem(
+        redeemer=msg.sender,
+        collateral_amount=total_collateral_decrease,
+        debt_amount=total_debt_decrease,
+        debt_amount_out=borrow_token_out
+    )
+
+    return borrow_token_out
 
 
 # ============================================================================================
