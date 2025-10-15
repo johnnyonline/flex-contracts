@@ -12,7 +12,9 @@ contract AdjustRateTests is Base {
     // 1. lend
     // 2. borrow all available liquidity
     // 3. adjust rate (no upfront fee)
-    function test_adjustRate(uint256 _amount) public {
+    function test_adjustRate(
+        uint256 _amount
+    ) public {
         _amount = bound(_amount, troveManager.MIN_DEBT(), maxFuzzAmount);
         _amount = troveManager.MIN_DEBT();
 
@@ -37,7 +39,9 @@ contract AdjustRateTests is Base {
         assertEq(_trove.last_interest_rate_adj_time, block.timestamp, "E4");
         assertEq(_trove.owner, userBorrower, "E5");
         assertEq(uint256(_trove.status), uint256(ITroveManager.Status.active), "E6");
-        assertApproxEqRel(_trove.collateral * exchange.price() / _trove.debt, DEFAULT_TARGET_COLLATERAL_RATIO, 1e15, "E7"); // 0.1%
+        assertApproxEqRel(
+            _trove.collateral * exchange.price() / _trove.debt, DEFAULT_TARGET_COLLATERAL_RATIO, 1e15, "E7"
+        ); // 0.1%
 
         // Check sorted troves
         assertFalse(sortedTroves.empty(), "E8");
@@ -116,7 +120,9 @@ contract AdjustRateTests is Base {
     // 1. lend
     // 2. borrow all available liquidity
     // 3. skip only half of the rate cooldown period and adjust rate prematurely (with upfront fee)
-    function test_adjustRate_prematurely(uint256 _amount) public {
+    function test_adjustRate_prematurely(
+        uint256 _amount
+    ) public {
         _amount = bound(_amount, troveManager.MIN_DEBT(), maxFuzzAmount);
 
         // Lend some from lender
@@ -140,7 +146,9 @@ contract AdjustRateTests is Base {
         assertEq(_trove.last_interest_rate_adj_time, block.timestamp, "E4");
         assertEq(_trove.owner, userBorrower, "E5");
         assertEq(uint256(_trove.status), uint256(ITroveManager.Status.active), "E6");
-        assertApproxEqRel(_trove.collateral * exchange.price() / _trove.debt, DEFAULT_TARGET_COLLATERAL_RATIO, 1e15, "E7"); // 0.1%
+        assertApproxEqRel(
+            _trove.collateral * exchange.price() / _trove.debt, DEFAULT_TARGET_COLLATERAL_RATIO, 1e15, "E7"
+        ); // 0.1%
 
         // Check sorted troves
         assertFalse(sortedTroves.empty(), "E8");
@@ -173,8 +181,12 @@ contract AdjustRateTests is Base {
         uint256 _newAnnualInterestRate = DEFAULT_ANNUAL_INTEREST_RATE * 2; // 2%
 
         // Calculate second expected debt with interest accumulated
-        uint256 _interestOnFirstDebt = _expectedDebt * DEFAULT_ANNUAL_INTEREST_RATE * (block.timestamp - _trove.last_debt_update_time) / (365 days * 1e18);
-        uint256 _secondExpectedDebt = troveManager.get_trove_debt_after_interest(_troveId) + troveManager.get_upfront_fee(_expectedDebt + _interestOnFirstDebt, _newAnnualInterestRate);
+        uint256 _interestOnFirstDebt =
+            _expectedDebt * DEFAULT_ANNUAL_INTEREST_RATE * (block.timestamp - _trove.last_debt_update_time)
+            / (365 days * 1e18);
+        uint256 _secondExpectedDebt =
+            troveManager.get_trove_debt_after_interest(_troveId)
+            + troveManager.get_upfront_fee(_expectedDebt + _interestOnFirstDebt, _newAnnualInterestRate);
 
         // Finally adjust the rate
         vm.prank(userBorrower);
@@ -223,7 +235,9 @@ contract AdjustRateTests is Base {
     // 2. borrow half of available liquidity from 1st borrower
     // 3. borrow other half from 2nd borrower
     // 4. adjust rate of first borrower (no upfront fee)
-    function test_adjustRate_changePlaceInList(uint256 _amount) public {
+    function test_adjustRate_changePlaceInList(
+        uint256 _amount
+    ) public {
         _amount = bound(_amount, troveManager.MIN_DEBT() * 2, maxFuzzAmount);
 
         // Lend some from lender
@@ -236,13 +250,16 @@ contract AdjustRateTests is Base {
         uint256 _collateralNeeded = _borrowAmount * DEFAULT_TARGET_COLLATERAL_RATIO / exchange.price();
 
         // Calculate expected debt (borrow amount + upfront fee)
-        uint256 _expectedDebt = _borrowAmount + troveManager.get_upfront_fee(_borrowAmount, DEFAULT_ANNUAL_INTEREST_RATE);
+        uint256 _expectedDebt =
+            _borrowAmount + troveManager.get_upfront_fee(_borrowAmount, DEFAULT_ANNUAL_INTEREST_RATE);
 
         // Open a trove from first borrower
-        uint256 _troveId = mintAndOpenTrove(userBorrower, _collateralNeeded, _borrowAmount, DEFAULT_ANNUAL_INTEREST_RATE);
+        uint256 _troveId =
+            mintAndOpenTrove(userBorrower, _collateralNeeded, _borrowAmount, DEFAULT_ANNUAL_INTEREST_RATE);
 
         // Open a trove from another borrower
-        uint256 _troveIdAnotherBorrower = mintAndOpenTrove(anotherUserBorrower, _collateralNeeded, _borrowAmount, DEFAULT_ANNUAL_INTEREST_RATE);
+        uint256 _troveIdAnotherBorrower =
+            mintAndOpenTrove(anotherUserBorrower, _collateralNeeded, _borrowAmount, DEFAULT_ANNUAL_INTEREST_RATE);
 
         // Check trove info
         ITroveManager.Trove memory _trove = troveManager.troves(_troveId);
@@ -253,7 +270,9 @@ contract AdjustRateTests is Base {
         assertEq(_trove.last_interest_rate_adj_time, block.timestamp, "E4");
         assertEq(_trove.owner, userBorrower, "E5");
         assertEq(uint256(_trove.status), uint256(ITroveManager.Status.active), "E6");
-        assertApproxEqRel(_trove.collateral * exchange.price() / _trove.debt, DEFAULT_TARGET_COLLATERAL_RATIO, 1e15, "E7"); // 0.1%
+        assertApproxEqRel(
+            _trove.collateral * exchange.price() / _trove.debt, DEFAULT_TARGET_COLLATERAL_RATIO, 1e15, "E7"
+        ); // 0.1%
 
         // Check another trove info
         _trove = troveManager.troves(_troveIdAnotherBorrower);
@@ -264,7 +283,9 @@ contract AdjustRateTests is Base {
         assertEq(_trove.last_interest_rate_adj_time, block.timestamp, "E4");
         assertEq(_trove.owner, anotherUserBorrower, "E5");
         assertEq(uint256(_trove.status), uint256(ITroveManager.Status.active), "E6");
-        assertApproxEqRel(_trove.collateral * exchange.price() / _trove.debt, DEFAULT_TARGET_COLLATERAL_RATIO, 1e15, "E7"); // 0.1%
+        assertApproxEqRel(
+            _trove.collateral * exchange.price() / _trove.debt, DEFAULT_TARGET_COLLATERAL_RATIO, 1e15, "E7"
+        ); // 0.1%
 
         // Make sure those change places after we adjust the rate of the first trove
         uint256 _firstBefore = _troveId;
@@ -318,7 +339,10 @@ contract AdjustRateTests is Base {
         assertLt(_trove.collateral * exchange.price() / _trove.debt, DEFAULT_TARGET_COLLATERAL_RATIO, "E33"); // increased debt --> lower CR
 
         // Calculate expected debt with interest accumulated
-        uint256 _secondExpectedDebt = _expectedDebt + ((_expectedDebt * DEFAULT_ANNUAL_INTEREST_RATE * (block.timestamp - _trove.last_debt_update_time)) / (365 days * 1e18));
+        uint256 _secondExpectedDebt =
+            _expectedDebt
+            + ((_expectedDebt * DEFAULT_ANNUAL_INTEREST_RATE * (block.timestamp - _trove.last_debt_update_time))
+                / (365 days * 1e18));
 
         // Check another trove info
         _trove = troveManager.troves(_troveIdAnotherBorrower);
@@ -348,11 +372,20 @@ contract AdjustRateTests is Base {
         assertEq(borrowToken.balanceOf(userBorrower), _borrowAmount, "E53");
 
         // Add interest to `_expectedDebt`
-        uint256 _expectedDebtWithInterest = _expectedDebt + ((_expectedDebt * DEFAULT_ANNUAL_INTEREST_RATE * (block.timestamp - (block.timestamp - troveManager.INTEREST_RATE_ADJ_COOLDOWN()))) / (365 days * 1e18));
+        uint256 _expectedDebtWithInterest =
+            _expectedDebt
+            + ((_expectedDebt
+                    * DEFAULT_ANNUAL_INTEREST_RATE
+                    * (block.timestamp - (block.timestamp - troveManager.INTEREST_RATE_ADJ_COOLDOWN())))
+                / (365 days * 1e18));
 
         // Check global info
         assertApproxEqAbs(troveManager.total_debt(), _expectedDebtWithInterest + _secondExpectedDebt, 1, "E54");
-        assertEq(troveManager.total_weighted_debt(), (_expectedDebt * DEFAULT_ANNUAL_INTEREST_RATE) + (_secondExpectedDebt * _newAnnualInterestRate), "E55");
+        assertEq(
+            troveManager.total_weighted_debt(),
+            (_expectedDebt * DEFAULT_ANNUAL_INTEREST_RATE) + (_secondExpectedDebt * _newAnnualInterestRate),
+            "E55"
+        );
         assertEq(troveManager.collateral_balance(), _collateralNeeded * 2, "E56");
         assertEq(troveManager.zombie_trove_id(), 0, "E57");
 

@@ -9,7 +9,10 @@ contract AddCollateralTests is Base {
         Base.setUp();
     }
 
-    function test_addCollateralToActiveTrove(uint256 _amount, uint256 _collateralAmountToAdd) public {
+    function test_addCollateralToActiveTrove(
+        uint256 _amount,
+        uint256 _collateralAmountToAdd
+    ) public {
         _amount = bound(_amount, troveManager.MIN_DEBT(), maxFuzzAmount);
         _collateralAmountToAdd = bound(_collateralAmountToAdd, minFuzzAmount, maxFuzzAmount);
 
@@ -34,7 +37,9 @@ contract AddCollateralTests is Base {
         assertEq(_trove.last_interest_rate_adj_time, block.timestamp, "E4");
         assertEq(_trove.owner, userBorrower, "E5");
         assertEq(uint256(_trove.status), uint256(ITroveManager.Status.active), "E6");
-        assertApproxEqRel(_trove.collateral * exchange.price() / _trove.debt, DEFAULT_TARGET_COLLATERAL_RATIO, 1e15, "E7"); // 0.1%
+        assertApproxEqRel(
+            _trove.collateral * exchange.price() / _trove.debt, DEFAULT_TARGET_COLLATERAL_RATIO, 1e15, "E7"
+        ); // 0.1%
 
         // Check sorted troves
         assertFalse(sortedTroves.empty(), "E8");
@@ -110,4 +115,6 @@ contract AddCollateralTests is Base {
     // function test_addCollateral_toNonActiveTrove
     // function test_addCollateral_insufficientAllowance
     // function test_addCollateral_insufficientBalance
+
+
 }

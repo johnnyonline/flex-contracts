@@ -12,6 +12,7 @@ abstract contract Base is Deploy, Test {
     address public userLender = address(420);
     address public userBorrower = address(69);
     address public anotherUserBorrower = address(555);
+    address public liquidator = address(88);
 
     // Fuzz lend amount from 0.001 of 1e18 coin up to 1 million of a 1e18 coin
     uint256 public maxFuzzAmount = 1_000_000 ether;
@@ -48,7 +49,10 @@ abstract contract Base is Deploy, Test {
         _token == address(0) ? vm.deal(_to, _amount) : deal({token: _token, to: _to, give: _amount});
     }
 
-    function depositIntoLender(address _user, uint256 _amount) public {
+    function depositIntoLender(
+        address _user,
+        uint256 _amount
+    ) public {
         vm.prank(_user);
         borrowToken.approve(address(lender), _amount);
 

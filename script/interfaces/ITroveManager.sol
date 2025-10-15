@@ -7,11 +7,16 @@ interface ITroveManager {
     // Enums
     // ============================================================================================
 
+    // vyper `flags` are n^2
     enum Status {
         none,
         active,
         zombie,
+        ignore1,
         closed,
+        ignore2,
+        ignore3,
+        ignore4,
         liquidated
     }
 
@@ -45,7 +50,6 @@ interface ITroveManager {
     function UPFRONT_INTEREST_PERIOD() external view returns (uint256);
     function INTEREST_RATE_ADJ_COOLDOWN() external view returns (uint256);
 
-
     // ============================================================================================
     // Storage
     // ============================================================================================
@@ -63,8 +67,13 @@ interface ITroveManager {
     // External view functions
     // ============================================================================================
 
-    function get_upfront_fee(uint256 debt_amount, uint256 annual_interest_rate) external view returns (uint256);
-    function get_trove_debt_after_interest(uint256 trove_id) external view returns (uint256);
+    function get_upfront_fee(
+        uint256 debt_amount,
+        uint256 annual_interest_rate
+    ) external view returns (uint256);
+    function get_trove_debt_after_interest(
+        uint256 trove_id
+    ) external view returns (uint256);
 
     // ============================================================================================
     // Sync total debt
@@ -125,6 +134,14 @@ interface ITroveManager {
         uint256 trove_id
     ) external;
     function close_zombie_trove(
+        uint256 trove_id
+    ) external;
+
+    // ============================================================================================
+    // Liquidate trove
+    // ============================================================================================
+
+    function liquidate_trove(
         uint256 trove_id
     ) external;
 

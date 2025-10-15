@@ -9,7 +9,10 @@ contract ViewsTests is Base {
         Base.setUp();
     }
 
-    function test_views(uint256 _randomNumber1, uint256 _randomNumber2) public {
+    function test_views(
+        uint256 _randomNumber1,
+        uint256 _randomNumber2
+    ) public {
         assertEq(troveManager.get_trove_debt_after_interest(_randomNumber1), 0, "E0");
         // assertEq(troveManager.get_upfront_fee(_randomNumber1, _randomNumber2), 0, "E1");
     }

@@ -12,7 +12,10 @@ contract RepayTests is Base {
     // 1. lend
     // 2. borrow all available liquidity
     // 3. repay up to min debt
-    function test_repay(uint256 _amount, uint256 _amountToRepay) public {
+    function test_repay(
+        uint256 _amount,
+        uint256 _amountToRepay
+    ) public {
         _amount = bound(_amount, troveManager.MIN_DEBT() * 150 / 100, maxFuzzAmount); // At least 50% above min debt so we have something to repay
         _amountToRepay = bound(_amountToRepay, _amount / 100, _amount - troveManager.MIN_DEBT()); // Make sure we leave at least min debt
 
@@ -37,7 +40,9 @@ contract RepayTests is Base {
         assertEq(_trove.last_interest_rate_adj_time, block.timestamp, "E4");
         assertEq(_trove.owner, userBorrower, "E5");
         assertEq(uint256(_trove.status), uint256(ITroveManager.Status.active), "E6");
-        assertApproxEqRel(_trove.collateral * exchange.price() / _trove.debt, DEFAULT_TARGET_COLLATERAL_RATIO, 1e15, "E7"); // 0.1%
+        assertApproxEqRel(
+            _trove.collateral * exchange.price() / _trove.debt, DEFAULT_TARGET_COLLATERAL_RATIO, 1e15, "E7"
+        ); // 0.1%
 
         // Check sorted troves
         assertFalse(sortedTroves.empty(), "E8");
@@ -99,7 +104,9 @@ contract RepayTests is Base {
 
         // Check global info
         assertEq(troveManager.total_debt(), _expectedDebt - _amountToRepay, "E41");
-        assertEq(troveManager.total_weighted_debt(), (_expectedDebt - _amountToRepay) * DEFAULT_ANNUAL_INTEREST_RATE, "E42");
+        assertEq(
+            troveManager.total_weighted_debt(), (_expectedDebt - _amountToRepay) * DEFAULT_ANNUAL_INTEREST_RATE, "E42"
+        );
         assertEq(troveManager.collateral_balance(), _collateralNeeded, "E43");
         assertEq(troveManager.zombie_trove_id(), 0, "E44");
 
@@ -113,4 +120,6 @@ contract RepayTests is Base {
     // function test_repay_amountScalesDownToMinDebt
     // function test_repay_zeroAmount
     // function test_repay_troveNotActive
+
+
 }

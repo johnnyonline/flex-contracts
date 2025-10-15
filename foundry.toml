@@ -17,5 +17,6 @@ single_line_statement_blocks = "single"
 multiline_func_header = "params_first"
 contract_new_lines = true
 number_underscore = "preserve"
+ignore = ["lib/"]
 
 # See more config options https://github.com/foundry-rs/foundry/tree/master/config

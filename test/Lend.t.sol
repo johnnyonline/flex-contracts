@@ -24,7 +24,9 @@ contract LendTests is Base {
     // 2. borrow all available liquidity
     // 3. skip some time, check we earn interest
     // 4. withdraw everything (+ profit)
-    function test_lend(uint256 _amount) public {
+    function test_lend(
+        uint256 _amount
+    ) public {
         _amount = bound(_amount, troveManager.MIN_DEBT(), maxFuzzAmount);
 
         // Bump up interest rate so that's it's profitible to lend
@@ -54,7 +56,9 @@ contract LendTests is Base {
         assertEq(_trove.last_interest_rate_adj_time, block.timestamp, "E5");
         assertEq(_trove.owner, userBorrower, "E6");
         assertEq(uint256(_trove.status), uint256(ITroveManager.Status.active), "E7");
-        assertApproxEqRel(_trove.collateral * exchange.price() / _trove.debt, DEFAULT_TARGET_COLLATERAL_RATIO, 1e15, "E8"); // 0.1%
+        assertApproxEqRel(
+            _trove.collateral * exchange.price() / _trove.debt, DEFAULT_TARGET_COLLATERAL_RATIO, 1e15, "E8"
+        ); // 0.1%
 
         // Check sorted troves
         assertFalse(sortedTroves.empty(), "E9");
@@ -82,10 +86,12 @@ contract LendTests is Base {
 
         // Skip some time, calculate expected interest
         uint256 _daysToSkip = 90 days;
-        uint256 _expectedProfit = _upfrontFee + _expectedDebt * DEFAULT_ANNUAL_INTEREST_RATE * _daysToSkip / 365 days / 1e18;
+        uint256 _expectedProfit =
+            _upfrontFee + _expectedDebt * DEFAULT_ANNUAL_INTEREST_RATE * _daysToSkip / 365 days / 1e18;
 
         // Calculate expected collateral after redemption
-        uint256 _expectedCollateralAfterRedemption = _collateralNeeded - ((_amount + _expectedProfit) * 1e18 / exchange.price());
+        uint256 _expectedCollateralAfterRedemption =
+            _collateralNeeded - ((_amount + _expectedProfit) * 1e18 / exchange.price());
 
         // Sanity check
         assertGt(_expectedProfit, 0, "E25");
@@ -130,7 +136,9 @@ contract LendTests is Base {
         assertFalse(sortedTroves.contains(_troveId), "E40");
 
         // Check balances
-        assertApproxEqRel(collateralToken.balanceOf(address(troveManager)), _expectedCollateralAfterRedemption, 5e15, "E41"); // 0.5%
+        assertApproxEqRel(
+            collateralToken.balanceOf(address(troveManager)), _expectedCollateralAfterRedemption, 5e15, "E41"
+        ); // 0.5%
         assertEq(collateralToken.balanceOf(address(troveManager)), troveManager.collateral_balance(), "E42");
         assertEq(collateralToken.balanceOf(address(userBorrower)), 0, "E43");
         assertEq(borrowToken.balanceOf(address(troveManager)), 0, "E44");
@@ -153,7 +161,9 @@ contract LendTests is Base {
     // 3. skip some time, check we earn interest
     // 4. withdraw without reporting, so borrower has tiny amount of debt left (< min debt)
     // 5. make sure borrower is now zombie and has tiny debt left
-    function test_lend_noReport(uint256 _amount) public {
+    function test_lend_noReport(
+        uint256 _amount
+    ) public {
         _amount = bound(_amount, troveManager.MIN_DEBT(), maxFuzzAmount);
 
         // Bump up interest rate so that's it's profitible to lend
@@ -183,7 +193,9 @@ contract LendTests is Base {
         assertEq(_trove.last_interest_rate_adj_time, block.timestamp, "E5");
         assertEq(_trove.owner, userBorrower, "E6");
         assertEq(uint256(_trove.status), uint256(ITroveManager.Status.active), "E7");
-        assertApproxEqRel(_trove.collateral * exchange.price() / _trove.debt, DEFAULT_TARGET_COLLATERAL_RATIO, 1e15, "E8"); // 0.1%
+        assertApproxEqRel(
+            _trove.collateral * exchange.price() / _trove.debt, DEFAULT_TARGET_COLLATERAL_RATIO, 1e15, "E8"
+        ); // 0.1%
 
         // Check sorted troves
         assertFalse(sortedTroves.empty(), "E9");
@@ -211,7 +223,8 @@ contract LendTests is Base {
 
         // Skip some time, calculate expected interest
         uint256 _daysToSkip = 90 days;
-        uint256 _expectedProfit = _upfrontFee + _expectedDebt * DEFAULT_ANNUAL_INTEREST_RATE * _daysToSkip / 365 days / 1e18;
+        uint256 _expectedProfit =
+            _upfrontFee + _expectedDebt * DEFAULT_ANNUAL_INTEREST_RATE * _daysToSkip / 365 days / 1e18;
 
         // Calculate expected collateral after redemption
         uint256 _expectedCollateralAfterRedemption = _collateralNeeded - (_amount * 1e18 / exchange.price());
@@ -251,7 +264,9 @@ contract LendTests is Base {
         assertFalse(sortedTroves.contains(_troveId), "E34");
 
         // Check balances
-        assertApproxEqRel(collateralToken.balanceOf(address(troveManager)), _expectedCollateralAfterRedemption, 5e15, "E35"); // 0.5%
+        assertApproxEqRel(
+            collateralToken.balanceOf(address(troveManager)), _expectedCollateralAfterRedemption, 5e15, "E35"
+        ); // 0.5%
         assertEq(collateralToken.balanceOf(address(troveManager)), troveManager.collateral_balance(), "E36");
         assertEq(collateralToken.balanceOf(address(userBorrower)), 0, "E37");
         assertEq(borrowToken.balanceOf(address(troveManager)), 0, "E38");
@@ -268,4 +283,5 @@ contract LendTests is Base {
         assertEq(borrowToken.balanceOf(address(exchange)), 0, "E45");
         assertEq(collateralToken.balanceOf(address(exchange)), 0, "E46");
     }
+
 }

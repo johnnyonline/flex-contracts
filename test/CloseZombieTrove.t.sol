@@ -21,7 +21,9 @@ contract CloseZombieTroveTests is Base {
     // 2. borrow all available liquidity
     // 3. Pull liquidity to leave borrower with a zombie trove (but above 0 debt)
     // 4. close zombie trove
-    function test_closeZombieTrove(uint256 _amount) public {
+    function test_closeZombieTrove(
+        uint256 _amount
+    ) public {
         _amount = bound(_amount, troveManager.MIN_DEBT(), maxFuzzAmount);
 
         // Lend some from lender
@@ -45,7 +47,9 @@ contract CloseZombieTroveTests is Base {
         assertEq(_trove.last_interest_rate_adj_time, block.timestamp, "E4");
         assertEq(_trove.owner, userBorrower, "E5");
         assertEq(uint256(_trove.status), uint256(ITroveManager.Status.active), "E6");
-        assertApproxEqRel(_trove.collateral * exchange.price() / _trove.debt, DEFAULT_TARGET_COLLATERAL_RATIO, 1e15, "E7"); // 0.1%
+        assertApproxEqRel(
+            _trove.collateral * exchange.price() / _trove.debt, DEFAULT_TARGET_COLLATERAL_RATIO, 1e15, "E7"
+        ); // 0.1%
 
         // Check sorted troves
         assertFalse(sortedTroves.empty(), "E8");
@@ -145,7 +149,9 @@ contract CloseZombieTroveTests is Base {
     // // 2. borrow all available liquidity
     // // 3. Pull liquidity to leave borrower with a zombie trove (and 0 debt)
     // // 4. close zombie trove
-    function test_closeZombieTrove_zeroDebt(uint256 _amount) public {
+    function test_closeZombieTrove_zeroDebt(
+        uint256 _amount
+    ) public {
         _amount = bound(_amount, troveManager.MIN_DEBT(), maxFuzzAmount);
 
         // Lend some from lender
@@ -169,7 +175,9 @@ contract CloseZombieTroveTests is Base {
         assertEq(_trove.last_interest_rate_adj_time, block.timestamp, "E4");
         assertEq(_trove.owner, userBorrower, "E5");
         assertEq(uint256(_trove.status), uint256(ITroveManager.Status.active), "E6");
-        assertApproxEqRel(_trove.collateral * exchange.price() / _trove.debt, DEFAULT_TARGET_COLLATERAL_RATIO, 1e15, "E7"); // 0.1%
+        assertApproxEqRel(
+            _trove.collateral * exchange.price() / _trove.debt, DEFAULT_TARGET_COLLATERAL_RATIO, 1e15, "E7"
+        ); // 0.1%
 
         // Check sorted troves
         assertFalse(sortedTroves.empty(), "E8");
@@ -202,7 +210,8 @@ contract CloseZombieTroveTests is Base {
         uint256 _amountToPull = _amount;
 
         // Calculate expected collateral after redemption
-        uint256 _expectedCollateralAfterRedemption = _collateralNeeded - ((_amount + _expectedProfit) * 1e18 / exchange.price());
+        uint256 _expectedCollateralAfterRedemption =
+            _collateralNeeded - ((_amount + _expectedProfit) * 1e18 / exchange.price());
 
         // Report profit
         vm.prank(keeper);
@@ -298,4 +307,5 @@ contract CloseZombieTroveTests is Base {
         assertEq(borrowToken.balanceOf(address(exchange)), 0, "E72");
         assertEq(collateralToken.balanceOf(address(exchange)), 0, "E73");
     }
+
 }

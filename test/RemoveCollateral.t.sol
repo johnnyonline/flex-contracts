@@ -9,7 +9,10 @@ contract RemoveCollateralTests is Base {
         Base.setUp();
     }
 
-    function test_removeCollateralFromActiveTrove(uint256 _amount, uint256 _collateralToRemove) public {
+    function test_removeCollateralFromActiveTrove(
+        uint256 _amount,
+        uint256 _collateralToRemove
+    ) public {
         _amount = bound(_amount, troveManager.MIN_DEBT(), maxFuzzAmount);
 
         // Lend some from lender
@@ -19,7 +22,8 @@ contract RemoveCollateralTests is Base {
         uint256 _collateralNeeded = _amount * DEFAULT_TARGET_COLLATERAL_RATIO / exchange.price();
 
         // Make sure we don't try to remove too much collateral
-        uint256 _maxCollateralToRemove = _collateralNeeded - (_amount * troveManager.MINIMUM_COLLATERAL_RATIO() / exchange.price());
+        uint256 _maxCollateralToRemove =
+            _collateralNeeded - (_amount * troveManager.MINIMUM_COLLATERAL_RATIO() / exchange.price());
 
         // Decrease a touch
         _maxCollateralToRemove = _maxCollateralToRemove * 99 / 100;
@@ -42,7 +46,9 @@ contract RemoveCollateralTests is Base {
         assertEq(_trove.last_interest_rate_adj_time, block.timestamp, "E4");
         assertEq(_trove.owner, userBorrower, "E5");
         assertEq(uint256(_trove.status), uint256(ITroveManager.Status.active), "E6");
-        assertApproxEqRel(_trove.collateral * exchange.price() / _trove.debt, DEFAULT_TARGET_COLLATERAL_RATIO, 1e15, "E7"); // 0.1%
+        assertApproxEqRel(
+            _trove.collateral * exchange.price() / _trove.debt, DEFAULT_TARGET_COLLATERAL_RATIO, 1e15, "E7"
+        ); // 0.1%
 
         // Check sorted troves
         assertFalse(sortedTroves.empty(), "E8");
@@ -117,4 +123,6 @@ contract RemoveCollateralTests is Base {
     // function test_removeCollateral_troveNotActive
     // function test_removeCollateral_insufficientCollateralInTrove
     // function test_removeCollateral_belowMCR
+
+
 }

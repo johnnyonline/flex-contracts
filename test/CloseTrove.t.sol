@@ -12,7 +12,9 @@ contract CloseTroveTests is Base {
     // 1. lend
     // 2. borrow all available liquidity
     // 3. close trove
-    function test_closeTrove(uint256 _amount) public {
+    function test_closeTrove(
+        uint256 _amount
+    ) public {
         _amount = bound(_amount, troveManager.MIN_DEBT(), maxFuzzAmount);
 
         // Lend some from lender
@@ -36,7 +38,9 @@ contract CloseTroveTests is Base {
         assertEq(_trove.last_interest_rate_adj_time, block.timestamp, "E4");
         assertEq(_trove.owner, userBorrower, "E5");
         assertEq(uint256(_trove.status), uint256(ITroveManager.Status.active), "E6");
-        assertApproxEqRel(_trove.collateral * exchange.price() / _trove.debt, DEFAULT_TARGET_COLLATERAL_RATIO, 1e15, "E7"); // 0.1%
+        assertApproxEqRel(
+            _trove.collateral * exchange.price() / _trove.debt, DEFAULT_TARGET_COLLATERAL_RATIO, 1e15, "E7"
+        ); // 0.1%
 
         // Check sorted troves
         assertFalse(sortedTroves.empty(), "E8");
@@ -81,7 +85,7 @@ contract CloseTroveTests is Base {
         assertEq(_trove.last_debt_update_time, 0, "E26");
         assertEq(_trove.last_interest_rate_adj_time, 0, "E27");
         assertEq(_trove.owner, address(0), "E28");
-        assertEq(uint256(_trove.status), 4, "E30"); // Closed
+        assertEq(uint256(_trove.status), uint256(ITroveManager.Status.closed), "E30");
 
         // Check sorted troves
         assertTrue(sortedTroves.empty(), "E31");
@@ -108,4 +112,5 @@ contract CloseTroveTests is Base {
         assertEq(borrowToken.balanceOf(address(exchange)), 0, "E46");
         assertEq(collateralToken.balanceOf(address(exchange)), 0, "E47");
     }
+
 }

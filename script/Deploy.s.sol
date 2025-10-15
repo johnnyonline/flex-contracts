@@ -96,4 +96,5 @@ contract Deploy is Script {
         _lender.setPendingManagement(management);
         _lender.setEmergencyAdmin(emergencyAdmin);
     }
+
 }

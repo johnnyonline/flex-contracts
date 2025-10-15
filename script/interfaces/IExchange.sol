@@ -15,5 +15,9 @@ interface IExchange {
     // Mutative functions
     // ============================================================================================
 
-    function swap(uint256 amount, address receiver) external returns (uint256);
+    function swap(
+        uint256 amount,
+        address receiver
+    ) external returns (uint256);
+
 }

@@ -637,7 +637,70 @@ def close_zombie_trove(trove_id: uint256):
 # ============================================================================================
 
 
-# @todo
+@external
+def liquidate_trove(trove_id: uint256):
+    """
+    @notice Liquidate an unhealthy Trove by repaying all its debt and withdrawing all its collateral
+    @dev Right now liquidator gets all the collateral. This function needs to be improved!
+         Consider using an auction to dump the collateral, maybe with an outside module that
+         checks min auction price and re-kicks if necessary. Then take all surplus as fee?
+    @param trove_id Unique identifier of the Trove
+    """ # @todo -- notice @dev
+    # Cache Trove info
+    trove: Trove = self.troves[trove_id]
+
+    # Make sure the Trove is active or zombie
+    assert trove.status == Status.ACTIVE or trove.status == Status.ZOMBIE, "!active or zombie"
+
+    # Make sure trove has debt
+    assert trove.debt > 0, "!debt"
+
+    # Get the Trove's debt after accruing interest
+    trove_debt_after_interest: uint256 = self._get_trove_debt_after_interest(trove)
+
+    # Get the collateral price
+    collateral_price: uint256 = staticcall EXCHANGE.price()
+
+    # Calculate the collateral ratio
+    collateral_ratio: uint256 = self._calculate_collateral_ratio(trove.collateral, trove_debt_after_interest, collateral_price)
+
+    # Make sure the collateral ratio is below the minimum collateral ratio
+    assert collateral_ratio < MINIMUM_COLLATERAL_RATIO, ">=MCR"
+
+    # Cache the Trove's old info for global accounting
+    old_trove: Trove = trove
+
+    # Delete all Trove info and mark it as liquidated
+    trove = empty(Trove)
+    trove.status = Status.LIQUIDATED
+
+    # Save changes to storage
+    self.troves[trove_id] = trove
+
+    # If Trove is the current zombie trove, reset the `zombie_trove_id` variable
+    if self.zombie_trove_id == trove_id:
+        self.zombie_trove_id = 0
+
+    # Update the contract's recorded collateral balance
+    self.collateral_balance -= old_trove.collateral
+
+    # Accrue interest on the total debt and update accounting
+    self._accrue_interest_and_account_for_trove_change(
+        0, # debt_increase
+        trove_debt_after_interest, # debt_decrease
+        old_trove.debt * old_trove.annual_interest_rate, # old_weighted_debt
+        0 # new_weighted_debt
+    )
+
+    # Remove from sorted list if it was active
+    if old_trove.status == Status.ACTIVE:
+        extcall SORTED_TROVES.remove(trove_id)
+
+    # Pull the borrow tokens from caller and transfer them to the lender
+    extcall BORROW_TOKEN.transferFrom(msg.sender, LENDER, trove_debt_after_interest, default_return_value=True)
+
+    # Transfer the collateral tokens to caller
+    extcall COLLATERAL_TOKEN.transfer(msg.sender, old_trove.collateral, default_return_value=True)
 
 
 # ============================================================================================
@@ -698,8 +761,6 @@ def _redeem(amount: uint256) -> uint256:
 
     # Loop through as many Troves as we're allowed or until we redeem all the debt we need
     for _: uint256 in range(_MAX_ITERATIONS):
-        print("iteration: _", _, hardhat_compat=True)
-
         # Cache Trove info
         trove: Trove = self.troves[trove_to_redeem]
 
