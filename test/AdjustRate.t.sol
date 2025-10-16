@@ -394,4 +394,150 @@ contract AdjustRateTests is Base {
         assertEq(collateralToken.balanceOf(address(exchange)), 0, "E59");
     }
 
+    function test_adjustRate_rateTooLow(
+        uint256 _amount
+    ) public {
+        _amount = bound(_amount, troveManager.MIN_DEBT(), maxFuzzAmount);
+
+        // Lend some from lender
+        mintAndDepositIntoLender(userLender, _amount);
+
+        // Calculate how much collateral is needed for the borrow amount
+        uint256 _collateralNeeded = _amount * DEFAULT_TARGET_COLLATERAL_RATIO / exchange.price();
+
+        // Open a trove
+        uint256 _troveId = mintAndOpenTrove(userBorrower, _collateralNeeded, _amount, DEFAULT_ANNUAL_INTEREST_RATE);
+
+        // Finally adjust the rate
+        uint256 _newAnnualInterestRate = troveManager.MIN_ANNUAL_INTEREST_RATE() - 1; // below minimum
+
+        vm.prank(userBorrower);
+        vm.expectRevert("!MIN_ANNUAL_INTEREST_RATE");
+        troveManager.adjust_interest_rate(_troveId, _newAnnualInterestRate, 0, 0, 0);
+    }
+
+    function test_adjustRate_rateTooHigh(
+        uint256 _amount
+    ) public {
+        _amount = bound(_amount, troveManager.MIN_DEBT(), maxFuzzAmount);
+
+        // Lend some from lender
+        mintAndDepositIntoLender(userLender, _amount);
+
+        // Calculate how much collateral is needed for the borrow amount
+        uint256 _collateralNeeded = _amount * DEFAULT_TARGET_COLLATERAL_RATIO / exchange.price();
+
+        // Open a trove
+        uint256 _troveId = mintAndOpenTrove(userBorrower, _collateralNeeded, _amount, DEFAULT_ANNUAL_INTEREST_RATE);
+
+        // Finally adjust the rate
+        uint256 _newAnnualInterestRate = troveManager.MAX_ANNUAL_INTEREST_RATE() + 1; // above maximum
+
+        vm.prank(userBorrower);
+        vm.expectRevert("!MAX_ANNUAL_INTEREST_RATE");
+        troveManager.adjust_interest_rate(_troveId, _newAnnualInterestRate, 0, 0, 0);
+    }
+
+    function test_adjustRate_notOwner(
+        uint256 _amount
+    ) public {
+        _amount = bound(_amount, troveManager.MIN_DEBT(), maxFuzzAmount);
+
+        // Lend some from lender
+        mintAndDepositIntoLender(userLender, _amount);
+
+        // Calculate how much collateral is needed for the borrow amount
+        uint256 _collateralNeeded = _amount * DEFAULT_TARGET_COLLATERAL_RATIO / exchange.price();
+
+        // Open a trove
+        uint256 _troveId = mintAndOpenTrove(userBorrower, _collateralNeeded, _amount, DEFAULT_ANNUAL_INTEREST_RATE);
+
+        // Finally adjust the rate
+        uint256 _newAnnualInterestRate = DEFAULT_ANNUAL_INTEREST_RATE * 2; // 2%
+
+        vm.prank(anotherUserBorrower);
+        vm.expectRevert("!owner");
+        troveManager.adjust_interest_rate(_troveId, _newAnnualInterestRate, 0, 0, 0);
+    }
+
+    function test_adjustRate_notActive(
+        uint256 _amount
+    ) public {
+        _amount = bound(_amount, troveManager.MIN_DEBT(), maxFuzzAmount);
+
+        // Lend some from lender
+        mintAndDepositIntoLender(userLender, _amount);
+
+        // Calculate how much collateral is needed for the borrow amount
+        uint256 _collateralNeeded = _amount * DEFAULT_TARGET_COLLATERAL_RATIO / exchange.price();
+
+        // Open a trove
+        uint256 _troveId = mintAndOpenTrove(userBorrower, _collateralNeeded, _amount, DEFAULT_ANNUAL_INTEREST_RATE);
+
+        // Pull enough liquidity to make trove a zombie trove (but above 0 debt)
+        uint256 _amountToPull = _amount - 100 ether;
+
+        // Pull liquidity from lender to make trove a zombie trove (but above 0 debt)
+        vm.prank(userLender);
+        lender.redeem(_amountToPull, userLender, userLender);
+
+        // Make sure trove is a zombie trove
+        assertEq(uint256(troveManager.troves(_troveId).status), uint256(ITroveManager.Status.zombie), "E25");
+
+        // Try to adjust the rate of a non-active trove
+        uint256 _newAnnualInterestRate = DEFAULT_ANNUAL_INTEREST_RATE * 2; // 2%
+        vm.prank(userBorrower);
+        vm.expectRevert("!active");
+        troveManager.adjust_interest_rate(_troveId, _newAnnualInterestRate, 0, 0, 0);
+    }
+
+    function test_adjustRate_sameRate(
+        uint256 _amount
+    ) public {
+        _amount = bound(_amount, troveManager.MIN_DEBT(), maxFuzzAmount);
+
+        // Lend some from lender
+        mintAndDepositIntoLender(userLender, _amount);
+
+        // Calculate how much collateral is needed for the borrow amount
+        uint256 _collateralNeeded = _amount * DEFAULT_TARGET_COLLATERAL_RATIO / exchange.price();
+
+        // Open a trove
+        uint256 _troveId = mintAndOpenTrove(userBorrower, _collateralNeeded, _amount, DEFAULT_ANNUAL_INTEREST_RATE);
+
+        // Finally adjust the rate
+        uint256 _newAnnualInterestRate = DEFAULT_ANNUAL_INTEREST_RATE; // same as current
+
+        vm.prank(userBorrower);
+        vm.expectRevert("!new_annual_interest_rate");
+        troveManager.adjust_interest_rate(_troveId, _newAnnualInterestRate, 0, 0, 0);
+    }
+
+    function test_adjustRate_belowMCR(
+        uint256 _amount
+    ) public {
+        _amount = bound(_amount, troveManager.MIN_DEBT(), maxFuzzAmount);
+
+        // Lend some from lender
+        mintAndDepositIntoLender(userLender, _amount);
+
+        // Calculate how much collateral is needed for the borrow amount
+        uint256 _collateralNeeded = _amount * DEFAULT_TARGET_COLLATERAL_RATIO / exchange.price();
+
+        // Calculate the maximum borrowable amount that would leave the trove at MCR
+        uint256 _maxBorrowableAtMCR =
+            (_collateralNeeded * exchange.price() / troveManager.MINIMUM_COLLATERAL_RATIO()) * 995 / 1000;
+
+        // Open a trove
+        uint256 _troveId =
+            mintAndOpenTrove(userBorrower, _collateralNeeded, _maxBorrowableAtMCR, DEFAULT_ANNUAL_INTEREST_RATE);
+
+        // Use max annual interest rate to increase the debt as much as possible
+        uint256 _newAnnualInterestRate = troveManager.MAX_ANNUAL_INTEREST_RATE(); // max rate
+
+        vm.prank(userBorrower);
+        vm.expectRevert("!MINIMUM_COLLATERAL_RATIO");
+        troveManager.adjust_interest_rate(_troveId, _newAnnualInterestRate, 0, 0, type(uint256).max);
+    }
+
 }

@@ -441,17 +441,196 @@ contract OpenTroveTests is Base {
         assertEq(collateralToken.balanceOf(address(exchange)), 0, "E32");
     }
 
-    // ------- @todo
+    function test_openTrove_zeroCollateral() public {
+        vm.prank(userBorrower);
+        vm.expectRevert("!collateral_amount");
+        troveManager.open_trove(
+            block.timestamp, // index
+            0, // collateral_amount
+            1, // debt_amount
+            0, // upper_hint
+            0, // lower_hint
+            DEFAULT_ANNUAL_INTEREST_RATE, // annual_interest_rate
+            type(uint256).max, // max_upfront_fee
+            0 // min_debt_out
+        );
+    }
 
-    // function test_openTrove_zeroCollateral
-    // function test_openTrove_zeroDebt
-    // function test_openTrove_rateTooLow
-    // function test_openTrove_rateTooHigh
-    // function test_openTrove_troveExists
-    // function test_openTrove_upfrontFeeTooHigh
-    // function test_openTrove_debtTooLow
-    // function test_openTrove_belowMCR
-    // function test_openTrove_debtOutTooLow
+    function test_openTrove_zeroDebt() public {
+        vm.prank(userBorrower);
+        vm.expectRevert("!debt_amount");
+        troveManager.open_trove(
+            block.timestamp, // index
+            1, // collateral_amount
+            0, // debt_amount
+            0, // upper_hint
+            0, // lower_hint
+            DEFAULT_ANNUAL_INTEREST_RATE, // annual_interest_rate
+            type(uint256).max, // max_upfront_fee
+            0 // min_debt_out
+        );
+    }
 
+    function test_openTrove_rateTooLow(
+        uint256 _tooLowRate
+    ) public {
+        _tooLowRate = bound(_tooLowRate, 0, troveManager.MIN_ANNUAL_INTEREST_RATE() - 1);
+        vm.prank(userBorrower);
+        vm.expectRevert("!MIN_ANNUAL_INTEREST_RATE");
+        troveManager.open_trove(
+            block.timestamp, // index
+            1, // collateral_amount
+            1, // debt_amount
+            0, // upper_hint
+            0, // lower_hint
+            _tooLowRate, // annual_interest_rate
+            type(uint256).max, // max_upfront_fee
+            0 // min_debt_out
+        );
+    }
+
+    function test_openTrove_rateTooHigh(
+        uint256 _tooHighRate
+    ) public {
+        _tooHighRate = bound(_tooHighRate, troveManager.MAX_ANNUAL_INTEREST_RATE() + 1, maxFuzzAmount);
+        vm.prank(userBorrower);
+        vm.expectRevert("!MAX_ANNUAL_INTEREST_RATE");
+        troveManager.open_trove(
+            block.timestamp, // index
+            1, // collateral_amount
+            1, // debt_amount
+            0, // upper_hint
+            0, // lower_hint
+            _tooHighRate, // annual_interest_rate
+            type(uint256).max, // max_upfront_fee
+            0 // min_debt_out
+        );
+    }
+
+    function test_openTrove_troveExists(
+        uint256 _amount
+    ) public {
+        _amount = bound(_amount, troveManager.MIN_DEBT(), maxFuzzAmount);
+
+        // Lend some from lender
+        mintAndDepositIntoLender(userLender, _amount);
+
+        // Calculate how much collateral is needed for the borrow amount
+        uint256 _collateralNeeded = _amount * DEFAULT_TARGET_COLLATERAL_RATIO / exchange.price();
+
+        // Open a trove
+        mintAndOpenTrove(userBorrower, _collateralNeeded, _amount, DEFAULT_ANNUAL_INTEREST_RATE);
+
+        vm.prank(userBorrower);
+        vm.expectRevert("!empty");
+        troveManager.open_trove(
+            block.timestamp, // index
+            1, // collateral_amount
+            1, // debt_amount
+            0, // upper_hint
+            0, // lower_hint
+            DEFAULT_ANNUAL_INTEREST_RATE, // annual_interest_rate
+            type(uint256).max, // max_upfront_fee
+            0 // min_debt_out
+        );
+    }
+
+    function test_openTrove_upfrontFeeTooHigh(
+        uint256 _amount
+    ) public {
+        _amount = bound(_amount, troveManager.MIN_DEBT(), maxFuzzAmount);
+
+        // Lend some from lender
+        mintAndDepositIntoLender(userLender, _amount);
+
+        // Calculate how much collateral is needed for the borrow amount
+        uint256 _collateralNeeded = _amount * DEFAULT_TARGET_COLLATERAL_RATIO / exchange.price();
+
+        uint256 _upfrontFee = troveManager.get_upfront_fee(_amount, DEFAULT_ANNUAL_INTEREST_RATE);
+
+        vm.prank(userBorrower);
+        vm.expectRevert("!max_upfront_fee");
+        troveManager.open_trove(
+            block.timestamp, // index
+            _collateralNeeded, // collateral_amount
+            _amount, // debt_amount
+            0, // upper_hint
+            0, // lower_hint
+            DEFAULT_ANNUAL_INTEREST_RATE, // annual_interest_rate
+            _upfrontFee - 1, // max_upfront_fee
+            0 // min_debt_out
+        );
+    }
+
+    function test_openTrove_debtTooLow() public {
+        vm.prank(userBorrower);
+        vm.expectRevert("!MIN_DEBT");
+        troveManager.open_trove(
+            block.timestamp, // index
+            1, // collateral_amount
+            1, // debt_amount
+            0, // upper_hint
+            0, // lower_hint
+            DEFAULT_ANNUAL_INTEREST_RATE, // annual_interest_rate
+            type(uint256).max, // max_upfront_fee
+            0 // min_debt_out
+        );
+    }
+
+    function test_openTrove_belowMCR(
+        uint256 _amount
+    ) public {
+        _amount = bound(_amount, troveManager.MIN_DEBT(), maxFuzzAmount);
+
+        // Lend some from lender
+        mintAndDepositIntoLender(userLender, _amount);
+
+        // Calculate how much collateral is needed for the borrow amount
+        uint256 _collateralNeeded = _amount * (troveManager.MINIMUM_COLLATERAL_RATIO() - 1) / exchange.price();
+
+        vm.prank(userBorrower);
+        vm.expectRevert("!MINIMUM_COLLATERAL_RATIO");
+        troveManager.open_trove(
+            block.timestamp, // index
+            _collateralNeeded, // collateral_amount
+            _amount, // debt_amount
+            0, // upper_hint
+            0, // lower_hint
+            DEFAULT_ANNUAL_INTEREST_RATE, // annual_interest_rate
+            type(uint256).max, // max_upfront_fee
+            0 // min_debt_out
+        );
+    }
+
+    function test_openTrove_notEnoughDebtOut(
+        uint256 _amount
+    ) public {
+        _amount = bound(_amount, troveManager.MIN_DEBT(), maxFuzzAmount);
+
+        // Lend some from lender
+        mintAndDepositIntoLender(userLender, _amount);
+
+        // Calculate how much collateral is needed for the borrow amount
+        uint256 _collateralNeeded = _amount * DEFAULT_TARGET_COLLATERAL_RATIO / exchange.price();
+
+        // Airdrop some collateral to borrower
+        airdrop(address(collateralToken), userBorrower, _collateralNeeded);
+
+        // Try to open a trove with max debt out
+        vm.startPrank(userBorrower);
+        collateralToken.approve(address(troveManager), _collateralNeeded);
+        vm.expectRevert("shrekt");
+        troveManager.open_trove(
+            block.timestamp, // index
+            _collateralNeeded, // collateral_amount
+            _amount, // debt_amount
+            0, // upper_hint
+            0, // lower_hint
+            DEFAULT_ANNUAL_INTEREST_RATE, // annual_interest_rate
+            type(uint256).max, // max_upfront_fee
+            type(uint256).max // min_debt_out
+        );
+        vm.stopPrank();
+    }
 
 }

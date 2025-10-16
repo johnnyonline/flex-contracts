@@ -117,12 +117,108 @@ contract RemoveCollateralTests is Base {
         assertEq(collateralToken.balanceOf(address(exchange)), 0, "E46");
     }
 
-    // ------- @todo
+    function test_removeCollateral_zeroCollateral(
+        uint256 _troveId
+    ) public {
+        vm.prank(userBorrower);
+        vm.expectRevert("!collateral_change");
+        troveManager.remove_collateral(_troveId, 0);
+    }
 
-    // function test_removeCollateral_zeroCollateral
-    // function test_removeCollateral_troveNotActive
-    // function test_removeCollateral_insufficientCollateralInTrove
-    // function test_removeCollateral_belowMCR
+    function test_removeCollateral_notOwner(
+        uint256 _amount
+    ) public {
+        _amount = bound(_amount, troveManager.MIN_DEBT(), maxFuzzAmount);
 
+        // Lend some from lender
+        mintAndDepositIntoLender(userLender, _amount);
+
+        // Calculate how much collateral is needed for the borrow amount
+        uint256 _collateralNeeded = _amount * DEFAULT_TARGET_COLLATERAL_RATIO / exchange.price();
+
+        // Open a trove
+        uint256 _troveId = mintAndOpenTrove(userBorrower, _collateralNeeded, _amount, DEFAULT_ANNUAL_INTEREST_RATE);
+
+        // Try to remove collateral as a different user
+        vm.prank(anotherUserBorrower);
+        vm.expectRevert("!owner");
+        troveManager.remove_collateral(_troveId, minFuzzAmount);
+    }
+
+    function test_removeCollateral_troveNotActive(
+        uint256 _amount
+    ) public {
+        _amount = bound(_amount, troveManager.MIN_DEBT(), maxFuzzAmount);
+
+        // Lend some from lender
+        mintAndDepositIntoLender(userLender, _amount);
+
+        // Calculate how much collateral is needed for the borrow amount
+        uint256 _collateralNeeded = _amount * DEFAULT_TARGET_COLLATERAL_RATIO / exchange.price();
+
+        // Open a trove
+        uint256 _troveId = mintAndOpenTrove(userBorrower, _collateralNeeded, _amount, DEFAULT_ANNUAL_INTEREST_RATE);
+
+        // Pull enough liquidity to make trove a zombie trove (but above 0 debt)
+        uint256 _amountToPull = _amount - 100 ether;
+
+        // Pull liquidity from lender to make trove a zombie trove (but above 0 debt)
+        vm.prank(userLender);
+        lender.redeem(_amountToPull, userLender, userLender);
+
+        // Make sure trove is a zombie trove
+        assertEq(uint256(troveManager.troves(_troveId).status), uint256(ITroveManager.Status.zombie), "E25");
+
+        // Try to remove collateral from a non-active trove
+        vm.prank(userBorrower);
+        vm.expectRevert("!active");
+        troveManager.remove_collateral(_troveId, _amount);
+    }
+
+    function test_removeCollateral_insufficientCollateralInTrove(
+        uint256 _amount
+    ) public {
+        _amount = bound(_amount, troveManager.MIN_DEBT(), maxFuzzAmount);
+
+        // Lend some from lender
+        mintAndDepositIntoLender(userLender, _amount);
+
+        // Calculate how much collateral is needed for the borrow amount
+        uint256 _collateralNeeded = _amount * DEFAULT_TARGET_COLLATERAL_RATIO / exchange.price();
+
+        // Open a trove
+        uint256 _troveId = mintAndOpenTrove(userBorrower, _collateralNeeded, _amount, DEFAULT_ANNUAL_INTEREST_RATE);
+
+        // Try to remove more collateral than is in the trove
+        vm.prank(userBorrower);
+        vm.expectRevert("!trove.collateral");
+        troveManager.remove_collateral(_troveId, _collateralNeeded + 1);
+    }
+
+    function test_removeCollateral_belowMCR(
+        uint256 _amount
+    ) public {
+        _amount = bound(_amount, troveManager.MIN_DEBT(), maxFuzzAmount);
+
+        // Lend some from lender
+        mintAndDepositIntoLender(userLender, _amount);
+
+        // Calculate how much collateral is needed for the borrow amount
+        uint256 _collateralNeeded = _amount * DEFAULT_TARGET_COLLATERAL_RATIO / exchange.price();
+
+        // Calculate the minimum collateral to leave in the trove to stay above MCR
+        uint256 _minCollateralToLeave = (_amount * troveManager.MINIMUM_COLLATERAL_RATIO()) / exchange.price();
+
+        // Open a trove
+        uint256 _troveId = mintAndOpenTrove(userBorrower, _collateralNeeded, _amount, DEFAULT_ANNUAL_INTEREST_RATE);
+
+        // Calculate the maximum collateral that can be removed
+        uint256 _maxCollateralToRemove = _collateralNeeded - _minCollateralToLeave;
+
+        // Try to remove more collateral than is in the trove
+        vm.prank(userBorrower);
+        vm.expectRevert("!MINIMUM_COLLATERAL_RATIO");
+        troveManager.remove_collateral(_troveId, _maxCollateralToRemove);
+    }
 
 }

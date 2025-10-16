@@ -109,12 +109,75 @@ contract AddCollateralTests is Base {
         assertEq(collateralToken.balanceOf(address(exchange)), 0, "E45");
     }
 
-    // ------- @todo
+    function test_addCollateral_zeroCollateral(
+        uint256 _amount
+    ) public {
+        _amount = bound(_amount, troveManager.MIN_DEBT(), maxFuzzAmount);
 
-    // function test_addCollateral_zeroCollateral
-    // function test_addCollateral_toNonActiveTrove
-    // function test_addCollateral_insufficientAllowance
-    // function test_addCollateral_insufficientBalance
+        // Lend some from lender
+        mintAndDepositIntoLender(userLender, _amount);
 
+        // Calculate how much collateral is needed for the borrow amount
+        uint256 _collateralNeeded = _amount * DEFAULT_TARGET_COLLATERAL_RATIO / exchange.price();
+
+        // Open a trove
+        uint256 _troveId = mintAndOpenTrove(userBorrower, _collateralNeeded, _amount, DEFAULT_ANNUAL_INTEREST_RATE);
+
+        // Try to add zero collateral
+        vm.startPrank(userBorrower);
+        vm.expectRevert("!collateral_change");
+        troveManager.add_collateral(_troveId, 0);
+        vm.stopPrank();
+    }
+
+    function test_addCollateral_notOwner(
+        uint256 _amount
+    ) public {
+        _amount = bound(_amount, troveManager.MIN_DEBT(), maxFuzzAmount);
+
+        // Lend some from lender
+        mintAndDepositIntoLender(userLender, _amount);
+
+        // Calculate how much collateral is needed for the borrow amount
+        uint256 _collateralNeeded = _amount * DEFAULT_TARGET_COLLATERAL_RATIO / exchange.price();
+
+        // Open a trove
+        uint256 _troveId = mintAndOpenTrove(userBorrower, _collateralNeeded, _amount, DEFAULT_ANNUAL_INTEREST_RATE);
+
+        // Try to add collateral from another user
+        vm.prank(anotherUserBorrower);
+        vm.expectRevert("!owner");
+        troveManager.add_collateral(_troveId, minFuzzAmount);
+    }
+
+    function test_addCollateral_notActive(
+        uint256 _amount
+    ) public {
+        _amount = bound(_amount, troveManager.MIN_DEBT(), maxFuzzAmount);
+
+        // Lend some from lender
+        mintAndDepositIntoLender(userLender, _amount);
+
+        // Calculate how much collateral is needed for the borrow amount
+        uint256 _collateralNeeded = _amount * DEFAULT_TARGET_COLLATERAL_RATIO / exchange.price();
+
+        // Open a trove
+        uint256 _troveId = mintAndOpenTrove(userBorrower, _collateralNeeded, _amount, DEFAULT_ANNUAL_INTEREST_RATE);
+
+        // Pull enough liquidity to make trove a zombie trove (but above 0 debt)
+        uint256 _amountToPull = _amount - 100 ether;
+
+        // Pull liquidity from lender to make trove a zombie trove (but above 0 debt)
+        vm.prank(userLender);
+        lender.redeem(_amountToPull, userLender, userLender);
+
+        // Make sure trove is a zombie trove
+        assertEq(uint256(troveManager.troves(_troveId).status), uint256(ITroveManager.Status.zombie), "E25");
+
+        // Try to add collateral to a non-active trove
+        vm.prank(userBorrower);
+        vm.expectRevert("!active");
+        troveManager.add_collateral(_troveId, _amount);
+    }
 
 }

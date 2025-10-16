@@ -115,11 +115,99 @@ contract RepayTests is Base {
         assertEq(collateralToken.balanceOf(address(exchange)), 0, "E46");
     }
 
-    // ------- @todo
+    function test_repay_zeroAmount(
+        uint256 _amount
+    ) public {
+        _amount = bound(_amount, troveManager.MIN_DEBT(), maxFuzzAmount);
 
-    // function test_repay_amountScalesDownToMinDebt
-    // function test_repay_zeroAmount
-    // function test_repay_troveNotActive
+        // Lend some from lender
+        mintAndDepositIntoLender(userLender, _amount);
 
+        // Calculate how much collateral is needed for the borrow amount
+        uint256 _collateralNeeded = _amount * DEFAULT_TARGET_COLLATERAL_RATIO / exchange.price();
+
+        // Open a trove
+        uint256 _troveId = mintAndOpenTrove(userBorrower, _collateralNeeded, _amount, DEFAULT_ANNUAL_INTEREST_RATE);
+
+        // Try to repay with 0 amount
+        vm.prank(userBorrower);
+        vm.expectRevert("!debt_amount");
+        troveManager.repay(_troveId, 0);
+    }
+
+    function test_repay_notOwner(
+        uint256 _amount
+    ) public {
+        _amount = bound(_amount, troveManager.MIN_DEBT(), maxFuzzAmount);
+
+        // Lend some from lender
+        mintAndDepositIntoLender(userLender, _amount);
+
+        // Calculate how much collateral is needed for the borrow amount
+        uint256 _collateralNeeded = _amount * DEFAULT_TARGET_COLLATERAL_RATIO / exchange.price();
+
+        // Open a trove
+        uint256 _troveId = mintAndOpenTrove(userBorrower, _collateralNeeded, _amount, DEFAULT_ANNUAL_INTEREST_RATE);
+
+        // Try to repay from another user
+        vm.prank(anotherUserBorrower);
+        vm.expectRevert("!owner");
+        troveManager.repay(_troveId, _amount);
+    }
+
+    function test_repay_troveNotActive(
+        uint256 _amount
+    ) public {
+        _amount = bound(_amount, troveManager.MIN_DEBT(), maxFuzzAmount);
+
+        // Lend some from lender
+        mintAndDepositIntoLender(userLender, _amount);
+
+        // Calculate how much collateral is needed for the borrow amount
+        uint256 _collateralNeeded = _amount * DEFAULT_TARGET_COLLATERAL_RATIO / exchange.price();
+
+        // Open a trove
+        uint256 _troveId = mintAndOpenTrove(userBorrower, _collateralNeeded, _amount, DEFAULT_ANNUAL_INTEREST_RATE);
+
+        // Pull enough liquidity to make trove a zombie trove (but above 0 debt)
+        uint256 _amountToPull = _amount - 100 ether;
+
+        // Pull liquidity from lender to make trove a zombie trove (but above 0 debt)
+        vm.prank(userLender);
+        lender.redeem(_amountToPull, userLender, userLender);
+
+        // Make sure trove is a zombie trove
+        assertEq(uint256(troveManager.troves(_troveId).status), uint256(ITroveManager.Status.zombie), "E25");
+
+        // Try to repay a non-active trove
+        vm.prank(userBorrower);
+        vm.expectRevert("!active");
+        troveManager.repay(_troveId, _amount);
+    }
+
+    function test_repay_amountScalesDownToMinDebt(
+        uint256 _amount
+    ) public {
+        _amount = bound(_amount, troveManager.MIN_DEBT() * 150 / 100, maxFuzzAmount); // At least 50% above min debt so we have something to repay
+
+        // Lend some from lender
+        mintAndDepositIntoLender(userLender, _amount);
+
+        // Calculate how much collateral is needed for the borrow amount
+        uint256 _collateralNeeded = _amount * DEFAULT_TARGET_COLLATERAL_RATIO / exchange.price();
+
+        // Open a trove
+        uint256 _troveId = mintAndOpenTrove(userBorrower, _collateralNeeded, _amount, DEFAULT_ANNUAL_INTEREST_RATE);
+
+        // Finally repay the trove back down to min debt
+        vm.startPrank(userBorrower);
+        borrowToken.approve(address(troveManager), type(uint256).max);
+        troveManager.repay(_troveId, type(uint256).max); // Use max uint256 to trigger scaling down to min debt
+        vm.stopPrank();
+
+        // Check trove info
+        ITroveManager.Trove memory _trove = troveManager.troves(_troveId);
+        assertEq(_trove.debt, troveManager.MIN_DEBT(), "E0");
+    }
 
 }

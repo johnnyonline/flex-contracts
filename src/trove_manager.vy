@@ -293,18 +293,18 @@ def open_trove(
     @return trove_id Unique identifier for the new Trove
     """
     # Make sure collateral and debt amounts are non-zero
-    assert collateral_amount > 0, "!collateral"
-    assert debt_amount > 0, "!debt"
+    assert collateral_amount > 0, "!collateral_amount"
+    assert debt_amount > 0, "!debt_amount"
 
     # Make sure the annual interest rate is within bounds    
-    assert annual_interest_rate >= MIN_ANNUAL_INTEREST_RATE, "rate too low"
-    assert annual_interest_rate <= MAX_ANNUAL_INTEREST_RATE, "rate too high"
+    assert annual_interest_rate >= MIN_ANNUAL_INTEREST_RATE, "!MIN_ANNUAL_INTEREST_RATE"
+    assert annual_interest_rate <= MAX_ANNUAL_INTEREST_RATE, "!MAX_ANNUAL_INTEREST_RATE"
 
     # Generate the Trove ID
     trove_id: uint256 = convert(keccak256(abi_encode(msg.sender, index)), uint256)
 
-    # Make sure the Trove doesn't already exist
-    assert self.troves[trove_id].status == empty(Status), "trove exists"
+    # Make sure the Trove status is empty
+    assert self.troves[trove_id].status == empty(Status), "!empty"
 
     # Calculate the upfront fee and make sure the user is ok with it
     upfront_fee: uint256 = self._get_upfront_fee(debt_amount, annual_interest_rate, max_upfront_fee)
@@ -313,7 +313,7 @@ def open_trove(
     debt_amount_with_fee: uint256 = debt_amount + upfront_fee
 
     # Make sure enough debt is being borrowed
-    assert debt_amount_with_fee > MIN_DEBT, "debt too low"
+    assert debt_amount_with_fee > MIN_DEBT, "!MIN_DEBT"
 
     # Get the collateral price
     collateral_price: uint256 = staticcall EXCHANGE.price()
@@ -322,7 +322,7 @@ def open_trove(
     trove_collateral_ratio: uint256 = self._calculate_collateral_ratio(collateral_amount, debt_amount_with_fee, collateral_price)
 
     # Make sure the collateral ratio is above the minimum collateral ratio
-    assert trove_collateral_ratio >= MINIMUM_COLLATERAL_RATIO, "!MCR"
+    assert trove_collateral_ratio >= MINIMUM_COLLATERAL_RATIO, "!MINIMUM_COLLATERAL_RATIO"
 
     # Store the Trove info
     self.troves[trove_id] = Trove(
@@ -434,7 +434,7 @@ def remove_collateral(trove_id: uint256, collateral_change: uint256):
     assert trove.status == Status.ACTIVE, "!active"
 
     # Make sure the Trove has enough collateral
-    assert trove.collateral >= collateral_change, "!collateral in trove"
+    assert trove.collateral >= collateral_change, "!trove.collateral"
 
     # Get the Trove's debt after accruing interest
     trove_debt_after_interest: uint256 = self._get_trove_debt_after_interest(trove)
@@ -447,7 +447,7 @@ def remove_collateral(trove_id: uint256, collateral_change: uint256):
     collateral_ratio: uint256 = self._calculate_collateral_ratio(new_collateral, trove_debt_after_interest, collateral_price)
 
     # Make sure the new collateral ratio is above the minimum collateral ratio
-    assert collateral_ratio >= MINIMUM_COLLATERAL_RATIO, "!MCR"
+    assert collateral_ratio >= MINIMUM_COLLATERAL_RATIO, "!MINIMUM_COLLATERAL_RATIO"
 
     # Update the Trove's collateral info
     self.troves[trove_id].collateral = new_collateral
@@ -506,7 +506,7 @@ def borrow(trove_id: uint256, debt_amount: uint256, max_upfront_fee: uint256, mi
     collateral_ratio: uint256 = self._calculate_collateral_ratio(trove.collateral, new_debt, collateral_price)
 
     # Make sure the new collateral ratio is above the minimum collateral ratio
-    assert collateral_ratio >= MINIMUM_COLLATERAL_RATIO, "!MCR"
+    assert collateral_ratio >= MINIMUM_COLLATERAL_RATIO, "!MINIMUM_COLLATERAL_RATIO"
 
     # Cache the Trove's old debt for global accounting
     old_debt: uint256 = trove.debt
@@ -613,9 +613,9 @@ def adjust_interest_rate(
     @param prev_id ID of previous Trove for the new insert position
     @param next_id ID of next Trove for the new insert position
     """
-    # Make sure the annual interest rate is within bounds
-    assert new_annual_interest_rate >= MIN_ANNUAL_INTEREST_RATE, "rate too low"
-    assert new_annual_interest_rate <= MAX_ANNUAL_INTEREST_RATE, "rate too high"
+    # Make sure the new annual interest rate is within bounds
+    assert new_annual_interest_rate >= MIN_ANNUAL_INTEREST_RATE, "!MIN_ANNUAL_INTEREST_RATE"
+    assert new_annual_interest_rate <= MAX_ANNUAL_INTEREST_RATE, "!MAX_ANNUAL_INTEREST_RATE"
 
     # Cache Trove info
     trove: Trove = self.troves[trove_id]
@@ -627,7 +627,7 @@ def adjust_interest_rate(
     assert trove.status == Status.ACTIVE, "!active"
 
     # Make sure user is actually changing his rate
-    assert new_annual_interest_rate != trove.annual_interest_rate, "!new rate"
+    assert new_annual_interest_rate != trove.annual_interest_rate, "!new_annual_interest_rate"
 
     # Get the Trove's debt after accruing interest
     trove_debt_after_interest: uint256 = self._get_trove_debt_after_interest(trove)
@@ -653,7 +653,7 @@ def adjust_interest_rate(
         collateral_ratio: uint256 = self._calculate_collateral_ratio(trove.collateral, new_debt, collateral_price)
 
         # Make sure the new collateral ratio is above the minimum collateral ratio
-        assert collateral_ratio >= MINIMUM_COLLATERAL_RATIO, "!MCR"
+        assert collateral_ratio >= MINIMUM_COLLATERAL_RATIO, "!MINIMUM_COLLATERAL_RATIO"
 
     # Cache the Trove's old debt and interest rate for global accounting
     old_debt: uint256 = trove.debt
@@ -699,7 +699,7 @@ def adjust_interest_rate(
 # Close trove
 # ============================================================================================
 
-
+# @todo -- here
 @external
 def close_trove(trove_id: uint256):
     """
