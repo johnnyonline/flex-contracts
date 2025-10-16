@@ -1177,12 +1177,6 @@ def _sync_total_debt() -> uint256:
     @notice Accrue interest on the total debt and return the updated figure
     @return new_total_debt The updated total debt after accruing interest
     """
-    # @todo -- use ceiling
-    # We use the ceiling of the division here to ensure positive error, while we use regular floor division
-    # when calculating the interest accrued by individual Troves.
-    # This ensures that `system debt >= sum(trove debt)` always holds, and thus system debt won't turn negative
-    # even if all Trove debt is repaid. The difference should be small and it should scale with the number of
-    # interest minting events.
     # Calculate the pending aggregate interest
     pending_agg_interest: uint256 = (self.total_weighted_debt * (block.timestamp - self.last_debt_update_time)) // (_ONE_YEAR * _WAD)
 

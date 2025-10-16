@@ -1,8 +1,14 @@
 # @version 0.4.1
-# @todo -- pls clean
+
+
+# ============================================================================================
+# Flags
+# ============================================================================================
+
 
 flag Status:
     ACTIVE
+    ZOMBIE
     CLOSED
     LIQUIDATED
 
@@ -17,11 +23,16 @@ struct Trove:
     collateral: uint256
     annual_interest_rate: uint256
     last_debt_update_time: uint64
-    last_interest_rate_adj_time: uint64 # @todo -- do we need both of these?
+    last_interest_rate_adj_time: uint64
     owner: address
     status: Status
 
-# troves: public(HashMap[uint256, Trove])
+
+# ============================================================================================
+# Storage
+# ============================================================================================
+
+
 @external
 @view
 def troves(trove_id: uint256) -> Trove:
