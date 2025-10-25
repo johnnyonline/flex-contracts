@@ -14,6 +14,11 @@ contract Lender is BaseHealthCheck {
     // Constants
     // ============================================================================================
 
+    /// @notice Deposit limit for the unaudited launch
+    /// @dev Should be removed after audit
+    uint256 public constant DEPOSIT_LIMIT = 10_000 * 1e18;
+
+    /// @notice TroveManager contract
     ITroveManager public immutable TROVE_MANAGER;
 
     // ============================================================================================
@@ -30,6 +35,18 @@ contract Lender is BaseHealthCheck {
 
         // Max approve TroveManager to pull borrow token
         asset.forceApprove(_troveManager, type(uint256).max);
+    }
+
+    // ============================================================================================
+    // Public view function
+    // ============================================================================================
+
+    // @inheritdoc BaseStrategy
+    function availableDepositLimit(
+        address /*_owner*/
+    ) public view override returns (uint256) {
+        uint256 _currentAssets = TokenizedStrategy.totalAssets();
+        return DEPOSIT_LIMIT <= _currentAssets ? 0 : DEPOSIT_LIMIT - _currentAssets;
     }
 
     // ============================================================================================
@@ -52,13 +69,7 @@ contract Lender is BaseHealthCheck {
     }
 
     /// @inheritdoc BaseStrategy
-    function _harvestAndReport()
-        internal
-        override
-        returns (
-            uint256 /*_totalAssets*/
-        )
-    {
+    function _harvestAndReport() internal override returns (uint256 /*_totalAssets*/) {
         // Total assets is whatever idle asset we have + the latest total debt figure from the trove manager
         return asset.balanceOf(address(this)) + TROVE_MANAGER.sync_total_debt();
     }
