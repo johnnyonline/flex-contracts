@@ -181,11 +181,9 @@ contract AdjustRateTests is Base {
         uint256 _newAnnualInterestRate = DEFAULT_ANNUAL_INTEREST_RATE * 2; // 2%
 
         // Calculate second expected debt with interest accumulated
-        uint256 _interestOnFirstDebt =
-            _expectedDebt * DEFAULT_ANNUAL_INTEREST_RATE * (block.timestamp - _trove.last_debt_update_time)
-            / (365 days * 1e18);
-        uint256 _secondExpectedDebt =
-            troveManager.get_trove_debt_after_interest(_troveId)
+        uint256 _interestOnFirstDebt = _expectedDebt * DEFAULT_ANNUAL_INTEREST_RATE
+            * (block.timestamp - _trove.last_debt_update_time) / (365 days * 1e18);
+        uint256 _secondExpectedDebt = troveManager.get_trove_debt_after_interest(_troveId)
             + troveManager.get_upfront_fee(_expectedDebt + _interestOnFirstDebt, _newAnnualInterestRate);
 
         // Finally adjust the rate
@@ -339,8 +337,7 @@ contract AdjustRateTests is Base {
         assertLt(_trove.collateral * exchange.price() / _trove.debt, DEFAULT_TARGET_COLLATERAL_RATIO, "E33"); // increased debt --> lower CR
 
         // Calculate expected debt with interest accumulated
-        uint256 _secondExpectedDebt =
-            _expectedDebt
+        uint256 _secondExpectedDebt = _expectedDebt
             + ((_expectedDebt * DEFAULT_ANNUAL_INTEREST_RATE * (block.timestamp - _trove.last_debt_update_time))
                 / (365 days * 1e18));
 
@@ -372,8 +369,7 @@ contract AdjustRateTests is Base {
         assertEq(borrowToken.balanceOf(userBorrower), _borrowAmount, "E53");
 
         // Add interest to `_expectedDebt`
-        uint256 _expectedDebtWithInterest =
-            _expectedDebt
+        uint256 _expectedDebtWithInterest = _expectedDebt
             + ((_expectedDebt
                     * DEFAULT_ANNUAL_INTEREST_RATE
                     * (block.timestamp - (block.timestamp - troveManager.INTEREST_RATE_ADJ_COOLDOWN())))

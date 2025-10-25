@@ -139,8 +139,7 @@ contract BorrowTests is Base {
             (_borrowAmount + troveManager.MIN_DEBT()) * DEFAULT_TARGET_COLLATERAL_RATIO / exchange.price();
 
         // Calculate expected debt (borrow amount + upfront fee)
-        uint256 _expectedDebt =
-            troveManager.MIN_DEBT()
+        uint256 _expectedDebt = troveManager.MIN_DEBT()
             + troveManager.get_upfront_fee(troveManager.MIN_DEBT(), DEFAULT_ANNUAL_INTEREST_RATE);
 
         // Cache the available liquidity
