@@ -1,0 +1,7 @@
+
+** Unaudited launch **
+
+- Exchange:  0x693e74c376a8884d885ab1374768f0e6f6964d93
+- Sorted Troves:  0xfF1cE633646ca7fA3eb9c79a5DDa340564aFaFb6
+- Trove Manager:  0x36e9EE7A0CE154CC1e379A7c0231FA19C0b41c1f
+- Lender:  0x1Ee6DB6b89fbf07489ec4cDAe89b82C97c7c53eA

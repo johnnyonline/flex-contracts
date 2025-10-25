@@ -50,6 +50,7 @@ contract Deploy is Script {
 
         // Derive deployer address from private key
         deployer = vm.addr(_pk);
+        require(deployer == address(0x285E3b1E82f74A99D07D2aD25e159E75382bB43B), "!johnnyonline.eth");
 
         if (!isTest) console.log("Deployer address: %s", deployer);
 
@@ -76,25 +77,36 @@ contract Deploy is Script {
         );
         require(address(troveManager) == _troveManagerAddress, "!troveManagerAddress");
 
-        lender = deployLender();
+        lender = deployLender(isTest);
         require(address(lender) == _lenderAddress, "!lenderAddress");
 
         if (isTest) {
+            vm.label({account: address(exchange), newLabel: "Exchange"});
             vm.label({account: address(sortedTroves), newLabel: "SortedTroves"});
+            vm.label({account: address(troveManager), newLabel: "TroveManager"});
+            vm.label({account: address(lender), newLabel: "Lender"});
         } else {
-            console.log("Deployer: ", deployer);
+            console.log("---------------------------------");
+            console.log("Exchange: ", address(exchange));
             console.log("Sorted Troves: ", address(sortedTroves));
+            console.log("Trove Manager: ", address(troveManager));
+            console.log("Lender: ", address(lender));
+            console.log("---------------------------------");
         }
 
         vm.stopBroadcast();
     }
 
-    function deployLender() public returns (ILender _lender) {
+    function deployLender(
+        bool _isTest
+    ) public returns (ILender _lender) {
         _lender = ILender(address(new Lender(address(borrowToken), address(troveManager), "Lender Strategy")));
-        _lender.setPerformanceFeeRecipient(performanceFeeRecipient);
-        _lender.setKeeper(keeper);
-        _lender.setPendingManagement(management);
-        _lender.setEmergencyAdmin(emergencyAdmin);
+        if (_isTest) {
+            _lender.setPerformanceFeeRecipient(performanceFeeRecipient);
+            _lender.setKeeper(keeper);
+            _lender.setPendingManagement(management);
+            _lender.setEmergencyAdmin(emergencyAdmin);
+        }
     }
 
 }
