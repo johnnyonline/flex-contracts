@@ -50,9 +50,11 @@ contract Deploy is Script {
 
         // Derive deployer address from private key
         deployer = vm.addr(_pk);
-        require(deployer == address(0x285E3b1E82f74A99D07D2aD25e159E75382bB43B), "!johnnyonline.eth");
 
-        if (!isTest) console.log("Deployer address: %s", deployer);
+        if (!isTest) {
+            require(deployer == address(0x285E3b1E82f74A99D07D2aD25e159E75382bB43B), "!johnnyonline.eth");
+            console.log("Deployer address: %s", deployer);
+        }
 
         vm.startBroadcast(_pk);
 
