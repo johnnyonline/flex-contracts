@@ -2,6 +2,7 @@
 pragma solidity 0.8.23;
 
 import {IERC20} from "@openzeppelin/contracts/interfaces/IERC20.sol";
+import {IBaseStrategy} from "@tokenized-strategy/interfaces/IBaseStrategy.sol";
 
 import "../script/Deploy.s.sol";
 
@@ -39,6 +40,13 @@ abstract contract Base is Deploy, Test {
         // Set up "constants" for tests
         DEFAULT_ANNUAL_INTEREST_RATE = troveManager.MIN_ANNUAL_INTEREST_RATE() * 2; // 1%
         DEFAULT_TARGET_COLLATERAL_RATIO = troveManager.MINIMUM_COLLATERAL_RATIO() * 110 / 100; // 10% above MCR
+
+        // Make sure Lender's deposit limit does not interfere with tests
+        vm.mockCall(
+            address(lender),
+            abi.encodeWithSelector(IBaseStrategy.availableDepositLimit.selector),
+            abi.encode(type(uint256).max)
+        );
     }
 
     function airdrop(

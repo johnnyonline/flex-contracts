@@ -123,7 +123,7 @@ COLLATERAL_TOKEN: public(immutable(IERC20))
 
 MINIMUM_COLLATERAL_RATIO: public(immutable(uint256))  # e.g., `110 * _ONE_PCT` for 110%
 
-MIN_DEBT: public(constant(uint256)) = 1000 * 10 ** 18
+MIN_DEBT: public(constant(uint256)) = 500 * 10 ** 18
 MIN_ANNUAL_INTEREST_RATE: public(constant(uint256)) = _ONE_PCT // 2  # 0.5%
 MAX_ANNUAL_INTEREST_RATE: public(constant(uint256)) = 250 * _ONE_PCT  # 250%
 UPFRONT_INTEREST_PERIOD: public(constant(uint256)) = 7 * 24 * 60 * 60  # 7 days
