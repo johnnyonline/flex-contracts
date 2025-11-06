@@ -8,6 +8,9 @@
         accrues interest, maintains aggregate debt accounting, and coordinates redemptions with the Lender
         and sorted_troves contracts
 """
+# @todo -- decimals?
+# @todo -- EXCHANGE_HANDLER?
+# @todo -- liquidations
 
 from ethereum.ercs import IERC20
 
@@ -22,60 +25,60 @@ from interfaces import ISortedTroves
 
 
 event OpenTrove:
-    trove_id: uint256
-    owner: address
+    trove_id: indexed(uint256)
+    owner: indexed(address)
     collateral_amount: uint256
     debt_amount: uint256
     upfront_fee: uint256
     annual_interest_rate: uint256
 
 event AddCollateral:
-    trove_id: uint256
-    owner: address
+    trove_id: indexed(uint256)
+    owner: indexed(address)
     collateral_amount: uint256
 
 event RemoveCollateral:
-    trove_id: uint256
-    owner: address
+    trove_id: indexed(uint256)
+    owner: indexed(address)
     collateral_amount: uint256
 
 event Borrow:
-    trove_id: uint256
-    owner: address
+    trove_id: indexed(uint256)
+    owner: indexed(address)
     debt_amount: uint256
     upfront_fee: uint256
 
 event Repay:
-    trove_id: uint256
-    owner: address
+    trove_id: indexed(uint256)
+    owner: indexed(address)
     debt_amount: uint256
 
 event AdjustInterestRate:
-    trove_id: uint256
-    owner: address
+    trove_id: indexed(uint256)
+    owner: indexed(address)
     new_annual_interest_rate: uint256
     upfront_fee: uint256
 
 event CloseTrove:
-    trove_id: uint256
-    owner: address
+    trove_id: indexed(uint256)
+    owner: indexed(address)
     collateral_amount: uint256
     debt_amount: uint256
 
 event CloseZombieTrove:
-    trove_id: uint256
-    owner: address
+    trove_id: indexed(uint256)
+    owner: indexed(address)
     collateral_amount: uint256
     debt_amount: uint256
 
 event LiquidateTrove:
-    trove_id: uint256
-    liquidator: address
+    trove_id: indexed(uint256)
+    liquidator: indexed(address)
     collateral_amount: uint256
     debt_amount: uint256
 
 event Redeem:
-    redeemer: address
+    redeemer: indexed(address)
     collateral_amount: uint256
     debt_amount: uint256
     debt_amount_out: uint256
