@@ -31,6 +31,7 @@ interface ITroveManager {
         uint64 last_debt_update_time;
         uint64 last_interest_rate_adj_time;
         address owner;
+        address pending_owner;
         Status status;
     }
 
@@ -80,6 +81,22 @@ interface ITroveManager {
     // ============================================================================================
 
     function sync_total_debt() external returns (uint256);
+
+    // ============================================================================================
+    // Ownership
+    // ============================================================================================
+
+    function transfer_ownership(
+        uint256 trove_id,
+        address new_owner
+    ) external;
+    function accept_ownership(
+        uint256 trove_id
+    ) external;
+    function force_transfer_ownership(
+        uint256 trove_id,
+        address new_owner
+    ) external;
 
     // ============================================================================================
     // Open trove

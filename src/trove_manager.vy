@@ -24,6 +24,16 @@ from interfaces import ISortedTroves
 # ============================================================================================
 
 
+event PendingOwnershipTransfer:
+    trove_id: indexed(uint256)
+    old_owner: indexed(address)
+    new_owner: indexed(address)
+
+event OwnershipTransferred:
+    trove_id: indexed(uint256)
+    old_owner: indexed(address)
+    new_owner: indexed(address)
+
 event OpenTrove:
     trove_id: indexed(uint256)
     owner: indexed(address)
@@ -108,6 +118,7 @@ struct Trove:
     last_debt_update_time: uint64
     last_interest_rate_adj_time: uint64
     owner: address
+    pending_owner: address
     status: Status
 
 
@@ -233,26 +244,65 @@ def sync_total_debt() -> uint256:
 # ============================================================================================
 # Ownership
 # ============================================================================================
-# @todo
 
 
 @external
-def transfer_ownership(new_owner: address):
+def transfer_ownership(trove_id: uint256, new_owner: address):
     """
-    @notice Transfer ownership of a Trove to a new owner
+    @notice Starts the ownership transfer of a Trove to a new owner
     @dev New owner must call `accept_ownership` to finalize the transfer
+    @param trove_id Unique identifier of the Trove
     @param new_owner The address of the new owner
     """
-    pass
+    # Cache Trove info
+    trove: Trove = self.troves[trove_id]
+
+    # Make sure the caller is the owner of the Trove
+    assert trove.owner == msg.sender, "!owner"
+
+    # Set the pending owner
+    trove.pending_owner = new_owner
+
+    # Save changes to storage
+    self.troves[trove_id] = trove
+
+    # Emit event
+    log PendingOwnershipTransfer(
+        trove_id=trove_id,
+        old_owner=msg.sender,
+        new_owner=new_owner
+    )
 
 
 @external
-def accept_ownership():
+def accept_ownership(trove_id: uint256):
     """
     @notice Accept ownership of a Trove
-    @dev Can only be called by the new owner
+    @dev Can only be called by the pending owner
+    @param trove_id Unique identifier of the Trove
     """
-    pass
+    # Cache Trove info
+    trove: Trove = self.troves[trove_id]
+
+    # Make sure the caller is the pending owner of the Trove
+    assert trove.pending_owner == msg.sender, "!pending_owner"
+
+    # Cache the old owner for event
+    old_owner: address = trove.owner
+
+    # Set the new owner and clear the pending owner
+    trove.owner = trove.pending_owner
+    trove.pending_owner = empty(address)
+
+    # Save changes to storage
+    self.troves[trove_id] = trove
+
+    # Emit event
+    log OwnershipTransferred(
+        trove_id=trove_id,
+        old_owner=old_owner,
+        new_owner=msg.sender
+    )
 
 
 @external
@@ -263,7 +313,24 @@ def force_transfer_ownership(trove_id: uint256, new_owner: address):
     @param trove_id Unique identifier of the Trove
     @param new_owner The address of the new owner
     """
-    pass
+    # Cache Trove info
+    trove: Trove = self.troves[trove_id]
+
+    # Make sure the caller is the owner of the Trove
+    assert trove.owner == msg.sender, "!owner"
+
+    # Set the new owner
+    trove.owner = new_owner
+
+    # Save changes to storage
+    self.troves[trove_id] = trove
+
+    # Emit event
+    log OwnershipTransferred(
+        trove_id=trove_id,
+        old_owner=msg.sender,
+        new_owner=new_owner
+    )
 
 
 # ============================================================================================
@@ -335,6 +402,7 @@ def open_trove(
         last_debt_update_time=convert(block.timestamp, uint64),
         last_interest_rate_adj_time=convert(block.timestamp, uint64),
         owner=msg.sender,
+        pending_owner=empty(address),
         status=Status.ACTIVE
     )
 
