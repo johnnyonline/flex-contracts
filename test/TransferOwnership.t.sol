@@ -101,7 +101,7 @@ contract TransferOwnershipTests is Base {
 
         // Check trove info again
         _trove = troveManager.troves(_troveId);
-        assertEq(_trove.owner, address(0), "E2");
+        assertEq(_trove.owner, _newOwner, "E2");
         assertEq(_trove.pending_owner, address(0), "E3");
     }
 
