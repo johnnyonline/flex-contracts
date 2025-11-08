@@ -9,13 +9,13 @@
         and sorted_troves contracts
 """
 # @todo -- decimals?
-# @todo -- EXCHANGE_HANDLER?
 # @todo -- liquidations
+# @todo -- here -- use exchange route index
 
 from ethereum.ercs import IERC20
 
-from periphery.interfaces import IExchange
-
+from interfaces import IExchange
+from interfaces import IPriceOracle
 from interfaces import ISortedTroves
 
 
@@ -130,6 +130,7 @@ struct Trove:
 LENDER: public(immutable(address))
 
 EXCHANGE: public(immutable(IExchange))
+PRICE_ORACLE: public(immutable(IPriceOracle))
 SORTED_TROVES: public(immutable(ISortedTroves))
 
 BORROW_TOKEN: public(immutable(IERC20))
@@ -183,6 +184,7 @@ troves: public(HashMap[uint256, Trove])
 def __init__(
     lender: address,
     exchange: address,
+    price_oracle: address,
     sorted_troves: address,
     borrow_token: address,
     collateral_token: address,
@@ -190,6 +192,7 @@ def __init__(
 ):
     LENDER = lender
     EXCHANGE = IExchange(exchange)
+    PRICE_ORACLE = IPriceOracle(price_oracle)
     SORTED_TROVES = ISortedTroves(sorted_troves)
     BORROW_TOKEN = IERC20(borrow_token)
     COLLATERAL_TOKEN = IERC20(collateral_token)
@@ -250,6 +253,8 @@ def sync_total_debt() -> uint256:
 def transfer_ownership(trove_id: uint256, new_owner: address):
     """
     @notice Starts the ownership transfer of a Trove to a new owner
+    @dev Only callable by the current `owner`
+    @dev Replaces the pending transfer if there is one
     @dev New owner must call `accept_ownership` to finalize the transfer
     @param trove_id Unique identifier of the Trove
     @param new_owner The address of the new owner
@@ -278,7 +283,7 @@ def transfer_ownership(trove_id: uint256, new_owner: address):
 def accept_ownership(trove_id: uint256):
     """
     @notice Accept ownership of a Trove
-    @dev Can only be called by the pending owner
+    @dev Only callable by the current `pending_owner`
     @param trove_id Unique identifier of the Trove
     """
     # Cache Trove info
@@ -309,6 +314,7 @@ def accept_ownership(trove_id: uint256):
 def force_transfer_ownership(trove_id: uint256, new_owner: address):
     """
     @notice Force transfer ownership of a Trove to a new owner
+    @dev Only callable by the current `owner`
     @dev Does not require acceptance by the new owner
     @param trove_id Unique identifier of the Trove
     @param new_owner The address of the new owner
@@ -386,7 +392,7 @@ def open_trove(
     assert debt_amount_with_fee > MIN_DEBT, "!MIN_DEBT"
 
     # Get the collateral price
-    collateral_price: uint256 = staticcall EXCHANGE.price()
+    collateral_price: uint256 = staticcall PRICE_ORACLE.price()
 
     # Calculate the collateral ratio
     trove_collateral_ratio: uint256 = self._calculate_collateral_ratio(collateral_amount, debt_amount_with_fee, collateral_price)
@@ -453,6 +459,7 @@ def open_trove(
 def add_collateral(trove_id: uint256, collateral_change: uint256):
     """
     @notice Add collateral to an existing Trove
+    @dev Only callable by the Trove owner
     @param trove_id Unique identifier of the Trove
     @param collateral_change Amount of collateral tokens to add
     """
@@ -489,6 +496,7 @@ def add_collateral(trove_id: uint256, collateral_change: uint256):
 def remove_collateral(trove_id: uint256, collateral_change: uint256):
     """
     @notice Remove collateral from an existing Trove
+    @dev Only callable by the Trove owner
     @param trove_id Unique identifier of the Trove
     @param collateral_change Amount of collateral tokens to remove
     """
@@ -511,7 +519,7 @@ def remove_collateral(trove_id: uint256, collateral_change: uint256):
     trove_debt_after_interest: uint256 = self._get_trove_debt_after_interest(trove)
 
     # Get the collateral price
-    collateral_price: uint256 = staticcall EXCHANGE.price()
+    collateral_price: uint256 = staticcall PRICE_ORACLE.price()
 
     # Calculate the new collateral amount and collateral ratio
     new_collateral: uint256 = trove.collateral - collateral_change
@@ -541,6 +549,7 @@ def remove_collateral(trove_id: uint256, collateral_change: uint256):
 def borrow(trove_id: uint256, debt_amount: uint256, max_upfront_fee: uint256, min_debt_out: uint256):
     """
     @notice Borrow more tokens from an existing Trove
+    @dev Only callable by the Trove owner
     @param trove_id Unique identifier of the Trove
     @param debt_amount Amount of additional debt to issue before the upfront fee
     @param max_upfront_fee Maximum upfront fee the caller is willing to pay
@@ -571,7 +580,7 @@ def borrow(trove_id: uint256, debt_amount: uint256, max_upfront_fee: uint256, mi
     new_debt: uint256 = trove_debt_after_interest + debt_amount_with_fee
 
     # Get the collateral price
-    collateral_price: uint256 = staticcall EXCHANGE.price()
+    collateral_price: uint256 = staticcall PRICE_ORACLE.price()
 
     # Calculate the collateral ratio
     collateral_ratio: uint256 = self._calculate_collateral_ratio(trove.collateral, new_debt, collateral_price)
@@ -613,6 +622,7 @@ def borrow(trove_id: uint256, debt_amount: uint256, max_upfront_fee: uint256, mi
 def repay(trove_id: uint256, debt_amount: uint256):
     """
     @notice Repay part of the debt of an existing Trove
+    @dev Only callable by the Trove owner
     @param trove_id Unique identifier of the Trove
     @param debt_amount Amount of debt to repay
     """
@@ -679,6 +689,7 @@ def adjust_interest_rate(
 ):
     """
     @notice Adjust the annual interest rate of an existing Trove
+    @dev Only callable by the Trove owner
     @param trove_id Unique identifier of the Trove
     @param new_annual_interest_rate New fixed annual interest rate to pay on the debt
     @param prev_id ID of previous Trove for the new insert position
@@ -718,7 +729,7 @@ def adjust_interest_rate(
         new_debt += upfront_fee
 
         # Get the collateral price
-        collateral_price: uint256 = staticcall EXCHANGE.price()
+        collateral_price: uint256 = staticcall PRICE_ORACLE.price()
 
         # Calculate the collateral ratio
         collateral_ratio: uint256 = self._calculate_collateral_ratio(trove.collateral, new_debt, collateral_price)
@@ -770,11 +781,12 @@ def adjust_interest_rate(
 # Close trove
 # ============================================================================================
 
-# @todo -- here
+# @todo -- here -- tests
 @external
 def close_trove(trove_id: uint256):
     """
     @notice Close an existing Trove by repaying all its debt and withdrawing all its collateral
+    @dev Only callable by the Trove owner
     @param trove_id Unique identifier of the Trove
     """
     # Cache Trove info
@@ -832,6 +844,7 @@ def close_trove(trove_id: uint256):
 def close_zombie_trove(trove_id: uint256):
     """
     @notice Close a zombie Trove by repaying all its debt (if it has any) and withdrawing all its collateral
+    @dev Only callable by the Trove owner
     @param trove_id Unique identifier of the Trove
     """
     # Cache Trove info
@@ -917,7 +930,7 @@ def liquidate_trove(trove_id: uint256):
     trove_debt_after_interest: uint256 = self._get_trove_debt_after_interest(trove)
 
     # Get the collateral price
-    collateral_price: uint256 = staticcall EXCHANGE.price()
+    collateral_price: uint256 = staticcall PRICE_ORACLE.price()
 
     # Calculate the collateral ratio
     collateral_ratio: uint256 = self._calculate_collateral_ratio(trove.collateral, trove_debt_after_interest, collateral_price)
@@ -1002,7 +1015,7 @@ def _redeem(amount: uint256) -> uint256:
     self._sync_total_debt()
 
     # Get the collateral price
-    collateral_price: uint256 = staticcall EXCHANGE.price()
+    collateral_price: uint256 = staticcall PRICE_ORACLE.price()
 
     # Initialize the `is_zombie_trove` flag
     is_zombie_trove: bool = False
@@ -1114,7 +1127,7 @@ def _redeem(amount: uint256) -> uint256:
     self.collateral_balance -= total_collateral_decrease
 
     # Swap the collateral to borrow token and transfer it to the caller. Does nothing on zero amount
-    borrow_token_out: uint256 = extcall EXCHANGE.swap(total_collateral_decrease, msg.sender)
+    borrow_token_out: uint256 = extcall EXCHANGE.swap(total_collateral_decrease, 0, msg.sender) # @todo -- index
 
     # Emit event
     log Redeem(

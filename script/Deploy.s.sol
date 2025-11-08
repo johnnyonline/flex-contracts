@@ -3,6 +3,8 @@ pragma solidity 0.8.23;
 
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/ERC20.sol";
 
+import {IPriceOracle} from "./interfaces/IPriceOracle.sol";
+import {IExchangeRoute} from "./interfaces/IExchangeRoute.sol";
 import {IExchange} from "./interfaces/IExchange.sol";
 import {ISortedTroves} from "./interfaces/ISortedTroves.sol";
 import {ITroveManager} from "./interfaces/ITroveManager.sol";
@@ -29,6 +31,8 @@ contract Deploy is Script {
     bool public isTest;
     address public deployer;
 
+    IPriceOracle public priceOracle;
+    IExchangeRoute public exchangeRoute;
     IExchange public exchange;
     ISortedTroves public sortedTroves;
     ITroveManager public troveManager;
@@ -59,10 +63,13 @@ contract Deploy is Script {
         vm.startBroadcast(_pk);
 
         uint256 _nonce = vm.getNonce(deployer);
-        address _lenderAddress = computeCreateAddress(deployer, _nonce + 3);
-        address _troveManagerAddress = computeCreateAddress(deployer, _nonce + 2);
+        address _lenderAddress = computeCreateAddress(deployer, _nonce + 5);
+        address _troveManagerAddress = computeCreateAddress(deployer, _nonce + 4);
 
-        exchange = IExchange(deployCode("tbtc"));
+        priceOracle = IPriceOracle(deployCode("tbtc_yb_oracle"));
+        exchangeRoute = IExchangeRoute(deployCode("tbtc_yb_route"));
+        exchange =
+            IExchange(deployCode("exchange", abi.encode(deployer, address(borrowToken), address(collateralToken))));
         sortedTroves = ISortedTroves(deployCode("sorted_troves", abi.encode(_troveManagerAddress)));
         troveManager = ITroveManager(
             deployCode(
@@ -70,6 +77,7 @@ contract Deploy is Script {
                 abi.encode(
                     _lenderAddress,
                     address(exchange),
+                    address(priceOracle),
                     address(sortedTroves),
                     address(borrowToken),
                     address(collateralToken),
@@ -82,13 +90,20 @@ contract Deploy is Script {
         lender = deployLender(isTest);
         require(address(lender) == _lenderAddress, "!lenderAddress");
 
+        // Set up the exchange route and transfer ownership to management
+        setupExchangeRoute();
+
         if (isTest) {
+            vm.label({account: address(priceOracle), newLabel: "PriceOracle"});
+            vm.label({account: address(exchangeRoute), newLabel: "ExchangeRoute"});
             vm.label({account: address(exchange), newLabel: "Exchange"});
             vm.label({account: address(sortedTroves), newLabel: "SortedTroves"});
             vm.label({account: address(troveManager), newLabel: "TroveManager"});
             vm.label({account: address(lender), newLabel: "Lender"});
         } else {
             console.log("---------------------------------");
+            console.log("Price Oracle: ", address(priceOracle));
+            console.log("Exchange Route: ", address(exchangeRoute));
             console.log("Exchange: ", address(exchange));
             console.log("Sorted Troves: ", address(sortedTroves));
             console.log("Trove Manager: ", address(troveManager));
@@ -109,6 +124,11 @@ contract Deploy is Script {
             _lender.setPendingManagement(management);
             _lender.setEmergencyAdmin(emergencyAdmin);
         }
+    }
+
+    function setupExchangeRoute() public {
+        exchange.add_route(address(exchangeRoute));
+        exchange.transfer_ownership(management);
     }
 
 }
