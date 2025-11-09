@@ -5,10 +5,20 @@ import {BaseHealthCheck, BaseStrategy, ERC20} from "@periphery/Bases/HealthCheck
 import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 
 import {ITroveManager} from "./interfaces/ITroveManager.sol";
-
+import "forge-std/console2.sol";
+// @todo -- configurable deposit limit
 contract Lender is BaseHealthCheck {
 
     using SafeERC20 for ERC20;
+
+    // ============================================================================================
+    // Events
+    // ============================================================================================
+
+    /// @notice Emitted when a user sets their exchange route index
+    /// @param user The address of the user
+    /// @param index The index of the exchange route set
+    event ExchangeRouteIndexSet(address indexed user, uint256 indexed index);
 
     // ============================================================================================
     // Constants
@@ -22,9 +32,21 @@ contract Lender is BaseHealthCheck {
     ITroveManager public immutable TROVE_MANAGER;
 
     // ============================================================================================
+    // Storage
+    // ============================================================================================
+
+    /// @notice Mapping of exchange route indices for a lender
+    /// @dev Used to indicate which exchange route to use when redeeming collateral
+    mapping(address => uint256) public exchangeRouteIndices; // lender => index
+
+    // ============================================================================================
     // Constructor
     // ============================================================================================
 
+    /// @notice Constructor
+    /// @param _asset The address of the borrow token
+    /// @param _troveManager The address of the TroveManager contract
+    /// @param _name The name of the vault
     constructor(
         address _asset,
         address _troveManager,
@@ -50,6 +72,19 @@ contract Lender is BaseHealthCheck {
     }
 
     // ============================================================================================
+    // External mutative functions
+    // ============================================================================================
+
+    /// @notice Set the exchange route index for the caller
+    /// @param _index The index of the exchange route to use
+    function setExchangeRouteIndex(
+        uint256 _index
+    ) external {
+        exchangeRouteIndices[msg.sender] = _index;
+        emit ExchangeRouteIndexSet(msg.sender, _index);
+    }
+
+    // ============================================================================================
     // Internal mutative functions
     // ============================================================================================
 
@@ -64,8 +99,15 @@ contract Lender is BaseHealthCheck {
     function _freeFunds(
         uint256 _amount
     ) internal override {
+        // Get the exchange route index for the caller
+        // If none set, defaults to 0
+        uint256 _index = exchangeRouteIndices[msg.sender];
+        console2.log("Lender: redeeming with exchange route index %s", _index);
+        console2.log("caller: %s", msg.sender);
+        console2.log("caller1: %s", tx.origin);
+
         // Try to free `_amount` by selling borrower's collateral
-        TROVE_MANAGER.redeem(_amount);
+        TROVE_MANAGER.redeem(_amount, _index);
     }
 
     /// @inheritdoc BaseStrategy

@@ -466,17 +466,145 @@ contract OpenTroveTests is Base {
         assertEq(collateralToken.balanceOf(address(exchangeRoute)), 0, "E37");
     }
 
+    // 1. lend
+    // 2. 1st borrower borrows all
+    // 3. 2nd borrower borrows slightly more (redeems 1st borrower completely, including upfront fee) using new exchange route
+    function test_openTrove_usingNewExchangeRoute(
+        uint256 _amount
+    ) public {
+        _amount = bound(_amount, troveManager.MIN_DEBT(), maxFuzzAmount);
+
+        // Lend some from lender
+        mintAndDepositIntoLender(userLender, _amount);
+
+        // Calculate how much collateral is needed for the borrow amount
+        uint256 _collateralNeeded = _amount * DEFAULT_TARGET_COLLATERAL_RATIO / priceOracle.price();
+
+        // Borrow all available liquidity from another borrower
+        uint256 _troveIdAnotherBorrower =
+            mintAndOpenTrove(anotherUserBorrower, _collateralNeeded, _amount, DEFAULT_ANNUAL_INTEREST_RATE);
+
+        // Make sure there's no liquidity left in the lender
+        assertEq(borrowToken.balanceOf(address(lender)), 0, "E0");
+
+        // Calculate expected debt (borrow amount + upfront fee)
+        uint256 _expectedDebt = _amount + troveManager.get_upfront_fee(_amount, DEFAULT_ANNUAL_INTEREST_RATE);
+        uint256 _expectedCollateralAfterRedemption = _collateralNeeded - (_expectedDebt * 1e18 / priceOracle.price());
+
+        // Second amount is slightly more than the first amount, just enough to cover the upfront fee
+        uint256 _secondAmount = _amount + troveManager.get_upfront_fee(_amount, DEFAULT_ANNUAL_INTEREST_RATE);
+        uint256 _secondCollateralNeeded = _secondAmount * DEFAULT_TARGET_COLLATERAL_RATIO / priceOracle.price();
+        uint256 _secondExpectedDebt =
+            _secondAmount + troveManager.get_upfront_fee(_secondAmount, DEFAULT_ANNUAL_INTEREST_RATE);
+
+        // Airdrop some collateral to borrower
+        airdrop(address(collateralToken), userBorrower, _secondCollateralNeeded);
+
+        // Open a trove and redeem from the other borrower using new exchange route
+        vm.startPrank(userBorrower);
+        collateralToken.approve(address(troveManager), _secondCollateralNeeded);
+        vm.expectRevert("!route");
+        troveManager.open_trove(
+            block.timestamp, // owner_index
+            _secondCollateralNeeded, // collateral_amount
+            _secondAmount, // debt_amount
+            0, // upper_hint
+            0, // lower_hint
+            DEFAULT_ANNUAL_INTEREST_RATE, // annual_interest_rate
+            type(uint256).max, // max_upfront_fee
+            1, // route_index
+            0 // min_debt_out
+        );
+        vm.stopPrank();
+
+        // Add new exchange route
+        vm.prank(deployer);
+        exchange.add_route(address(exchangeRoute));
+
+        vm.prank(userBorrower);
+        uint256 _troveId = troveManager.open_trove(
+            block.timestamp, // owner_index
+            _secondCollateralNeeded, // collateral_amount
+            _secondAmount, // debt_amount
+            0, // upper_hint
+            0, // lower_hint
+            DEFAULT_ANNUAL_INTEREST_RATE, // annual_interest_rate
+            type(uint256).max, // max_upfront_fee
+            1, // route_index
+            0 // min_debt_out
+        );
+
+        // Check trove info of anotherUserBorrower
+        ITroveManager.Trove memory _trove = troveManager.troves(_troveIdAnotherBorrower);
+        assertEq(_trove.debt, 0, "E1");
+        assertEq(_trove.collateral, _expectedCollateralAfterRedemption, "E2");
+        assertEq(_trove.annual_interest_rate, DEFAULT_ANNUAL_INTEREST_RATE, "E3");
+        assertEq(_trove.last_debt_update_time, block.timestamp, "E4");
+        assertEq(_trove.last_interest_rate_adj_time, block.timestamp, "E5");
+        assertEq(_trove.owner, anotherUserBorrower, "E6");
+        assertEq(_trove.pending_owner, address(0), "E7");
+        assertEq(uint256(_trove.status), uint256(ITroveManager.Status.zombie), "E8");
+
+        // Check trove info of userBorrower
+        _trove = troveManager.troves(_troveId);
+        assertEq(_trove.debt, _secondExpectedDebt, "E9");
+        assertEq(_trove.collateral, _secondCollateralNeeded, "E10");
+        assertEq(_trove.annual_interest_rate, DEFAULT_ANNUAL_INTEREST_RATE, "E11");
+        assertEq(_trove.last_debt_update_time, block.timestamp, "E12");
+        assertEq(_trove.last_interest_rate_adj_time, block.timestamp, "E13");
+        assertEq(_trove.owner, userBorrower, "E14");
+        assertEq(uint256(_trove.status), uint256(ITroveManager.Status.active), "E15");
+        assertApproxEqRel(
+            _trove.collateral * priceOracle.price() / _trove.debt, DEFAULT_TARGET_COLLATERAL_RATIO, 1e15, "E16"
+        ); // 0.1%
+
+        // Check sorted troves
+        assertFalse(sortedTroves.empty(), "E17");
+        assertEq(sortedTroves.size(), 1, "E18");
+        assertEq(sortedTroves.first(), _troveId, "E19");
+        assertEq(sortedTroves.last(), _troveId, "E20");
+        assertTrue(sortedTroves.contains(_troveId), "E21");
+        assertFalse(sortedTroves.contains(_troveIdAnotherBorrower), "E22");
+
+        // Check balances
+        assertEq(
+            collateralToken.balanceOf(address(troveManager)),
+            _secondCollateralNeeded + _expectedCollateralAfterRedemption,
+            "E23"
+        );
+        assertEq(collateralToken.balanceOf(address(troveManager)), troveManager.collateral_balance(), "E24");
+        assertEq(borrowToken.balanceOf(address(troveManager)), 0, "E25");
+        assertEq(borrowToken.balanceOf(address(lender)), 0, "E26");
+        assertApproxEqRel(borrowToken.balanceOf(userBorrower), _secondAmount, 25e15, "E27"); // 2.5%. Pays slippage due to the redemption
+        assertEq(borrowToken.balanceOf(anotherUserBorrower), _amount, "E28");
+
+        // Check global info
+        assertEq(troveManager.total_debt(), _secondExpectedDebt, "E29");
+        assertEq(troveManager.total_weighted_debt(), _secondExpectedDebt * DEFAULT_ANNUAL_INTEREST_RATE, "E30");
+        assertEq(troveManager.collateral_balance(), _secondCollateralNeeded + _expectedCollateralAfterRedemption, "E31");
+        assertEq(troveManager.zombie_trove_id(), 0, "E32");
+
+        // Check exchange is empty
+        assertEq(borrowToken.balanceOf(address(exchange)), 0, "E33");
+        assertEq(collateralToken.balanceOf(address(exchange)), 0, "E34");
+
+        // Check exchange route is empty
+        assertEq(borrowToken.balanceOf(address(exchangeRoute)), 0, "E35");
+        assertEq(collateralToken.balanceOf(address(exchangeRoute)), 0, "E36");
+    }
+
     function test_openTrove_zeroCollateral() public {
         vm.prank(userBorrower);
         vm.expectRevert("!collateral_amount");
         troveManager.open_trove(
-            block.timestamp, // index
+            block.timestamp, // owner_index
             0, // collateral_amount
             1, // debt_amount
             0, // upper_hint
             0, // lower_hint
             DEFAULT_ANNUAL_INTEREST_RATE, // annual_interest_rate
             type(uint256).max, // max_upfront_fee
+            0, // route_index
             0 // min_debt_out
         );
     }
@@ -485,13 +613,14 @@ contract OpenTroveTests is Base {
         vm.prank(userBorrower);
         vm.expectRevert("!debt_amount");
         troveManager.open_trove(
-            block.timestamp, // index
+            block.timestamp, // owner_index
             1, // collateral_amount
             0, // debt_amount
             0, // upper_hint
             0, // lower_hint
             DEFAULT_ANNUAL_INTEREST_RATE, // annual_interest_rate
             type(uint256).max, // max_upfront_fee
+            0, // route_index
             0 // min_debt_out
         );
     }
@@ -503,13 +632,14 @@ contract OpenTroveTests is Base {
         vm.prank(userBorrower);
         vm.expectRevert("!MIN_ANNUAL_INTEREST_RATE");
         troveManager.open_trove(
-            block.timestamp, // index
+            block.timestamp, // owner_index
             1, // collateral_amount
             1, // debt_amount
             0, // upper_hint
             0, // lower_hint
             _tooLowRate, // annual_interest_rate
             type(uint256).max, // max_upfront_fee
+            0, // route_index
             0 // min_debt_out
         );
     }
@@ -521,13 +651,14 @@ contract OpenTroveTests is Base {
         vm.prank(userBorrower);
         vm.expectRevert("!MAX_ANNUAL_INTEREST_RATE");
         troveManager.open_trove(
-            block.timestamp, // index
+            block.timestamp, // owner_index
             1, // collateral_amount
             1, // debt_amount
             0, // upper_hint
             0, // lower_hint
             _tooHighRate, // annual_interest_rate
             type(uint256).max, // max_upfront_fee
+            0, // route_index
             0 // min_debt_out
         );
     }
@@ -549,13 +680,14 @@ contract OpenTroveTests is Base {
         vm.prank(userBorrower);
         vm.expectRevert("!empty");
         troveManager.open_trove(
-            block.timestamp, // index
+            block.timestamp, // owner_index
             1, // collateral_amount
             1, // debt_amount
             0, // upper_hint
             0, // lower_hint
             DEFAULT_ANNUAL_INTEREST_RATE, // annual_interest_rate
             type(uint256).max, // max_upfront_fee
+            0, // route_index
             0 // min_debt_out
         );
     }
@@ -576,13 +708,14 @@ contract OpenTroveTests is Base {
         vm.prank(userBorrower);
         vm.expectRevert("!max_upfront_fee");
         troveManager.open_trove(
-            block.timestamp, // index
+            block.timestamp, // owner_index
             _collateralNeeded, // collateral_amount
             _amount, // debt_amount
             0, // upper_hint
             0, // lower_hint
             DEFAULT_ANNUAL_INTEREST_RATE, // annual_interest_rate
             _upfrontFee - 1, // max_upfront_fee
+            0, // route_index
             0 // min_debt_out
         );
     }
@@ -591,13 +724,14 @@ contract OpenTroveTests is Base {
         vm.prank(userBorrower);
         vm.expectRevert("!MIN_DEBT");
         troveManager.open_trove(
-            block.timestamp, // index
+            block.timestamp, // owner_index
             1, // collateral_amount
             1, // debt_amount
             0, // upper_hint
             0, // lower_hint
             DEFAULT_ANNUAL_INTEREST_RATE, // annual_interest_rate
             type(uint256).max, // max_upfront_fee
+            0, // route_index
             0 // min_debt_out
         );
     }
@@ -616,13 +750,14 @@ contract OpenTroveTests is Base {
         vm.prank(userBorrower);
         vm.expectRevert("!MINIMUM_COLLATERAL_RATIO");
         troveManager.open_trove(
-            block.timestamp, // index
+            block.timestamp, // owner_index
             _collateralNeeded, // collateral_amount
             _amount, // debt_amount
             0, // upper_hint
             0, // lower_hint
             DEFAULT_ANNUAL_INTEREST_RATE, // annual_interest_rate
             type(uint256).max, // max_upfront_fee
+            0, // route_index
             0 // min_debt_out
         );
     }
@@ -646,13 +781,14 @@ contract OpenTroveTests is Base {
         collateralToken.approve(address(troveManager), _collateralNeeded);
         vm.expectRevert("shrekt");
         troveManager.open_trove(
-            block.timestamp, // index
+            block.timestamp, // owner_index
             _collateralNeeded, // collateral_amount
             _amount, // debt_amount
             0, // upper_hint
             0, // lower_hint
             DEFAULT_ANNUAL_INTEREST_RATE, // annual_interest_rate
             type(uint256).max, // max_upfront_fee
+            0, // route_index
             type(uint256).max // min_debt_out
         );
         vm.stopPrank();

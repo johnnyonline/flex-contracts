@@ -10,7 +10,9 @@
 """
 # @todo -- decimals?
 # @todo -- liquidations
-# @todo -- here -- use exchange route index
+# @todo -- here -- test withdraw(lend) using new route -- problems here -- also, pass receiver address to exchange?
+# @todo -- check round up thingy on `pending_agg_interest: uint256 = (self.total_weighted_deb.....`
+# @todo -- finish tests...
 
 from ethereum.ercs import IERC20
 
@@ -346,25 +348,27 @@ def force_transfer_ownership(trove_id: uint256, new_owner: address):
 
 @external
 def open_trove(
-    index: uint256,
+    owner_index: uint256,
     collateral_amount: uint256,
     debt_amount: uint256,
     prev_id: uint256,
     next_id: uint256,
     annual_interest_rate: uint256,
     max_upfront_fee: uint256,
-    min_debt_out: uint256
+    route_index: uint256,
+    min_debt_out: uint256,
 ) -> uint256:
     """
     @notice Open a new Trove with specified collateral, debt, and interest rate
     @dev Caller will become the owner of the Trove
-    @param index Unique index to allow multiple Troves per caller
+    @param owner_index Unique index to allow multiple Troves per caller
     @param collateral_amount Amount of collateral tokens to deposit
     @param debt_amount Amount of debt to issue before the upfront fee
     @param prev_id ID of previous Trove for the insert position
     @param next_id ID of next Trove for the insert position
     @param annual_interest_rate Fixed annual interest rate to pay on the debt
     @param max_upfront_fee Maximum upfront fee the caller is willing to pay
+    @param route_index Index of the exchange route to use
     @param min_debt_out Minimum amount of borrow tokens the caller is willing to receive
     @return trove_id Unique identifier for the new Trove
     """
@@ -377,7 +381,7 @@ def open_trove(
     assert annual_interest_rate <= MAX_ANNUAL_INTEREST_RATE, "!MAX_ANNUAL_INTEREST_RATE"
 
     # Generate the Trove ID
-    trove_id: uint256 = convert(keccak256(abi_encode(msg.sender, index)), uint256)
+    trove_id: uint256 = convert(keccak256(abi_encode(msg.sender, owner_index)), uint256)
 
     # Make sure the Trove status is empty
     assert self.troves[trove_id].status == empty(Status), "!empty"
@@ -435,7 +439,7 @@ def open_trove(
     extcall COLLATERAL_TOKEN.transferFrom(msg.sender, self, collateral_amount, default_return_value=True)
 
     # Deliver borrow tokens to the caller, redeem if liquidity is insufficient
-    self._transfer_borrow_tokens(debt_amount, min_debt_out)
+    self._transfer_borrow_tokens(debt_amount, min_debt_out, route_index)
 
     # Emit event
     log OpenTrove(
@@ -546,13 +550,20 @@ def remove_collateral(trove_id: uint256, collateral_change: uint256):
 
 
 @external
-def borrow(trove_id: uint256, debt_amount: uint256, max_upfront_fee: uint256, min_debt_out: uint256):
+def borrow(
+    trove_id: uint256,
+    debt_amount: uint256,
+    max_upfront_fee: uint256,
+    route_index: uint256,
+    min_debt_out: uint256,
+):
     """
     @notice Borrow more tokens from an existing Trove
     @dev Only callable by the Trove owner
     @param trove_id Unique identifier of the Trove
     @param debt_amount Amount of additional debt to issue before the upfront fee
     @param max_upfront_fee Maximum upfront fee the caller is willing to pay
+    @param route_index Index of the exchange route to use
     @param min_debt_out Minimum amount of debt the caller is willing to receive
     """
     # Make sure debt amount is non-zero
@@ -607,7 +618,7 @@ def borrow(trove_id: uint256, debt_amount: uint256, max_upfront_fee: uint256, mi
     )
 
     # Deliver borrow tokens to the caller, redeem if liquidity is insufficient
-    self._transfer_borrow_tokens(debt_amount, min_debt_out)
+    self._transfer_borrow_tokens(debt_amount, min_debt_out, route_index)
 
     # Emit event
     log Borrow(
@@ -988,27 +999,29 @@ def liquidate_trove(trove_id: uint256):
 
 
 @external
-def redeem(amount: uint256) -> uint256:
+def redeem(amount: uint256, route_index: uint256) -> uint256:
     """
     @notice Attempt to free the specified amount of borrow tokens by selling collateral
     @dev Can only be called by the Lender contract
     @dev Swap sandwich protection is the caller's responsibility
     @param amount Desired amount of borrow tokens to free
+    @param route_index Index of the exchange route to use
     @return amount The actual amount of borrow tokens freed
     """
     # Make sure the caller is the lender
     assert msg.sender == LENDER, "!lender"
 
     # Attempt to redeem the specified amount and transfer the resulting borrow tokens to the lender
-    return self._redeem(amount)
+    return self._redeem(amount, route_index)
 
 
 @internal
-def _redeem(amount: uint256) -> uint256:
+def _redeem(amount: uint256, route_index: uint256) -> uint256:
     """
     @notice Internal implementation of `redeem`
     @dev Swap sandwich protection is the caller's responsibility
     @param amount Target amount of borrow tokens to free
+    @param route_index Index of the exchange route to use
     @return amount The actual amount of borrow tokens freed
     """
     # Accrue interest on the total debt and get the updated figure
@@ -1127,7 +1140,7 @@ def _redeem(amount: uint256) -> uint256:
     self.collateral_balance -= total_collateral_decrease
 
     # Swap the collateral to borrow token and transfer it to the caller. Does nothing on zero amount
-    borrow_token_out: uint256 = extcall EXCHANGE.swap(total_collateral_decrease, 0, msg.sender) # @todo -- index
+    borrow_token_out: uint256 = extcall EXCHANGE.swap(total_collateral_decrease, route_index, msg.sender)
 
     # Emit event
     log Redeem(
@@ -1277,11 +1290,12 @@ def _sync_total_debt() -> uint256:
 
 
 @internal
-def _transfer_borrow_tokens(amount: uint256, min_out: uint256):
+def _transfer_borrow_tokens(amount: uint256, min_out: uint256, route_index: uint256):
     """
     @notice Transfer borrow tokens to the caller, redeeming from borrowers if necessary
     @param amount Amount of borrow tokens to transfer
     @param min_out Minimum amount of borrow tokens the caller is willing to receive
+    @param route_index Index of the exchange route to use
     """
     # Check how much borrow token liquidity the lender has
     available_liquidity: uint256 = staticcall BORROW_TOKEN.balanceOf(LENDER)
@@ -1296,7 +1310,7 @@ def _transfer_borrow_tokens(amount: uint256, min_out: uint256):
             extcall BORROW_TOKEN.transferFrom(LENDER, msg.sender, available_liquidity, default_return_value=True)
 
         # Redeem the difference
-        amount_out_of_redeem: uint256 = self._redeem(amount - available_liquidity)
+        amount_out_of_redeem: uint256 = self._redeem(amount - available_liquidity, route_index)
 
         # Total amount we were able to transfer
         amount_out = amount_out_of_redeem + available_liquidity

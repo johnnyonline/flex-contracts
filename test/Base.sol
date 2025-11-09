@@ -102,13 +102,14 @@ abstract contract Base is Deploy, Test {
         vm.startPrank(_user);
         collateralToken.approve(address(troveManager), _collateralAmount);
         _troveId = troveManager.open_trove(
-            block.timestamp, // index
+            block.timestamp, // owner_index
             _collateralAmount, // collateral_amount
             _borrowAmount, // debt_amount
             0, // upper_hint
             0, // lower_hint
             _annualInterestRate, // annual_interest_rate
             type(uint256).max, // max_upfront_fee
+            0, // route_index
             0 // min_debt_out
         );
         vm.stopPrank();

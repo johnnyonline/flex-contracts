@@ -157,12 +157,12 @@ def add_route(route: address):
 
 
 @external
-def swap(amount: uint256, index: uint256 = 0, receiver: address = msg.sender) -> uint256:
+def swap(amount: uint256, route_index: uint256 = 0, receiver: address = msg.sender) -> uint256:
     """
     @notice Swap from collateral token to borrow token
     @dev Caller should add slippage protection
     @param amount Amount of collateral tokens to swap
-    @param index Index of the route to use. Defaults to 0
+    @param route_index Index of the exchange route to use. Defaults to 0
     @param receiver Address to receive the borrow tokens. Defaults to caller
     @return Amount of borrow tokens received
     """
@@ -171,7 +171,7 @@ def swap(amount: uint256, index: uint256 = 0, receiver: address = msg.sender) ->
         return 0
 
     # Cache the route
-    route: IExchangeRoute = self.routes[index]
+    route: IExchangeRoute = self.routes[route_index]
 
     # Make sure the route exists
     assert route.address != empty(address), "!route"

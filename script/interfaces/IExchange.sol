@@ -39,7 +39,7 @@ interface IExchange {
 
     function swap(
         uint256 amount,
-        uint256 index,
+        uint256 route_index,
         address receiver
     ) external returns (uint256);
 

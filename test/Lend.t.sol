@@ -303,4 +303,57 @@ contract LendTests is Base {
         assertEq(collateralToken.balanceOf(address(exchangeRoute)), 0, "E55");
     }
 
+    // 1. lend
+    // 2. borrow all available liquidity
+    // 3. skip some time, check we earn interest
+    // 4. withdraw everything (+ profit) using a new exchange route
+    function test_lend_withdrawUsingNewExchangeRoute(
+        uint256 _amount
+    ) public {
+        _amount = bound(_amount, troveManager.MIN_DEBT(), maxFuzzAmount);
+
+        // Bump up interest rate so that's it's profitible to lend
+        DEFAULT_ANNUAL_INTEREST_RATE = DEFAULT_ANNUAL_INTEREST_RATE * 5; // 5%
+
+        // Lend some from lender
+        mintAndDepositIntoLender(userLender, _amount);
+
+        // Calculate how much collateral is needed for the borrow amount
+        uint256 _collateralNeeded = _amount * DEFAULT_TARGET_COLLATERAL_RATIO / priceOracle.price();
+
+        // Open a trove
+        mintAndOpenTrove(userBorrower, _collateralNeeded, _amount, DEFAULT_ANNUAL_INTEREST_RATE);
+
+        // Skip some time, calculate expected interest
+        uint256 _daysToSkip = 90 days;
+
+        // Earn Interest
+        skip(_daysToSkip);
+
+        // Report profit
+        vm.prank(keeper);
+        (uint256 _profit, uint256 _loss) = lender.report();
+
+        // Check return Values
+        assertGt(_profit, 0, "E1");
+        assertEq(_loss, 0, "E2");
+
+        uint256 _balanceBefore = borrowToken.balanceOf(userLender);
+
+        // function setExchangeRouteIndex(uint256 _index) external;
+        vm.startPrank(userLender);
+        lender.setExchangeRouteIndex(1);
+        console2.log("userlender: %s", userLender);
+
+        vm.expectRevert("!route");
+        lender.redeem(_amount, userLender, userLender);
+
+        // // Withdraw all funds
+        // vm.prank(userLender);
+        // lender.redeem(_amount, userLender, userLender);
+
+        // // profit > slippage
+        // assertGt(borrowToken.balanceOf(userLender), _balanceBefore + _amount, "E3");
+    }
+
 }
