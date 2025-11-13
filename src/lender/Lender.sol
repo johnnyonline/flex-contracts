@@ -1,13 +1,14 @@
 // SPDX-License-Identifier: AGPL-3.0
 pragma solidity 0.8.23;
 
-import {BaseHealthCheck, BaseStrategy, ERC20} from "@periphery/Bases/HealthCheck/BaseHealthCheck.sol";
+import {BaseHooks, ERC20} from "@periphery/Bases/Hooks/BaseHooks.sol";
+import {BaseStrategy} from "@tokenized-strategy/BaseStrategy.sol";
 import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 
 import {ITroveManager} from "./interfaces/ITroveManager.sol";
 import "forge-std/console2.sol";
 // @todo -- configurable deposit limit
-contract Lender is BaseHealthCheck {
+contract Lender is BaseHooks {
 
     using SafeERC20 for ERC20;
 
@@ -19,6 +20,19 @@ contract Lender is BaseHealthCheck {
     /// @param user The address of the user
     /// @param index The index of the exchange route set
     event ExchangeRouteIndexSet(address indexed user, uint256 indexed index);
+
+    // ============================================================================================
+    // Structs
+    // ============================================================================================
+
+    /// @notice Per-withdrawal context used when freeing funds
+    /// @dev Populated in `_preWithdrawHook` and cleared in `_postWithdrawHook`
+    ///      Used by `_freeFunds()` and the trove_manager to know which exchange route
+    ///      and potentially receiver to use for the current withdrawal
+    struct WithdrawContext {
+        uint32 routeIndex;
+        address receiver;
+    }
 
     // ============================================================================================
     // Constants
@@ -35,9 +49,15 @@ contract Lender is BaseHealthCheck {
     // Storage
     // ============================================================================================
 
+    /// @notice Holds per-withdrawal settings (exchange route + receiver)
+    /// @dev Set in `_preWithdrawHook` and deleted in `_postWithdrawHook`
+    ///      Used by `_freeFunds()` (and downstream trove_manager and exchange) to know
+    ///      which exchange route to use and potentially where redeemed tokens should be sent
+    WithdrawContext public withdrawContext;
+
     /// @notice Mapping of exchange route indices for a lender
     /// @dev Used to indicate which exchange route to use when redeeming collateral
-    mapping(address => uint256) public exchangeRouteIndices; // lender => index
+    mapping(address => uint32) public exchangeRouteIndices; // lender --> index
 
     // ============================================================================================
     // Constructor
@@ -51,7 +71,7 @@ contract Lender is BaseHealthCheck {
         address _asset,
         address _troveManager,
         string memory _name
-    ) BaseHealthCheck(_asset, _name) {
+    ) BaseHooks(_asset, _name) {
         TROVE_MANAGER = ITroveManager(_troveManager);
         require(TROVE_MANAGER.BORROW_TOKEN() == _asset, "!TROVE_MANAGER");
 
@@ -78,7 +98,7 @@ contract Lender is BaseHealthCheck {
     /// @notice Set the exchange route index for the caller
     /// @param _index The index of the exchange route to use
     function setExchangeRouteIndex(
-        uint256 _index
+        uint32 _index
     ) external {
         exchangeRouteIndices[msg.sender] = _index;
         emit ExchangeRouteIndexSet(msg.sender, _index);
@@ -87,6 +107,37 @@ contract Lender is BaseHealthCheck {
     // ============================================================================================
     // Internal mutative functions
     // ============================================================================================
+
+    /// @notice Hook called before the TokenizedStrategy's withdraw/redeem
+    /// @dev Loads the caller's configured exchange route index and receiver
+    ///      into `withdrawContext` so that `_freeFunds()` and the trove_manager
+    ///      know how to process this withdrawal
+    function _preWithdrawHook(
+        uint256 /*_assets*/,
+        uint256 /*_shares*/,
+        address _receiver,
+        address _owner,
+        uint256 /*_maxLoss*/
+    ) internal override {
+        // Set the route index and receiver for this withdrawal
+        withdrawContext = WithdrawContext({
+            routeIndex: exchangeRouteIndices[_owner],
+            receiver: _receiver
+        });
+    }
+
+    /// @notice Hook called after the TokenizedStrategy's withdraw/redeem
+    /// @dev Clears the temporary `exchangeRouteIndex` variable
+    function _postWithdrawHook(
+        uint256 /*_assets*/,
+        uint256 /*_shares*/,
+        address /*_receiver*/,
+        address /*_owner*/,
+        uint256 /*_maxLoss*/
+    ) internal override {
+        // Reset the withdrawal context
+        delete withdrawContext;
+    }
 
     /// @inheritdoc BaseStrategy
     function _deployFunds(
@@ -99,15 +150,9 @@ contract Lender is BaseHealthCheck {
     function _freeFunds(
         uint256 _amount
     ) internal override {
-        // Get the exchange route index for the caller
-        // If none set, defaults to 0
-        uint256 _index = exchangeRouteIndices[msg.sender];
-        console2.log("Lender: redeeming with exchange route index %s", _index);
-        console2.log("caller: %s", msg.sender);
-        console2.log("caller1: %s", tx.origin);
-
-        // Try to free `_amount` by selling borrower's collateral
-        TROVE_MANAGER.redeem(_amount, _index);
+        // Try to free `_amount` by selling borrower's collateral through the
+        // currently-selected exchange route (set in `_preWithdrawHook`)
+        TROVE_MANAGER.redeem(_amount, withdrawContext.routeIndex);
     }
 
     /// @inheritdoc BaseStrategy

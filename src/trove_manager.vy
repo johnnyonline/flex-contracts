@@ -10,9 +10,9 @@
 """
 # @todo -- decimals?
 # @todo -- liquidations
-# @todo -- here -- test withdraw(lend) using new route -- problems here -- also, pass receiver address to exchange?
 # @todo -- check round up thingy on `pending_agg_interest: uint256 = (self.total_weighted_deb.....`
 # @todo -- finish tests...
+# @todo -- auction wishlist
 
 from ethereum.ercs import IERC20
 

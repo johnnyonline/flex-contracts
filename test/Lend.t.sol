@@ -340,20 +340,35 @@ contract LendTests is Base {
 
         uint256 _balanceBefore = borrowToken.balanceOf(userLender);
 
-        // function setExchangeRouteIndex(uint256 _index) external;
-        vm.startPrank(userLender);
+        vm.prank(userLender);
         lender.setExchangeRouteIndex(1);
-        console2.log("userlender: %s", userLender);
+
+        // Check withdraw context and exchange route index
+        ILender.WithdrawContext memory _withdrawContext = lender.withdrawContext();
+        assertEq(_withdrawContext.routeIndex, 0, "E3");
+        assertEq(_withdrawContext.receiver, address(0), "E4");
+        assertEq(lender.exchangeRouteIndices(userLender), 1, "E5");
 
         vm.expectRevert("!route");
+        vm.prank(userLender);
         lender.redeem(_amount, userLender, userLender);
 
-        // // Withdraw all funds
-        // vm.prank(userLender);
-        // lender.redeem(_amount, userLender, userLender);
+        // Add new exchange route
+        vm.prank(deployer);
+        exchange.add_route(address(exchangeRoute));
 
-        // // profit > slippage
-        // assertGt(borrowToken.balanceOf(userLender), _balanceBefore + _amount, "E3");
+        // Withdraw all funds
+        vm.prank(userLender);
+        lender.redeem(_amount, userLender, userLender);
+
+        // profit > slippage
+        assertGt(borrowToken.balanceOf(userLender), _balanceBefore + _amount, "E3");
+
+        // Check withdraw context and exchange route index
+        _withdrawContext = lender.withdrawContext();
+        assertEq(_withdrawContext.routeIndex, 0, "E3");
+        assertEq(_withdrawContext.receiver, address(0), "E4");
+        assertEq(lender.exchangeRouteIndices(userLender), 1, "E5");
     }
 
 }
