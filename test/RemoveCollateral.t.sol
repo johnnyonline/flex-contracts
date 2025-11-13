@@ -22,8 +22,7 @@ contract RemoveCollateralTests is Base {
         uint256 _collateralNeeded = _amount * DEFAULT_TARGET_COLLATERAL_RATIO / priceOracle.price();
 
         // Make sure we don't try to remove too much collateral
-        uint256 _maxCollateralToRemove =
-            _collateralNeeded - (_amount * troveManager.MINIMUM_COLLATERAL_RATIO() / priceOracle.price());
+        uint256 _maxCollateralToRemove = _collateralNeeded - (_amount * troveManager.MINIMUM_COLLATERAL_RATIO() / priceOracle.price());
 
         // Decrease a touch
         _maxCollateralToRemove = _maxCollateralToRemove * 99 / 100;
@@ -47,9 +46,7 @@ contract RemoveCollateralTests is Base {
         assertEq(_trove.owner, userBorrower, "E5");
         assertEq(_trove.pending_owner, address(0), "E6");
         assertEq(uint256(_trove.status), uint256(ITroveManager.Status.active), "E7");
-        assertApproxEqRel(
-            _trove.collateral * priceOracle.price() / _trove.debt, DEFAULT_TARGET_COLLATERAL_RATIO, 1e15, "E8"
-        ); // 0.1%
+        assertApproxEqRel(_trove.collateral * priceOracle.price() / _trove.debt, DEFAULT_TARGET_COLLATERAL_RATIO, 1e15, "E8"); // 0.1%
 
         // Check sorted troves
         assertFalse(sortedTroves.empty(), "E9");

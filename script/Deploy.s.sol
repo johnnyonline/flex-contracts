@@ -3,14 +3,14 @@ pragma solidity 0.8.23;
 
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/ERC20.sol";
 
-import {IPriceOracle} from "./interfaces/IPriceOracle.sol";
-import {IExchangeRoute} from "./interfaces/IExchangeRoute.sol";
 import {IExchange} from "./interfaces/IExchange.sol";
+import {IExchangeRoute} from "./interfaces/IExchangeRoute.sol";
+import {IPriceOracle} from "./interfaces/IPriceOracle.sol";
 import {ISortedTroves} from "./interfaces/ISortedTroves.sol";
 import {ITroveManager} from "./interfaces/ITroveManager.sol";
 
-import {ILender} from "../src/lender/interfaces/ILender.sol";
 import {Lender} from "../src/lender/Lender.sol";
+import {ILender} from "../src/lender/interfaces/ILender.sol";
 
 import "forge-std/Script.sol";
 
@@ -68,8 +68,7 @@ contract Deploy is Script {
 
         priceOracle = IPriceOracle(deployCode("tbtc_yb_oracle"));
         exchangeRoute = IExchangeRoute(deployCode("tbtc_yb_route"));
-        exchange =
-            IExchange(deployCode("exchange", abi.encode(deployer, address(borrowToken), address(collateralToken))));
+        exchange = IExchange(deployCode("exchange", abi.encode(deployer, address(borrowToken), address(collateralToken))));
         sortedTroves = ISortedTroves(deployCode("sorted_troves", abi.encode(_troveManagerAddress)));
         troveManager = ITroveManager(
             deployCode(

@@ -41,9 +41,7 @@ contract RepayTests is Base {
         assertEq(_trove.owner, userBorrower, "E5");
         assertEq(_trove.pending_owner, address(0), "E6");
         assertEq(uint256(_trove.status), uint256(ITroveManager.Status.active), "E7");
-        assertApproxEqRel(
-            _trove.collateral * priceOracle.price() / _trove.debt, DEFAULT_TARGET_COLLATERAL_RATIO, 1e15, "E8"
-        ); // 0.1%
+        assertApproxEqRel(_trove.collateral * priceOracle.price() / _trove.debt, DEFAULT_TARGET_COLLATERAL_RATIO, 1e15, "E8"); // 0.1%
 
         // Check sorted troves
         assertFalse(sortedTroves.empty(), "E9");
@@ -110,9 +108,7 @@ contract RepayTests is Base {
 
         // Check global info
         assertEq(troveManager.total_debt(), _expectedDebt - _amountToRepay, "E47");
-        assertEq(
-            troveManager.total_weighted_debt(), (_expectedDebt - _amountToRepay) * DEFAULT_ANNUAL_INTEREST_RATE, "E48"
-        );
+        assertEq(troveManager.total_weighted_debt(), (_expectedDebt - _amountToRepay) * DEFAULT_ANNUAL_INTEREST_RATE, "E48");
         assertEq(troveManager.collateral_balance(), _collateralNeeded, "E49");
         assertEq(troveManager.zombie_trove_id(), 0, "E50");
 

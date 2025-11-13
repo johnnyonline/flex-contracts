@@ -1,13 +1,12 @@
 // SPDX-License-Identifier: AGPL-3.0
 pragma solidity 0.8.23;
 
+import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import {BaseHooks, ERC20} from "@periphery/Bases/Hooks/BaseHooks.sol";
 import {BaseStrategy} from "@tokenized-strategy/BaseStrategy.sol";
-import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 
 import {ITroveManager} from "./interfaces/ITroveManager.sol";
-import "forge-std/console2.sol";
-// @todo -- configurable deposit limit
+
 contract Lender is BaseHooks {
 
     using SafeERC20 for ERC20;
@@ -15,6 +14,10 @@ contract Lender is BaseHooks {
     // ============================================================================================
     // Events
     // ============================================================================================
+
+    /// @notice Emitted when the deposit limit is set
+    /// @param depositLimit The new deposit limit
+    event DepositLimitSet(uint256 depositLimit);
 
     /// @notice Emitted when a user sets their exchange route index
     /// @param user The address of the user
@@ -38,16 +41,16 @@ contract Lender is BaseHooks {
     // Constants
     // ============================================================================================
 
-    /// @notice Deposit limit for the unaudited launch
-    /// @dev Should be removed after audit
-    uint256 public constant DEPOSIT_LIMIT = 10_000 * 1e18;
-
     /// @notice TroveManager contract
     ITroveManager public immutable TROVE_MANAGER;
 
     // ============================================================================================
     // Storage
     // ============================================================================================
+
+    /// @notice The strategy deposit limit
+    /// @dev Initialized to `type(uint256).max` (no limit) in constructor
+    uint256 public depositLimit;
 
     /// @notice Holds per-withdrawal settings (exchange route + receiver)
     /// @dev Set in `_preWithdrawHook` and deleted in `_postWithdrawHook`
@@ -75,6 +78,9 @@ contract Lender is BaseHooks {
         TROVE_MANAGER = ITroveManager(_troveManager);
         require(TROVE_MANAGER.BORROW_TOKEN() == _asset, "!TROVE_MANAGER");
 
+        // No deposit limit by default
+        depositLimit = type(uint256).max;
+
         // Max approve TroveManager to pull borrow token
         asset.forceApprove(_troveManager, type(uint256).max);
     }
@@ -84,11 +90,22 @@ contract Lender is BaseHooks {
     // ============================================================================================
 
     // @inheritdoc BaseStrategy
-    function availableDepositLimit(
-        address /*_owner*/
-    ) public view override returns (uint256) {
+    function availableDepositLimit(address /*_owner*/) public view override returns (uint256) {
+        uint256 _depositLimit = depositLimit;
         uint256 _currentAssets = TokenizedStrategy.totalAssets();
-        return DEPOSIT_LIMIT <= _currentAssets ? 0 : DEPOSIT_LIMIT - _currentAssets;
+        return _depositLimit <= _currentAssets ? 0 : _depositLimit - _currentAssets;
+    }
+
+    // ============================================================================================
+    // Management functions
+    // ============================================================================================
+
+    /// @notice Set the strategy deposit limit
+    /// @dev Only callable by management
+    /// @param _depositLimit The new deposit limit
+    function setDepositLimit(uint256 _depositLimit) external onlyManagement {
+        depositLimit = _depositLimit;
+        emit DepositLimitSet(_depositLimit);
     }
 
     // ============================================================================================
@@ -97,9 +114,7 @@ contract Lender is BaseHooks {
 
     /// @notice Set the exchange route index for the caller
     /// @param _index The index of the exchange route to use
-    function setExchangeRouteIndex(
-        uint32 _index
-    ) external {
+    function setExchangeRouteIndex(uint32 _index) external {
         exchangeRouteIndices[msg.sender] = _index;
         emit ExchangeRouteIndexSet(msg.sender, _index);
     }
@@ -120,10 +135,7 @@ contract Lender is BaseHooks {
         uint256 /*_maxLoss*/
     ) internal override {
         // Set the route index and receiver for this withdrawal
-        withdrawContext = WithdrawContext({
-            routeIndex: exchangeRouteIndices[_owner],
-            receiver: _receiver
-        });
+        withdrawContext = WithdrawContext({routeIndex: exchangeRouteIndices[_owner], receiver: _receiver});
     }
 
     /// @notice Hook called after the TokenizedStrategy's withdraw/redeem
@@ -140,29 +152,19 @@ contract Lender is BaseHooks {
     }
 
     /// @inheritdoc BaseStrategy
-    function _deployFunds(
-        uint256 /*_amount*/
-    ) internal pure override {
+    function _deployFunds(uint256 /*_amount*/) internal pure override {
         return;
     }
 
     /// @inheritdoc BaseStrategy
-    function _freeFunds(
-        uint256 _amount
-    ) internal override {
+    function _freeFunds(uint256 _amount) internal override {
         // Try to free `_amount` by selling borrower's collateral through the
         // currently-selected exchange route (set in `_preWithdrawHook`)
         TROVE_MANAGER.redeem(_amount, withdrawContext.routeIndex);
     }
 
     /// @inheritdoc BaseStrategy
-    function _harvestAndReport()
-        internal
-        override
-        returns (
-            uint256 /*_totalAssets*/
-        )
-    {
+    function _harvestAndReport() internal override returns (uint256 /*_totalAssets*/) {
         // Total assets is whatever idle asset we have + the latest total debt figure from the trove manager
         return asset.balanceOf(address(this)) + TROVE_MANAGER.sync_total_debt();
     }

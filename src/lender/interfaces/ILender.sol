@@ -24,13 +24,26 @@ interface ILender is IStrategy {
     // Storage
     // ============================================================================================
 
+    function depositLimit() external view returns (uint256);
     function withdrawContext() external view returns (WithdrawContext memory);
-    function exchangeRouteIndices(address _lender) external view returns (uint32);
+    function exchangeRouteIndices(
+        address _lender
+    ) external view returns (uint32);
+
+    // ============================================================================================
+    // Management functions
+    // ============================================================================================
+
+    function setDepositLimit(
+        uint256 _depositLimit
+    ) external;
 
     // ============================================================================================
     // External mutative functions
     // ============================================================================================
 
-    function setExchangeRouteIndex(uint32 _index) external;
+    function setExchangeRouteIndex(
+        uint32 _index
+    ) external;
 
 }

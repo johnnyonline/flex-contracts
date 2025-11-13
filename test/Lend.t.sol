@@ -57,9 +57,7 @@ contract LendTests is Base {
         assertEq(_trove.owner, userBorrower, "E6");
         assertEq(_trove.pending_owner, address(0), "E7");
         assertEq(uint256(_trove.status), uint256(ITroveManager.Status.active), "E8");
-        assertApproxEqRel(
-            _trove.collateral * priceOracle.price() / _trove.debt, DEFAULT_TARGET_COLLATERAL_RATIO, 1e15, "E9"
-        ); // 0.1%
+        assertApproxEqRel(_trove.collateral * priceOracle.price() / _trove.debt, DEFAULT_TARGET_COLLATERAL_RATIO, 1e15, "E9"); // 0.1%
 
         // Check sorted troves
         assertFalse(sortedTroves.empty(), "E10");
@@ -91,12 +89,10 @@ contract LendTests is Base {
 
         // Skip some time, calculate expected interest
         uint256 _daysToSkip = 90 days;
-        uint256 _expectedProfit =
-            _upfrontFee + _expectedDebt * DEFAULT_ANNUAL_INTEREST_RATE * _daysToSkip / 365 days / 1e18;
+        uint256 _expectedProfit = _upfrontFee + _expectedDebt * DEFAULT_ANNUAL_INTEREST_RATE * _daysToSkip / 365 days / 1e18;
 
         // Calculate expected collateral after redemption
-        uint256 _expectedCollateralAfterRedemption =
-            _collateralNeeded - ((_amount + _expectedProfit) * 1e18 / priceOracle.price());
+        uint256 _expectedCollateralAfterRedemption = _collateralNeeded - ((_amount + _expectedProfit) * 1e18 / priceOracle.price());
 
         // Sanity check
         assertGt(_expectedProfit, 0, "E28");
@@ -142,9 +138,7 @@ contract LendTests is Base {
         assertFalse(sortedTroves.contains(_troveId), "E44");
 
         // Check balances
-        assertApproxEqRel(
-            collateralToken.balanceOf(address(troveManager)), _expectedCollateralAfterRedemption, 5e15, "E45"
-        ); // 0.5%
+        assertApproxEqRel(collateralToken.balanceOf(address(troveManager)), _expectedCollateralAfterRedemption, 5e15, "E45"); // 0.5%
         assertEq(collateralToken.balanceOf(address(troveManager)), troveManager.collateral_balance(), "E46");
         assertEq(collateralToken.balanceOf(address(userBorrower)), 0, "E47");
         assertEq(borrowToken.balanceOf(address(troveManager)), 0, "E48");
@@ -204,9 +198,7 @@ contract LendTests is Base {
         assertEq(_trove.owner, userBorrower, "E6");
         assertEq(_trove.pending_owner, address(0), "E7");
         assertEq(uint256(_trove.status), uint256(ITroveManager.Status.active), "E8");
-        assertApproxEqRel(
-            _trove.collateral * priceOracle.price() / _trove.debt, DEFAULT_TARGET_COLLATERAL_RATIO, 1e15, "E9"
-        ); // 0.1%
+        assertApproxEqRel(_trove.collateral * priceOracle.price() / _trove.debt, DEFAULT_TARGET_COLLATERAL_RATIO, 1e15, "E9"); // 0.1%
 
         // Check sorted troves
         assertFalse(sortedTroves.empty(), "E10");
@@ -238,8 +230,7 @@ contract LendTests is Base {
 
         // Skip some time, calculate expected interest
         uint256 _daysToSkip = 90 days;
-        uint256 _expectedProfit =
-            _upfrontFee + _expectedDebt * DEFAULT_ANNUAL_INTEREST_RATE * _daysToSkip / 365 days / 1e18;
+        uint256 _expectedProfit = _upfrontFee + _expectedDebt * DEFAULT_ANNUAL_INTEREST_RATE * _daysToSkip / 365 days / 1e18;
 
         // Calculate expected collateral after redemption
         uint256 _expectedCollateralAfterRedemption = _collateralNeeded - (_amount * 1e18 / priceOracle.price());
@@ -279,9 +270,7 @@ contract LendTests is Base {
         assertFalse(sortedTroves.contains(_troveId), "E41");
 
         // Check balances
-        assertApproxEqRel(
-            collateralToken.balanceOf(address(troveManager)), _expectedCollateralAfterRedemption, 5e15, "E42"
-        ); // 0.5%
+        assertApproxEqRel(collateralToken.balanceOf(address(troveManager)), _expectedCollateralAfterRedemption, 5e15, "E42"); // 0.5%
         assertEq(collateralToken.balanceOf(address(troveManager)), troveManager.collateral_balance(), "E43");
         assertEq(collateralToken.balanceOf(address(userBorrower)), 0, "E44");
         assertEq(borrowToken.balanceOf(address(troveManager)), 0, "E45");
@@ -369,6 +358,26 @@ contract LendTests is Base {
         assertEq(_withdrawContext.routeIndex, 0, "E3");
         assertEq(_withdrawContext.receiver, address(0), "E4");
         assertEq(lender.exchangeRouteIndices(userLender), 1, "E5");
+    }
+
+    function test_setDepositLimit(
+        uint256 _depositLimit
+    ) public {
+        vm.prank(management);
+        lender.setDepositLimit(_depositLimit);
+
+        assertEq(lender.depositLimit(), _depositLimit, "E0");
+    }
+
+    function test_setDepositLimit_wrongCaller(
+        uint256 _depositLimit,
+        address _wrongCaller
+    ) public {
+        vm.assume(_wrongCaller != management);
+
+        vm.prank(_wrongCaller);
+        vm.expectRevert("!management");
+        lender.setDepositLimit(_depositLimit);
     }
 
 }

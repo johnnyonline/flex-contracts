@@ -42,11 +42,7 @@ abstract contract Base is Deploy, Test {
         DEFAULT_TARGET_COLLATERAL_RATIO = troveManager.MINIMUM_COLLATERAL_RATIO() * 110 / 100; // 10% above MCR
 
         // Make sure Lender's deposit limit does not interfere with tests
-        vm.mockCall(
-            address(lender),
-            abi.encodeWithSelector(IBaseStrategy.availableDepositLimit.selector),
-            abi.encode(type(uint256).max)
-        );
+        vm.mockCall(address(lender), abi.encodeWithSelector(IBaseStrategy.availableDepositLimit.selector), abi.encode(type(uint256).max));
     }
 
     function airdrop(

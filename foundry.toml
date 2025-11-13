@@ -15,8 +15,11 @@ remappings = [
 [fmt]
 single_line_statement_blocks = "single"
 multiline_func_header = "params_first"
+sort_imports = true
 contract_new_lines = true
+line_length = 150
 number_underscore = "preserve"
-ignore = ["lib/"]
+quote_style = "double"
+ignore = ["lib/", "src/lender/Lender.sol"]
 
 # See more config options https://github.com/foundry-rs/foundry/tree/master/config
