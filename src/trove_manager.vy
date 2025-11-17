@@ -9,14 +9,15 @@
         and sorted_troves contracts
 """
 # @todo -- decimals?
-# @todo -- liquidations
 # @todo -- check round up thingy on `pending_agg_interest: uint256 = (self.total_weighted_deb.....`
 # @todo -- finish tests...
-# @todo -- auction wishlist
+# @todo -- liquidations
+# @todo -- auction wishlist/dutch route
 
 from ethereum.ercs import IERC20
 
-from interfaces import IExchange
+from interfaces import ILiquidationHandler
+from interfaces import IExchangeHandler
 from interfaces import IPriceOracle
 from interfaces import ISortedTroves
 
@@ -131,7 +132,8 @@ struct Trove:
 
 LENDER: public(immutable(address))
 
-EXCHANGE: public(immutable(IExchange))
+LIQUIDATION_HANDLER: public(immutable(ILiquidationHandler))
+EXCHANGE_HANDLER: public(immutable(IExchangeHandler))
 PRICE_ORACLE: public(immutable(IPriceOracle))
 SORTED_TROVES: public(immutable(ISortedTroves))
 
@@ -149,6 +151,7 @@ INTEREST_RATE_ADJ_COOLDOWN: public(constant(uint256)) = 7 * 24 * 60 * 60  # 7 da
 _WAD: constant(uint256) = 10 ** 18
 _ONE_PCT: constant(uint256) = _WAD // 100
 _MAX_ITERATIONS: constant(uint256) = 1000
+_MAX_LIQUIDATION_BATCH_SIZE: constant(uint256) = 50
 _ONE_YEAR: constant(uint256) = 365 * 60 * 60 * 24
 
 
@@ -185,7 +188,8 @@ troves: public(HashMap[uint256, Trove])
 @deploy
 def __init__(
     lender: address,
-    exchange: address,
+    liquidation_handler: address,
+    exchange_handler: address,
     price_oracle: address,
     sorted_troves: address,
     borrow_token: address,
@@ -193,14 +197,15 @@ def __init__(
     minimum_collateral_ratio: uint256
 ):
     LENDER = lender
-    EXCHANGE = IExchange(exchange)
+    LIQUIDATION_HANDLER = ILiquidationHandler(liquidation_handler)
+    EXCHANGE_HANDLER = IExchangeHandler(exchange_handler)
     PRICE_ORACLE = IPriceOracle(price_oracle)
     SORTED_TROVES = ISortedTroves(sorted_troves)
     BORROW_TOKEN = IERC20(borrow_token)
     COLLATERAL_TOKEN = IERC20(collateral_token)
     MINIMUM_COLLATERAL_RATIO = minimum_collateral_ratio
 
-    extcall COLLATERAL_TOKEN.approve(exchange, max_value(uint256), default_return_value=True)
+    extcall COLLATERAL_TOKEN.approve(exchange_handler, max_value(uint256), default_return_value=True)
 
 
 # ============================================================================================
@@ -458,7 +463,7 @@ def open_trove(
 # Adjust trove
 # ============================================================================================
 
-
+# @todo -- rename collateral_change to collateral_amount...
 @external
 def add_collateral(trove_id: uint256, collateral_change: uint256):
     """
@@ -495,7 +500,7 @@ def add_collateral(trove_id: uint256, collateral_change: uint256):
         collateral_amount=collateral_change
     )
 
-
+# @todo -- rename collateral_change to collateral_amount...
 @external
 def remove_collateral(trove_id: uint256, collateral_change: uint256):
     """
@@ -920,14 +925,75 @@ def close_zombie_trove(trove_id: uint256):
 
 
 @external
-def liquidate_trove(trove_id: uint256):
+def liquidate_troves(trove_ids: uint256[_MAX_LIQUIDATION_BATCH_SIZE]):
     """
-    @notice Liquidate an unhealthy Trove by repaying all its debt and withdrawing all its collateral
-    @dev Right now liquidator gets all the collateral. This function needs to be improved!
-         Consider using an auction to dump the collateral, maybe with an outside module that
-         checks min auction price and re-kicks if necessary. Then take all surplus as fee?
+    @notice Liquidate a list of unhealthy Troves
+    @dev Uses the `liquidation_handler` contract to sell the collateral tokens
+    @param trove_ids List of unique identifiers of the unhealthy Troves
+    """
+    # Cache the current zombie trove id to avoid multiple SLOADs
+    current_zombie_trove_id: uint256 = self.zombie_trove_id
+
+    # Cache the collateral price to avoid multiple external calls
+    collateral_price: uint256 = staticcall PRICE_ORACLE.price()
+
+    # Initialize variables to track total changes
+    total_collateral_to_decrease: uint256 = 0
+    total_debt_to_decrease: uint256 = 0
+    total_weighted_debt_to_decrease: uint256 = 0
+
+    # Iterate over the Troves and liquidate them one by one
+    for trove_id: uint256 in trove_ids:
+        if trove_id == 0:
+            break
+
+        # Initialize variables to capture individual trove liquidation results
+        collateral_to_decrease: uint256 = 0
+        debt_to_decrease: uint256 = 0
+        weighted_debt_decrease: uint256 = 0
+
+        # Liquidate the single Trove and get the changes
+        (
+            collateral_to_decrease,
+            debt_to_decrease,
+            weighted_debt_decrease
+        ) = self._liquidate_single_trove(trove_id, current_zombie_trove_id, collateral_price)
+
+        # Accumulate the total changes
+        total_collateral_to_decrease += collateral_to_decrease
+        total_debt_to_decrease += debt_to_decrease
+        total_weighted_debt_to_decrease += weighted_debt_decrease
+
+    # Update the contract's recorded collateral balance
+    self.collateral_balance -= total_collateral_to_decrease
+
+    # Accrue interest on the total debt and update accounting
+    self._accrue_interest_and_account_for_trove_change(
+        0, # debt_increase
+        total_debt_to_decrease, # debt_decrease
+        total_weighted_debt_to_decrease, # old_weighted_debt
+        0 # new_weighted_debt
+    )
+
+    # Transfer collateral tokens to the liquidation handler for selling. Proceeds will be sent to the lender
+    extcall COLLATERAL_TOKEN.transfer(LIQUIDATION_HANDLER.address, total_collateral_to_decrease, default_return_value=True)
+
+    # Notify the liquidation handler of the liquidation
+    extcall LIQUIDATION_HANDLER.notify(total_collateral_to_decrease, total_debt_to_decrease, msg.sender)
+
+
+@internal
+def _liquidate_single_trove(trove_id: uint256, current_zombie_trove_id: uint256, collateral_price: uint256) -> (uint256, uint256, uint256):
+    """
+    @notice Internal function to liquidate a single unhealthy Trove
+    @dev Does not update global accounting or handle token transfers
     @param trove_id Unique identifier of the Trove
-    """ # @todo -- notice @dev
+    @param current_zombie_trove_id Current zombie trove id
+    @param collateral_price Current collateral price
+    @return collateral_to_decrease Amount of collateral to subtract from the total collateral
+    @return debt_to_decrease Amount of debt to subtract from the total debt
+    @return weighted_debt_decrease Amount of weighted debt to subtract from the total weighted debt
+    """
     # Cache Trove info
     trove: Trove = self.troves[trove_id]
 
@@ -939,9 +1005,6 @@ def liquidate_trove(trove_id: uint256):
 
     # Get the Trove's debt after accruing interest
     trove_debt_after_interest: uint256 = self._get_trove_debt_after_interest(trove)
-
-    # Get the collateral price
-    collateral_price: uint256 = staticcall PRICE_ORACLE.price()
 
     # Calculate the collateral ratio
     collateral_ratio: uint256 = self._calculate_collateral_ratio(trove.collateral, trove_debt_after_interest, collateral_price)
@@ -960,29 +1023,12 @@ def liquidate_trove(trove_id: uint256):
     self.troves[trove_id] = trove
 
     # If Trove is the current zombie trove, reset the `zombie_trove_id` variable
-    if self.zombie_trove_id == trove_id:
+    if current_zombie_trove_id == trove_id:
         self.zombie_trove_id = 0
-
-    # Update the contract's recorded collateral balance
-    self.collateral_balance -= old_trove.collateral
-
-    # Accrue interest on the total debt and update accounting
-    self._accrue_interest_and_account_for_trove_change(
-        0, # debt_increase
-        trove_debt_after_interest, # debt_decrease
-        old_trove.debt * old_trove.annual_interest_rate, # old_weighted_debt
-        0 # new_weighted_debt
-    )
 
     # Remove from sorted list if it was active
     if old_trove.status == Status.ACTIVE:
         extcall SORTED_TROVES.remove(trove_id)
-
-    # Pull the borrow tokens from caller and transfer them to the lender
-    extcall BORROW_TOKEN.transferFrom(msg.sender, LENDER, trove_debt_after_interest, default_return_value=True)
-
-    # Transfer the collateral tokens to caller
-    extcall COLLATERAL_TOKEN.transfer(msg.sender, old_trove.collateral, default_return_value=True)
 
     # Emit event
     log LiquidateTrove(
@@ -990,6 +1036,12 @@ def liquidate_trove(trove_id: uint256):
         liquidator=msg.sender,
         collateral_amount=old_trove.collateral,
         debt_amount=trove_debt_after_interest,
+    )
+
+    return (
+        old_trove.collateral,  # collateral_to_decrease
+        trove_debt_after_interest,  # debt_to_decrease
+        old_trove.debt * old_trove.annual_interest_rate  # weighted_debt_decrease
     )
 
 
@@ -1140,7 +1192,7 @@ def _redeem(amount: uint256, route_index: uint256) -> uint256:
     self.collateral_balance -= total_collateral_decrease
 
     # Swap the collateral to borrow token and transfer it to the caller. Does nothing on zero amount
-    borrow_token_out: uint256 = extcall EXCHANGE.swap(total_collateral_decrease, route_index, msg.sender)
+    borrow_token_out: uint256 = extcall EXCHANGE_HANDLER.swap(total_collateral_decrease, route_index, msg.sender)
 
     # Emit event
     log Redeem(
@@ -1240,7 +1292,7 @@ def _get_trove_debt_after_interest(trove: Trove) -> uint256:
 # Internal mutative functions
 # ============================================================================================
 
-
+# @todo -- rename `old_weighted_debt` to `weighted_debt_decrease` and `new_weighted_debt` to `weighted_debt_increase`
 @internal
 def _accrue_interest_and_account_for_trove_change(
     debt_increase: uint256,

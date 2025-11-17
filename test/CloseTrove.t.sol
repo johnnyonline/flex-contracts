@@ -62,8 +62,8 @@ contract CloseTroveTests is Base {
         assertEq(troveManager.zombie_trove_id(), 0, "E22");
 
         // Check exchange is empty
-        assertEq(borrowToken.balanceOf(address(exchange)), 0, "E23");
-        assertEq(collateralToken.balanceOf(address(exchange)), 0, "E24");
+        assertEq(borrowToken.balanceOf(address(exchangeHandler)), 0, "E23");
+        assertEq(collateralToken.balanceOf(address(exchangeHandler)), 0, "E24");
 
         // Check exchange route is empty
         assertEq(borrowToken.balanceOf(address(exchangeRoute)), 0, "E25");
@@ -112,8 +112,8 @@ contract CloseTroveTests is Base {
         assertEq(troveManager.zombie_trove_id(), 0, "E48");
 
         // Check exchange is empty
-        assertEq(borrowToken.balanceOf(address(exchange)), 0, "E49");
-        assertEq(collateralToken.balanceOf(address(exchange)), 0, "E50");
+        assertEq(borrowToken.balanceOf(address(exchangeHandler)), 0, "E49");
+        assertEq(collateralToken.balanceOf(address(exchangeHandler)), 0, "E50");
 
         // Check exchange route is empty
         assertEq(borrowToken.balanceOf(address(exchangeRoute)), 0, "E51");

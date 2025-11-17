@@ -1,7 +1,7 @@
 # @version 0.4.1
 
 """
-@title Exchange
+@title Exchange Handler
 @license MIT
 @author Flex
 @notice Handles swapping from collateral tokens to borrow tokens via registered exchange routes
@@ -11,19 +11,27 @@ from ethereum.ercs import IERC20
 
 from periphery.interfaces import IExchangeRoute
 
+import periphery.ownable_2step as ownable
+
+
+# ============================================================================================
+# Modules
+# ============================================================================================
+
+
+initializes: ownable
+exports: (
+    ownable.owner,
+    ownable.pending_owner,
+    ownable.transfer_ownership,
+    ownable.accept_ownership,
+)
+
 
 # ============================================================================================
 # Events
 # ============================================================================================
 
-
-event PendingOwnershipTransfer:
-    old_owner: indexed(address)
-    new_owner: indexed(address)
-
-event OwnershipTransferred:
-    old_owner: indexed(address)
-    new_owner: indexed(address)
 
 event RouteAdded:
     index: indexed(uint256)
@@ -44,10 +52,6 @@ COLLATERAL_TOKEN: public(immutable(IERC20))
 # ============================================================================================
 
 
-# Owner addresses
-owner: public(address)
-pending_owner: public(address)
-
 # Next route index
 route_index: public(uint256)
 
@@ -62,9 +66,7 @@ routes: public(HashMap[uint256, IExchangeRoute])
 
 @deploy
 def __init__(owner: address, borrow_token: address, collateral_token: address):
-    assert owner != empty(address), "!owner"
-
-    self.owner = owner
+    ownable.__init__(owner)
 
     BORROW_TOKEN = IERC20(borrow_token)
     COLLATERAL_TOKEN = IERC20(collateral_token)
@@ -76,56 +78,6 @@ def __init__(owner: address, borrow_token: address, collateral_token: address):
 
 
 @external
-def transfer_ownership(new_owner: address):
-    """
-    @notice Starts the ownership transfer of the contract to a new owner
-    @dev Only callable by the current `owner`
-    @dev Replaces the pending transfer if there is one
-    @dev New owner must call `accept_ownership` to finalize the transfer
-    @param new_owner The address of the new owner
-    """
-    # Make sure the caller is the current owner
-    assert msg.sender == self.owner, "!owner"
-
-    # Set the pending owner
-    self.pending_owner = new_owner
-
-    # Emit event
-    log PendingOwnershipTransfer(
-        old_owner=self.owner,
-        new_owner=new_owner
-    )
-
-
-@external
-def accept_ownership():
-    """
-    @notice The new owner accepts the ownership transfer
-    @dev Only callable by the current `pending_owner`
-    """
-    # Cache the new owner
-    new_owner: address = self.pending_owner
-
-    # Make sure the caller is the pending owner
-    assert new_owner == msg.sender, "!pending_owner"
-
-    # Cache the old owner for the event
-    old_owner: address = self.owner
-
-    # Clear the pending owner
-    self.pending_owner = empty(address)
-
-    # Set the new owner
-    self.owner = new_owner
-
-    # Emit event
-    log OwnershipTransferred(
-        old_owner=old_owner,
-        new_owner=new_owner
-    )
-
-
-@external
 def add_route(route: address):
     """
     @notice Adds a new exchange route
@@ -133,7 +85,7 @@ def add_route(route: address):
     @param route Address of the route to add
     """
     # Make sure the caller is the current owner
-    assert msg.sender == self.owner, "!owner"
+    assert msg.sender == ownable.owner, "!owner"
 
     # Cache the current route index
     index: uint256 = self.route_index

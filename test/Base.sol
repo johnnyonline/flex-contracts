@@ -22,6 +22,8 @@ abstract contract Base is Deploy, Test {
     uint256 public DEFAULT_ANNUAL_INTEREST_RATE;
     uint256 public DEFAULT_TARGET_COLLATERAL_RATIO;
 
+    uint256 public constant MAX_LIQUIDATION_BATCH_SIZE = 50;
+
     function setUp() public virtual {
         // notify deplyment script that this is a test
         isTest = true;

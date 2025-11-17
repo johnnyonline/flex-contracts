@@ -3,8 +3,9 @@ pragma solidity 0.8.23;
 
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/ERC20.sol";
 
-import {IExchange} from "./interfaces/IExchange.sol";
+import {IExchangeHandler} from "./interfaces/IExchangeHandler.sol";
 import {IExchangeRoute} from "./interfaces/IExchangeRoute.sol";
+import {ILiquidationHandler} from "./interfaces/ILiquidationHandler.sol";
 import {IPriceOracle} from "./interfaces/IPriceOracle.sol";
 import {ISortedTroves} from "./interfaces/ISortedTroves.sol";
 import {ITroveManager} from "./interfaces/ITroveManager.sol";
@@ -32,8 +33,9 @@ contract Deploy is Script {
     address public deployer;
 
     IPriceOracle public priceOracle;
+    ILiquidationHandler public liquidationHandler;
     IExchangeRoute public exchangeRoute;
-    IExchange public exchange;
+    IExchangeHandler public exchangeHandler;
     ISortedTroves public sortedTroves;
     ITroveManager public troveManager;
 
@@ -63,19 +65,25 @@ contract Deploy is Script {
         vm.startBroadcast(_pk);
 
         uint256 _nonce = vm.getNonce(deployer);
-        address _lenderAddress = computeCreateAddress(deployer, _nonce + 5);
-        address _troveManagerAddress = computeCreateAddress(deployer, _nonce + 4);
+        address _lenderAddress = computeCreateAddress(deployer, _nonce + 6);
+        address _troveManagerAddress = computeCreateAddress(deployer, _nonce + 5);
 
         priceOracle = IPriceOracle(deployCode("tbtc_yb_oracle"));
+        liquidationHandler = ILiquidationHandler(
+            deployCode(
+                "liquidation_handler", abi.encode(deployer, _lenderAddress, _troveManagerAddress, address(borrowToken), address(collateralToken))
+            )
+        );
         exchangeRoute = IExchangeRoute(deployCode("tbtc_yb_route"));
-        exchange = IExchange(deployCode("exchange", abi.encode(deployer, address(borrowToken), address(collateralToken))));
+        exchangeHandler = IExchangeHandler(deployCode("exchange_handler", abi.encode(deployer, address(borrowToken), address(collateralToken))));
         sortedTroves = ISortedTroves(deployCode("sorted_troves", abi.encode(_troveManagerAddress)));
         troveManager = ITroveManager(
             deployCode(
                 "trove_manager",
                 abi.encode(
                     _lenderAddress,
-                    address(exchange),
+                    address(liquidationHandler),
+                    address(exchangeHandler),
                     address(priceOracle),
                     address(sortedTroves),
                     address(borrowToken),
@@ -94,16 +102,18 @@ contract Deploy is Script {
 
         if (isTest) {
             vm.label({account: address(priceOracle), newLabel: "PriceOracle"});
+            vm.label({account: address(liquidationHandler), newLabel: "LiquidationHandler"});
             vm.label({account: address(exchangeRoute), newLabel: "ExchangeRoute"});
-            vm.label({account: address(exchange), newLabel: "Exchange"});
+            vm.label({account: address(exchangeHandler), newLabel: "ExchangeHandler"});
             vm.label({account: address(sortedTroves), newLabel: "SortedTroves"});
             vm.label({account: address(troveManager), newLabel: "TroveManager"});
             vm.label({account: address(lender), newLabel: "Lender"});
         } else {
             console.log("---------------------------------");
             console.log("Price Oracle: ", address(priceOracle));
+            console.log("Liquidation Handler: ", address(liquidationHandler));
             console.log("Exchange Route: ", address(exchangeRoute));
-            console.log("Exchange: ", address(exchange));
+            console.log("Exchange Handler: ", address(exchangeHandler));
             console.log("Sorted Troves: ", address(sortedTroves));
             console.log("Trove Manager: ", address(troveManager));
             console.log("Lender: ", address(lender));
@@ -126,8 +136,8 @@ contract Deploy is Script {
     }
 
     function setupExchangeRoute() public {
-        exchange.add_route(address(exchangeRoute));
-        exchange.transfer_ownership(management);
+        exchangeHandler.add_route(address(exchangeRoute));
+        exchangeHandler.transfer_ownership(management);
     }
 
 }

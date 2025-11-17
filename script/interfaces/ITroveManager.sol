@@ -160,8 +160,8 @@ interface ITroveManager {
     // Liquidate trove
     // ============================================================================================
 
-    function liquidate_trove(
-        uint256 trove_id
+    function liquidate_troves(
+        uint256[50] calldata trove_ids
     ) external;
 
     // ============================================================================================

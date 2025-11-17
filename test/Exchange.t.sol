@@ -9,16 +9,16 @@ contract ExchangeTests is Base {
         Base.setUp();
 
         vm.prank(management);
-        exchange.accept_ownership();
+        exchangeHandler.accept_ownership();
     }
 
     function test_setup() public {
-        assertEq(exchange.owner(), management, "E0");
-        assertEq(exchange.pending_owner(), address(0), "E1");
-        assertEq(exchange.route_index(), 1, "E2");
-        assertNotEq(exchange.routes(0), address(0), "E3");
-        assertEq(exchange.BORROW_TOKEN(), address(borrowToken), "E4");
-        assertEq(exchange.COLLATERAL_TOKEN(), address(collateralToken), "E5");
+        assertEq(exchangeHandler.owner(), management, "E0");
+        assertEq(exchangeHandler.pending_owner(), address(0), "E1");
+        assertEq(exchangeHandler.route_index(), 1, "E2");
+        assertNotEq(exchangeHandler.routes(0), address(0), "E3");
+        assertEq(exchangeHandler.BORROW_TOKEN(), address(borrowToken), "E4");
+        assertEq(exchangeHandler.COLLATERAL_TOKEN(), address(collateralToken), "E5");
     }
 
     function test_swap(
@@ -31,8 +31,8 @@ contract ExchangeTests is Base {
 
         // Swap using route index 0 and send to userLender
         vm.startPrank(userBorrower);
-        collateralToken.approve(address(exchange), _amount);
-        uint256 _amountOut = exchange.swap(_amount, 0, userLender);
+        collateralToken.approve(address(exchangeHandler), _amount);
+        uint256 _amountOut = exchangeHandler.swap(_amount, 0, userLender);
         vm.stopPrank();
 
         // Check balances
@@ -40,15 +40,15 @@ contract ExchangeTests is Base {
         assertEq(borrowToken.balanceOf(userBorrower), 0, "E4");
         assertEq(collateralToken.balanceOf(userLender), 0, "E5");
         assertEq(borrowToken.balanceOf(userLender), _amountOut, "E6");
-        assertEq(collateralToken.balanceOf(address(exchange)), 0, "E7");
-        assertEq(borrowToken.balanceOf(address(exchange)), 0, "E8");
+        assertEq(collateralToken.balanceOf(address(exchangeHandler)), 0, "E7");
+        assertEq(borrowToken.balanceOf(address(exchangeHandler)), 0, "E8");
     }
 
     function test_swap_zeroAmount(
         uint256 _index,
         address _receiver
     ) public {
-        assertEq(exchange.swap(0, _index, _receiver), 0, "E0");
+        assertEq(exchangeHandler.swap(0, _index, _receiver), 0, "E0");
     }
 
     function test_swap_invalidRoute(
@@ -60,23 +60,23 @@ contract ExchangeTests is Base {
         vm.assume(_invalidIndex > 0);
 
         vm.expectRevert("!route");
-        exchange.swap(_amount, _invalidIndex, _receiver);
+        exchangeHandler.swap(_amount, _invalidIndex, _receiver);
     }
 
     function test_transferOwnership(
         address _newOwner
     ) public {
         vm.prank(management);
-        exchange.transfer_ownership(_newOwner);
+        exchangeHandler.transfer_ownership(_newOwner);
 
-        assertEq(exchange.owner(), management, "E0");
-        assertEq(exchange.pending_owner(), _newOwner, "E1");
+        assertEq(exchangeHandler.owner(), management, "E0");
+        assertEq(exchangeHandler.pending_owner(), _newOwner, "E1");
 
         vm.prank(_newOwner);
-        exchange.accept_ownership();
+        exchangeHandler.accept_ownership();
 
-        assertEq(exchange.owner(), _newOwner, "E2");
-        assertEq(exchange.pending_owner(), address(0), "E3");
+        assertEq(exchangeHandler.owner(), _newOwner, "E2");
+        assertEq(exchangeHandler.pending_owner(), address(0), "E3");
     }
 
     function test_transferOwnership_invalidCaller(
@@ -87,7 +87,7 @@ contract ExchangeTests is Base {
 
         vm.expectRevert("!owner");
         vm.prank(_invalidCaller);
-        exchange.transfer_ownership(_newOwner);
+        exchangeHandler.transfer_ownership(_newOwner);
     }
 
     function test_acceptOwnership_invalidCaller(
@@ -97,21 +97,21 @@ contract ExchangeTests is Base {
         vm.assume(_invalidCaller != _newOwner);
 
         vm.prank(management);
-        exchange.transfer_ownership(_newOwner);
+        exchangeHandler.transfer_ownership(_newOwner);
 
         vm.expectRevert("!pending_owner");
         vm.prank(_invalidCaller);
-        exchange.accept_ownership();
+        exchangeHandler.accept_ownership();
     }
 
     function test_addRoute(
         address _newRoute
     ) public {
         vm.prank(management);
-        exchange.add_route(_newRoute);
+        exchangeHandler.add_route(_newRoute);
 
-        assertEq(exchange.routes(1), _newRoute, "E0");
-        assertEq(exchange.route_index(), 2, "E1");
+        assertEq(exchangeHandler.routes(1), _newRoute, "E0");
+        assertEq(exchangeHandler.route_index(), 2, "E1");
     }
 
     function test_addRoute_invalidCaller(
@@ -120,7 +120,7 @@ contract ExchangeTests is Base {
     ) public {
         vm.expectRevert("!owner");
         vm.prank(_invalidCaller);
-        exchange.add_route(_newRoute);
+        exchangeHandler.add_route(_newRoute);
     }
 
 }
