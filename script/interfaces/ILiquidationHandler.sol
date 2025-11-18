@@ -29,12 +29,13 @@ interface ILiquidationHandler {
         address new_owner
     ) external;
     function accept_ownership() external;
+    function toggle_use_auction() external;
 
     // ============================================================================================
     // Mutative functions
     // ============================================================================================
 
-    function notify(
+    function process(
         uint256 collateral_amount,
         uint256 debt_amount,
         address liquidator

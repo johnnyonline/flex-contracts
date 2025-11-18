@@ -978,8 +978,8 @@ def liquidate_troves(trove_ids: uint256[_MAX_LIQUIDATION_BATCH_SIZE]):
     # Transfer collateral tokens to the liquidation handler for selling. Proceeds will be sent to the lender
     extcall COLLATERAL_TOKEN.transfer(LIQUIDATION_HANDLER.address, total_collateral_to_decrease, default_return_value=True)
 
-    # Notify the liquidation handler of the liquidation
-    extcall LIQUIDATION_HANDLER.notify(total_collateral_to_decrease, total_debt_to_decrease, msg.sender)
+    # Notify the liquidation handler of the liquidation. It will handle selling the collateral and transferring proceeds to the lender
+    extcall LIQUIDATION_HANDLER.process(total_collateral_to_decrease, total_debt_to_decrease, msg.sender)
 
 
 @internal

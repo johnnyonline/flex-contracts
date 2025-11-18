@@ -27,16 +27,6 @@ exports: (
 
 
 # ============================================================================================
-# Events
-# ============================================================================================
-
-
-# event RouteAdded:
-#     index: indexed(uint256)
-#     route: indexed(address)
-
-
-# ============================================================================================
 # Constants
 # ============================================================================================
 
@@ -53,11 +43,8 @@ COLLATERAL_TOKEN: public(immutable(IERC20))
 # ============================================================================================
 
 
-# # Next route index
-# route_index: public(uint256)
-
-# # Route index --> Route
-# routes: public(HashMap[uint256, IExchangeRoute])
+# Whether to dutch auction the liquidated collateral or not
+use_auction: public(bool)
 
 
 # ============================================================================================
@@ -87,41 +74,28 @@ def __init__(
 # ============================================================================================
 
 
-# @external
-# def add_route(route: address):
-#     """
-#     @notice Adds a new exchange route
-#     @dev Only callable by the current `owner`
-#     @param route Address of the route to add
-#     """
-#     # Make sure the caller is the current owner
-#     assert msg.sender == ownable.owner, "!owner"
-
-#     # Cache the current route index
-#     index: uint256 = self.route_index
-
-#     # Add the route
-#     self.routes[index] = IExchangeRoute(route)
-
-#     # Increment the route index
-#     self.route_index = index + 1
-
-#     # Emit event
-#     log RouteAdded(
-#         index=index,
-#         route=route
-#     )
-
-
-# ============================================================================================
-# Mutative functions
-# ============================================================================================
-
-# @todo -- here -- add dutch
 @external
-def notify(collateral_amount: uint256, debt_amount: uint256, liquidator: address):
+def toggle_use_auction():
     """
-    @notice Notify the liquidation handler of a liquidation
+    @notice Toggles the `use_auction` flag
+    @dev Only callable by the current `owner`
+    """
+    # Make sure the caller is the current owner
+    assert msg.sender == ownable.owner, "!owner"
+
+    # Flip the flag
+    self.use_auction = not self.use_auction
+
+
+# ============================================================================================
+# External mutative functions
+# ============================================================================================
+
+
+@external
+def process(collateral_amount: uint256, debt_amount: uint256, liquidator: address):
+    """
+    @notice Handles selling of collateral tokens from liquidated troves and returning borrow tokens to the lender
     @dev Only callable by the `trove_manager` contract
     @dev `trove_manager` already transferred the collateral tokens before calling this function
     @param collateral_amount Amount of collateral tokens to sell
@@ -131,6 +105,24 @@ def notify(collateral_amount: uint256, debt_amount: uint256, liquidator: address
     # Make sure the caller is the trove manager
     assert msg.sender == TROVE_MANAGER, "!trove_manager"
 
+    if self.use_auction:
+        self._dutch_process(collateral_amount, debt_amount, liquidator)
+    else:
+        self._swap_process(collateral_amount, debt_amount, liquidator)
+
+
+# ============================================================================================
+# Internal mutative functions
+# ============================================================================================
+
+
+@internal
+def _dutch_process(collateral_amount: uint256, debt_amount: uint256, liquidator: address):
+    pass
+
+
+@internal
+def _swap_process(collateral_amount: uint256, debt_amount: uint256, liquidator: address):
     # Pull the borrow tokens from caller and transfer them to the lender
     extcall BORROW_TOKEN.transferFrom(liquidator, LENDER, debt_amount, default_return_value=True)
 

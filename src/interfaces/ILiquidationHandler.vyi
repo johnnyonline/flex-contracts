@@ -7,5 +7,5 @@
 
 
 @external
-def notify(collateral_amount: uint256, debt_amount: uint256, liquidator: address):
+def process(collateral_amount: uint256, debt_amount: uint256, liquidator: address):
     ...
