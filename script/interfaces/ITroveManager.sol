@@ -120,11 +120,11 @@ interface ITroveManager {
 
     function add_collateral(
         uint256 trove_id,
-        uint256 collateral_change
+        uint256 collateral_amount
     ) external;
     function remove_collateral(
         uint256 trove_id,
-        uint256 collateral_change
+        uint256 collateral_amount
     ) external;
     function borrow(
         uint256 trove_id,

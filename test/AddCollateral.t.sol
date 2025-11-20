@@ -129,7 +129,7 @@ contract AddCollateralTests is Base {
 
         // Try to add zero collateral
         vm.startPrank(userBorrower);
-        vm.expectRevert("!collateral_change");
+        vm.expectRevert("!collateral_amount");
         troveManager.add_collateral(_troveId, 0);
         vm.stopPrank();
     }

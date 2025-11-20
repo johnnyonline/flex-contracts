@@ -127,7 +127,7 @@ contract RemoveCollateralTests is Base {
         uint256 _troveId
     ) public {
         vm.prank(userBorrower);
-        vm.expectRevert("!collateral_change");
+        vm.expectRevert("!collateral_amount");
         troveManager.remove_collateral(_troveId, 0);
     }
 

@@ -11,8 +11,7 @@
 # @todo -- decimals?
 # @todo -- check round up thingy on `pending_agg_interest: uint256 = (self.total_weighted_deb.....`
 # @todo -- finish tests...
-# @todo -- liquidations
-# @todo -- auction wishlist/dutch route
+# @todo -- auction wishlist/dutch route/liquidations
 
 from ethereum.ercs import IERC20
 
@@ -425,8 +424,8 @@ def open_trove(
     self._accrue_interest_and_account_for_trove_change(
         debt_amount_with_fee, # debt_increase
         0, # debt_decrease
-        0, # old_weighted_debt
-        debt_amount_with_fee * annual_interest_rate, # new_weighted_debt
+        debt_amount_with_fee * annual_interest_rate, # weighted_debt_increase
+        0, # weighted_debt_decrease
     )
 
     # Record the received collateral
@@ -463,17 +462,17 @@ def open_trove(
 # Adjust trove
 # ============================================================================================
 
-# @todo -- rename collateral_change to collateral_amount...
+
 @external
-def add_collateral(trove_id: uint256, collateral_change: uint256):
+def add_collateral(trove_id: uint256, collateral_amount: uint256):
     """
     @notice Add collateral to an existing Trove
     @dev Only callable by the Trove owner
     @param trove_id Unique identifier of the Trove
-    @param collateral_change Amount of collateral tokens to add
+    @param collateral_amount Amount of collateral tokens to add
     """
     # Make sure collateral amount is non-zero
-    assert collateral_change > 0, "!collateral_change"
+    assert collateral_amount > 0, "!collateral_amount"
 
     # Cache Trove info
     trove: Trove = self.troves[trove_id]
@@ -485,32 +484,32 @@ def add_collateral(trove_id: uint256, collateral_change: uint256):
     assert trove.status == Status.ACTIVE, "!active"
 
     # Update the Trove's collateral info
-    self.troves[trove_id].collateral += collateral_change
+    self.troves[trove_id].collateral += collateral_amount
 
     # Update the contract's recorded collateral balance
-    self.collateral_balance += collateral_change
+    self.collateral_balance += collateral_amount
 
     # Pull the collateral tokens from caller
-    extcall COLLATERAL_TOKEN.transferFrom(msg.sender, self, collateral_change, default_return_value=True)
+    extcall COLLATERAL_TOKEN.transferFrom(msg.sender, self, collateral_amount, default_return_value=True)
 
     # Emit event
     log AddCollateral(
         trove_id=trove_id,
         owner=msg.sender,
-        collateral_amount=collateral_change
+        collateral_amount=collateral_amount
     )
 
-# @todo -- rename collateral_change to collateral_amount...
+
 @external
-def remove_collateral(trove_id: uint256, collateral_change: uint256):
+def remove_collateral(trove_id: uint256, collateral_amount: uint256):
     """
     @notice Remove collateral from an existing Trove
     @dev Only callable by the Trove owner
     @param trove_id Unique identifier of the Trove
-    @param collateral_change Amount of collateral tokens to remove
+    @param collateral_amount Amount of collateral tokens to remove
     """
     # Make sure collateral amount is non-zero
-    assert collateral_change > 0, "!collateral_change"
+    assert collateral_amount > 0, "!collateral_amount"
 
     # Cache Trove info
     trove: Trove = self.troves[trove_id]
@@ -522,7 +521,7 @@ def remove_collateral(trove_id: uint256, collateral_change: uint256):
     assert trove.status == Status.ACTIVE, "!active"
 
     # Make sure the Trove has enough collateral
-    assert trove.collateral >= collateral_change, "!trove.collateral"
+    assert trove.collateral >= collateral_amount, "!trove.collateral"
 
     # Get the Trove's debt after accruing interest
     trove_debt_after_interest: uint256 = self._get_trove_debt_after_interest(trove)
@@ -531,7 +530,7 @@ def remove_collateral(trove_id: uint256, collateral_change: uint256):
     collateral_price: uint256 = staticcall PRICE_ORACLE.price()
 
     # Calculate the new collateral amount and collateral ratio
-    new_collateral: uint256 = trove.collateral - collateral_change
+    new_collateral: uint256 = trove.collateral - collateral_amount
     collateral_ratio: uint256 = self._calculate_collateral_ratio(new_collateral, trove_debt_after_interest, collateral_price)
 
     # Make sure the new collateral ratio is above the minimum collateral ratio
@@ -541,16 +540,16 @@ def remove_collateral(trove_id: uint256, collateral_change: uint256):
     self.troves[trove_id].collateral = new_collateral
 
     # Update the contract's recorded collateral balance
-    self.collateral_balance -= collateral_change
+    self.collateral_balance -= collateral_amount
 
     # Transfer the collateral tokens to caller
-    extcall COLLATERAL_TOKEN.transfer(msg.sender, collateral_change, default_return_value=True)
+    extcall COLLATERAL_TOKEN.transfer(msg.sender, collateral_amount, default_return_value=True)
 
     # Emit event
     log RemoveCollateral(
         trove_id=trove_id,
         owner=msg.sender,
-        collateral_amount=collateral_change
+        collateral_amount=collateral_amount
     )
 
 
@@ -618,8 +617,8 @@ def borrow(
     self._accrue_interest_and_account_for_trove_change(
         debt_amount_with_fee, # debt_increase
         0, # debt_decrease
-        old_debt * trove.annual_interest_rate, # old_weighted
-        new_debt * trove.annual_interest_rate, # new_weighted_debt
+        new_debt * trove.annual_interest_rate, # weighted_debt_increase
+        old_debt * trove.annual_interest_rate, # weighted_debt_decrease
     )
 
     # Deliver borrow tokens to the caller, redeem if liquidity is insufficient
@@ -680,8 +679,8 @@ def repay(trove_id: uint256, debt_amount: uint256):
     self._accrue_interest_and_account_for_trove_change(
         0, # debt_increase
         debt_to_repay, # debt_decrease
-        old_debt * trove.annual_interest_rate, # old_weighted_debt
-        new_debt * trove.annual_interest_rate, # new_weighted_debt
+        new_debt * trove.annual_interest_rate, # weighted_debt_increase
+        old_debt * trove.annual_interest_rate, # weighted_debt_decrease
     )
 
     # Pull the borrow tokens from caller and transfer them to the lender
@@ -772,8 +771,8 @@ def adjust_interest_rate(
     self._accrue_interest_and_account_for_trove_change(
         upfront_fee, # debt_increase
         0, # debt_decrease
-        old_debt * old_annual_interest_rate, # old_weighted_debt
-        new_debt * new_annual_interest_rate # new_weighted_debt
+        new_debt * new_annual_interest_rate, # weighted_debt_increase
+        old_debt * old_annual_interest_rate, # weighted_debt_decrease
     )
 
     # Reinsert the Trove in the sorted list at its new position
@@ -834,8 +833,8 @@ def close_trove(trove_id: uint256):
     self._accrue_interest_and_account_for_trove_change(
         0, # debt_increase
         trove_debt_after_interest, # debt_decrease
-        old_trove.debt * old_trove.annual_interest_rate, # old_weighted_debt
-        0 # new_weighted_debt
+        0, # weighted_debt_increase
+        old_trove.debt * old_trove.annual_interest_rate, # weighted_debt_decrease
     )
 
     # Remove from sorted list
@@ -900,8 +899,8 @@ def close_zombie_trove(trove_id: uint256):
         self._accrue_interest_and_account_for_trove_change(
             0, # debt_increase
             trove_debt_after_interest, # debt_decrease
-            old_trove.debt * old_trove.annual_interest_rate, # old_weighted_debt
-            0 # new_weighted_debt
+            0, # weighted_debt_increase
+            old_trove.debt * old_trove.annual_interest_rate, # weighted_debt_decrease
         )
 
         # Pull the borrow tokens from caller and transfer them to the lender
@@ -971,8 +970,8 @@ def liquidate_troves(trove_ids: uint256[_MAX_LIQUIDATION_BATCH_SIZE]):
     self._accrue_interest_and_account_for_trove_change(
         0, # debt_increase
         total_debt_to_decrease, # debt_decrease
-        total_weighted_debt_to_decrease, # old_weighted_debt
-        0 # new_weighted_debt
+        0, # weighted_debt_increase
+        total_weighted_debt_to_decrease, # weighted_debt_decrease
     )
 
     # Transfer collateral tokens to the liquidation handler for selling. Proceeds will be sent to the lender
@@ -1100,8 +1099,8 @@ def _redeem(amount: uint256, route_index: uint256) -> uint256:
     # Cache the total changes we're making so that later we can update the accounting
     total_debt_decrease: uint256 = 0
     total_collateral_decrease: uint256 = 0
-    total_new_weighted_debt: uint256 = 0
-    total_old_weighted_debt: uint256 = 0
+    total_weighted_debt_increase: uint256 = 0
+    total_weighted_debt_decrease: uint256 = 0
 
     # Loop through as many Troves as we're allowed or until we redeem all the debt we need
     for _: uint256 in range(_MAX_ITERATIONS):
@@ -1144,8 +1143,8 @@ def _redeem(amount: uint256, route_index: uint256) -> uint256:
             trove_new_collateral: uint256 = trove.collateral - collateral_to_redeem
 
             # Calculate the Trove's old and new weighted debt
-            trove_old_weighted_debt: uint256 = trove.debt * trove.annual_interest_rate
-            trove_new_weighted_debt: uint256 = trove_new_debt * trove.annual_interest_rate
+            trove_weighted_debt_decrease: uint256 = trove.debt * trove.annual_interest_rate
+            trove_weighted_debt_increase: uint256 = trove_new_debt * trove.annual_interest_rate
 
             # Update the Trove's info
             trove.debt = trove_new_debt
@@ -1160,8 +1159,8 @@ def _redeem(amount: uint256, route_index: uint256) -> uint256:
             total_collateral_decrease += collateral_to_redeem
 
             # Increment the total old and new weighted debt
-            total_old_weighted_debt += trove_old_weighted_debt
-            total_new_weighted_debt += trove_new_weighted_debt
+            total_weighted_debt_decrease += trove_weighted_debt_decrease
+            total_weighted_debt_increase += trove_weighted_debt_increase
 
             # Update the remaining debt to free
             remaining_debt_to_free -= min(debt_to_free, remaining_debt_to_free)
@@ -1184,8 +1183,8 @@ def _redeem(amount: uint256, route_index: uint256) -> uint256:
     self._accrue_interest_and_account_for_trove_change(
         0, # debt_increase
         total_debt_decrease, # debt_decrease
-        total_old_weighted_debt, # old_weighted_debt
-        total_new_weighted_debt, # new_weighted_debt
+        total_weighted_debt_increase, # weighted_debt_increase
+        total_weighted_debt_decrease, # weighted_debt_decrease
     )
 
     # Update the contract's recorded collateral balance
@@ -1292,20 +1291,20 @@ def _get_trove_debt_after_interest(trove: Trove) -> uint256:
 # Internal mutative functions
 # ============================================================================================
 
-# @todo -- rename `old_weighted_debt` to `weighted_debt_decrease` and `new_weighted_debt` to `weighted_debt_increase`
+
 @internal
 def _accrue_interest_and_account_for_trove_change(
     debt_increase: uint256,
     debt_decrease: uint256,
-    old_weighted_debt: uint256,
-    new_weighted_debt: uint256
+    weighted_debt_increase: uint256,
+    weighted_debt_decrease: uint256,
 ):
     """
     @notice Accrue interest on the total debt and update total debt and total weighted debt accounting
     @param debt_increase Amount of debt to add to the total debt
     @param debt_decrease Amount of debt to subtract from the total debt
-    @param old_weighted_debt Amount of weighted debt to subtract from the total weighted debt
-    @param new_weighted_debt Amount of weighted debt to add to the total weighted debt
+    @param weighted_debt_increase Amount of weighted debt to add to the total weighted debt
+    @param weighted_debt_decrease Amount of weighted debt to subtract from the total weighted debt
     """
     # Update total debt
     new_total_debt: uint256 = self._sync_total_debt()
@@ -1315,8 +1314,8 @@ def _accrue_interest_and_account_for_trove_change(
 
     # Update total weighted debt
     new_total_weighted_debt: uint256 = self.total_weighted_debt
-    new_total_weighted_debt += new_weighted_debt
-    new_total_weighted_debt -= old_weighted_debt
+    new_total_weighted_debt += weighted_debt_increase
+    new_total_weighted_debt -= weighted_debt_decrease
     self.total_weighted_debt = new_total_weighted_debt
 
 
