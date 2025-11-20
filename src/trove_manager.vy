@@ -8,9 +8,8 @@
         accrues interest, maintains aggregate debt accounting, and coordinates redemptions with the Lender
         and sorted_troves contracts
 """
-# @todo -- decimals?
 # @todo -- check round up thingy on `pending_agg_interest: uint256 = (self.total_weighted_deb.....`
-# @todo -- finish tests...
+# @todo -- finish tests... / decimals?
 # @todo -- auction wishlist/dutch route/liquidations
 
 from ethereum.ercs import IERC20
@@ -796,7 +795,7 @@ def adjust_interest_rate(
 # Close trove
 # ============================================================================================
 
-# @todo -- here -- tests
+
 @external
 def close_trove(trove_id: uint256):
     """
@@ -930,10 +929,13 @@ def liquidate_troves(trove_ids: uint256[_MAX_LIQUIDATION_BATCH_SIZE]):
     @dev Uses the `liquidation_handler` contract to sell the collateral tokens
     @param trove_ids List of unique identifiers of the unhealthy Troves
     """
-    # Cache the current zombie trove id to avoid multiple SLOADs
+    # Make sure that first trove id is non-zero
+    assert trove_ids[0] != 0, "!trove_ids"
+
+    # Cache the current zombie trove id to avoid multiple SLOADs inside `_liquidate_single_trove`
     current_zombie_trove_id: uint256 = self.zombie_trove_id
 
-    # Cache the collateral price to avoid multiple external calls
+    # Get the collateral price
     collateral_price: uint256 = staticcall PRICE_ORACLE.price()
 
     # Initialize variables to track total changes
@@ -1000,7 +1002,7 @@ def _liquidate_single_trove(trove_id: uint256, current_zombie_trove_id: uint256,
     assert trove.status == Status.ACTIVE or trove.status == Status.ZOMBIE, "!active or zombie"
 
     # Make sure trove has debt
-    assert trove.debt > 0, "!debt"
+    assert trove.debt > 0, "!debt"  # It should actually be impossible to hit this
 
     # Get the Trove's debt after accruing interest
     trove_debt_after_interest: uint256 = self._get_trove_debt_after_interest(trove)
@@ -1053,7 +1055,7 @@ def _liquidate_single_trove(trove_id: uint256, current_zombie_trove_id: uint256,
 def redeem(amount: uint256, route_index: uint256) -> uint256:
     """
     @notice Attempt to free the specified amount of borrow tokens by selling collateral
-    @dev Can only be called by the Lender contract
+    @dev Can only be called by the `lender` contract
     @dev Swap sandwich protection is the caller's responsibility
     @param amount Desired amount of borrow tokens to free
     @param route_index Index of the exchange route to use
@@ -1075,7 +1077,7 @@ def _redeem(amount: uint256, route_index: uint256) -> uint256:
     @param route_index Index of the exchange route to use
     @return amount The actual amount of borrow tokens freed
     """
-    # Accrue interest on the total debt and get the updated figure
+    # Accrue interest on the total debt
     self._sync_total_debt()
 
     # Get the collateral price
@@ -1163,16 +1165,17 @@ def _redeem(amount: uint256, route_index: uint256) -> uint256:
             total_weighted_debt_increase += trove_weighted_debt_increase
 
             # Update the remaining debt to free
-            remaining_debt_to_free -= min(debt_to_free, remaining_debt_to_free)
+            remaining_debt_to_free -= debt_to_free
 
-            # Check if we freed all the debt we wanted
+            # Break if we freed all the debt we wanted
             if remaining_debt_to_free == 0:
                 break
 
-        # Get the next trove to redeem
+        # Get the next trove to redeem. If we just processed a zombie trove (which is not in the sorted troves list),
+        # get the trove with the lowest interest rate. Otherwise, get the previous trove from the list
         trove_to_redeem = staticcall SORTED_TROVES.last() if is_zombie_trove else staticcall SORTED_TROVES.prev(trove_to_redeem)
 
-        # If we reached the end of the list, break
+        # Break if we reached the end of the list
         if trove_to_redeem == 0:
             break
 
@@ -1190,7 +1193,7 @@ def _redeem(amount: uint256, route_index: uint256) -> uint256:
     # Update the contract's recorded collateral balance
     self.collateral_balance -= total_collateral_decrease
 
-    # Swap the collateral to borrow token and transfer it to the caller. Does nothing on zero amount
+    # Swap the collateral to borrow tokens and transfer them to the caller. Does nothing on zero amount
     borrow_token_out: uint256 = extcall EXCHANGE_HANDLER.swap(total_collateral_decrease, route_index, msg.sender)
 
     # Emit event
@@ -1364,7 +1367,7 @@ def _transfer_borrow_tokens(amount: uint256, min_out: uint256, route_index: uint
         amount_out_of_redeem: uint256 = self._redeem(amount - available_liquidity, route_index)
 
         # Total amount we were able to transfer
-        amount_out = amount_out_of_redeem + available_liquidity
+        amount_out = available_liquidity + amount_out_of_redeem
     else:
         # We are able to transfer the full amount
         amount_out = amount

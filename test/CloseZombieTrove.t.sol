@@ -327,4 +327,63 @@ contract CloseZombieTroveTests is Base {
         assertEq(collateralToken.balanceOf(address(exchangeRoute)), 0, "E82");
     }
 
+    function test_closeZombieTrove_notOwner(
+        uint256 _amount,
+        address _wrongUser
+    ) public {
+        vm.assume(_wrongUser != userBorrower);
+        _amount = bound(_amount, troveManager.MIN_DEBT(), maxFuzzAmount);
+
+        // Lend some from lender
+        mintAndDepositIntoLender(userLender, _amount);
+
+        // Calculate how much collateral is needed for the borrow amount
+        uint256 _collateralNeeded = _amount * DEFAULT_TARGET_COLLATERAL_RATIO / priceOracle.price();
+
+        // Calculate expected debt (borrow amount + upfront fee)
+        uint256 _expectedDebt = _amount + troveManager.get_upfront_fee(_amount, DEFAULT_ANNUAL_INTEREST_RATE);
+
+        // Open a trove
+        uint256 _troveId = mintAndOpenTrove(userBorrower, _collateralNeeded, _amount, DEFAULT_ANNUAL_INTEREST_RATE);
+
+        // Pull enough liquidity to make trove a zombie trove (but above 0 debt)
+        uint256 _amountToPull = _amount - 100 ether;
+
+        // Pull liquidity from lender to make trove a zombie trove (but above 0 debt)
+        vm.startPrank(userLender);
+        lender.redeem(_amountToPull, userLender, userLender);
+        vm.stopPrank();
+
+        // Make sure trove is now a zombie trove
+        assertEq(troveManager.zombie_trove_id(), _troveId, "E0");
+
+        // Make sure non-owner cannot close trove
+        vm.prank(_wrongUser);
+        vm.expectRevert("!owner");
+        troveManager.close_zombie_trove(_troveId);
+    }
+
+    function test_closeZombieTrove_notZombie(
+        uint256 _amount
+    ) public {
+        _amount = bound(_amount, troveManager.MIN_DEBT(), maxFuzzAmount);
+
+        // Lend some from lender
+        mintAndDepositIntoLender(userLender, _amount);
+
+        // Calculate how much collateral is needed for the borrow amount
+        uint256 _collateralNeeded = _amount * DEFAULT_TARGET_COLLATERAL_RATIO / priceOracle.price();
+
+        // Calculate expected debt (borrow amount + upfront fee)
+        uint256 _expectedDebt = _amount + troveManager.get_upfront_fee(_amount, DEFAULT_ANNUAL_INTEREST_RATE);
+
+        // Open a trove
+        uint256 _troveId = mintAndOpenTrove(userBorrower, _collateralNeeded, _amount, DEFAULT_ANNUAL_INTEREST_RATE);
+
+        // Make sure cannot zombie close trove that is not a zombie
+        vm.prank(userBorrower);
+        vm.expectRevert("!zombie");
+        troveManager.close_zombie_trove(_troveId);
+    }
+
 }

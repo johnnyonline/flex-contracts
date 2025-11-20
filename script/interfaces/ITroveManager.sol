@@ -169,7 +169,8 @@ interface ITroveManager {
     // ============================================================================================
 
     function redeem(
-        uint256 amount
+        uint256 amount,
+        uint256 route_index
     ) external returns (uint256);
 
 }

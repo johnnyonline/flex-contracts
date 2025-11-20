@@ -3,7 +3,7 @@ pragma solidity 0.8.23;
 
 import "./Base.sol";
 
-contract ExchangeTests is Base {
+contract ExchangeHandlerTests is Base {
 
     function setUp() public override {
         Base.setUp();
