@@ -7,7 +7,7 @@ interface ISortedTroves {
     // Constants
     // ============================================================================================
 
-    function BORROWER() external view returns (address);
+    function TROVE_MANAGER() external view returns (address);
 
     // ============================================================================================
     // View functions
