@@ -66,6 +66,7 @@ _nodes: HashMap[uint256, Node]
 def __init__(trove_manager: address):
     """
     @notice Initialize the contract
+    @param trove_manager Address of the Trove Manager
     """
     TROVE_MANAGER = ITroveManager(trove_manager)
 

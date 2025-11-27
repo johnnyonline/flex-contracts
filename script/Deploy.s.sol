@@ -42,11 +42,15 @@ contract Deploy is Script {
     ILender public lender;
 
     uint256 public minimumCollateralRatio = 110 * 1e16; // 110%
+    uint256 public liqHandlerDustThreshold = 1e14; // 0.0001 tBTC
+    uint256 public liqHandlerMaxAuctionAmount = 20e18; // 20 tBTC
 
     address public management = address(420_420);
     address public emergencyAdmin = address(69_420);
     address public performanceFeeRecipient = address(420_69_420);
     address public keeper = address(69_69);
+
+    address public auctionFactory;
 
     IERC20 public borrowToken = IERC20(0xf939E0A03FB07F59A73314E73794Be0E57ac1b4E); // crvUSD
     IERC20 public collateralToken = IERC20(0x18084fbA666a33d37592fA2633fD49a74DD93a88); // tBTC
@@ -71,7 +75,18 @@ contract Deploy is Script {
         priceOracle = IPriceOracle(deployCode("tbtc_yb_oracle"));
         liquidationHandler = ILiquidationHandler(
             deployCode(
-                "liquidation_handler", abi.encode(deployer, _lenderAddress, _troveManagerAddress, address(borrowToken), address(collateralToken))
+                "liquidation_handler",
+                abi.encode(
+                    deployer,
+                    _lenderAddress,
+                    _troveManagerAddress,
+                    address(priceOracle),
+                    address(auctionFactory),
+                    address(borrowToken),
+                    address(collateralToken),
+                    liqHandlerDustThreshold,
+                    liqHandlerMaxAuctionAmount
+                )
             )
         );
         exchangeRoute = IExchangeRoute(deployCode("tbtc_yb_route"));
@@ -99,6 +114,9 @@ contract Deploy is Script {
 
         // Set up the exchange route and transfer ownership to management
         setupExchangeRoute();
+
+        // Set up the liquidation handler and transfer ownership to management
+        setupLiquidationHandler();
 
         if (isTest) {
             vm.label({account: address(priceOracle), newLabel: "PriceOracle"});
@@ -138,6 +156,11 @@ contract Deploy is Script {
     function setupExchangeRoute() public {
         exchangeHandler.add_route(address(exchangeRoute));
         exchangeHandler.transfer_ownership(management);
+    }
+
+    function setupLiquidationHandler() public {
+        liquidationHandler.set_keeper(keeper);
+        liquidationHandler.transfer_ownership(management);
     }
 
 }

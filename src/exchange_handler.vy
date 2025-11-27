@@ -66,6 +66,12 @@ routes: public(HashMap[uint256, IExchangeRoute])
 
 @deploy
 def __init__(owner: address, borrow_token: address, collateral_token: address):
+    """
+    @notice Initialize the contract
+    @param owner Address of the initial owner
+    @param borrow_token Address of the borrow token
+    @param collateral_token Address of the collateral token
+    """
     ownable.__init__(owner)
 
     BORROW_TOKEN = IERC20(borrow_token)

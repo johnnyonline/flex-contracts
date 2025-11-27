@@ -1,0 +1,47 @@
+# @version 0.4.1
+
+
+@external
+@view
+def available(_from: address) -> uint256:
+    ...
+
+
+@external
+@view
+def isActive(_from: address) -> bool:
+    ...
+
+
+@external
+@view
+def kickable(_from: address) -> uint256:
+    ...
+
+
+@external
+def enable(_from: address):
+    ...
+
+
+@external
+def kick(_token: address) -> uint256:
+    ...
+
+@external
+def setMinimumPrice(_minimumPrice: uint256):
+    ...
+
+@external
+def setStartingPrice(_startingPrice: uint256):
+    ...
+
+
+@external
+def settle(_token: address):
+    ...
+
+
+@external
+def sweep(_token: address):
+    ...

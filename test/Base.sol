@@ -4,6 +4,8 @@ pragma solidity 0.8.23;
 import {IERC20} from "@openzeppelin/contracts/interfaces/IERC20.sol";
 import {IBaseStrategy} from "@tokenized-strategy/interfaces/IBaseStrategy.sol";
 
+import {AuctionFactory} from "./Mocks/AuctionFactory.sol";
+
 import "../script/Deploy.s.sol";
 
 import "forge-std/Test.sol";
@@ -31,6 +33,9 @@ abstract contract Base is Deploy, Test {
         // create fork
         uint256 _blockNumber = 23_513_850; // cache state for faster tests
         vm.selectFork(vm.createFork(vm.envString("ETH_RPC_URL"), _blockNumber));
+
+        // Deploy auction factory with minimumPrice and setReceiver
+        auctionFactory = address(new AuctionFactory());
 
         // deploy and initialize contracts
         run();

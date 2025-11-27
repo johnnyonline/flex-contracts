@@ -8,8 +8,7 @@
         accrues interest, maintains aggregate debt accounting, and coordinates redemptions with the Lender
         and sorted_troves contracts
 """
-# @todo -- finish tests... / decimals?
-# @todo -- auction wishlist/dutch route/liquidation_handler
+# @todo -- dutch_route/liquidation_handler(test)
 
 from ethereum.ercs import IERC20
 
