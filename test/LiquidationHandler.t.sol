@@ -1,8 +1,6 @@
 // SPDX-License-Identifier: MIT
 pragma solidity 0.8.23;
 
-import {IAuction} from "../script/interfaces/IAuction.sol";
-
 import "./Base.sol";
 
 contract LiquidationHandlerTests is Base {
@@ -42,7 +40,7 @@ contract LiquidationHandlerTests is Base {
     function test_kickTrigger_collateralToSell(
         uint256 _amount
     ) public {
-        vm.assume(_amount > liquidationHandler.DUST_THRESHOLD() && _amount < maxFuzzAmount);
+        _amount = bound(_amount, liquidationHandler.DUST_THRESHOLD() + 1, maxFuzzAmount);
 
         // Airdrop collateral to the auction contract
         airdrop(address(collateralToken), address(auction), _amount);
@@ -54,7 +52,7 @@ contract LiquidationHandlerTests is Base {
     function test_kickTrigger_notEnoughCollateralToSell(
         uint256 _amount
     ) public {
-        vm.assume(_amount > 0 && _amount < liquidationHandler.DUST_THRESHOLD());
+        _amount = bound(_amount, 0, liquidationHandler.DUST_THRESHOLD() - 1);
 
         // Airdrop collateral to the auction contract
         airdrop(address(collateralToken), address(auction), _amount);
@@ -81,7 +79,7 @@ contract LiquidationHandlerTests is Base {
     function test_kickTrigger_activeAuction(
         uint256 _amount
     ) public {
-        vm.assume(_amount > liquidationHandler.DUST_THRESHOLD() && _amount < maxFuzzAmount);
+        _amount = bound(_amount, liquidationHandler.DUST_THRESHOLD() + 1, maxFuzzAmount);
 
         test_kickTrigger_collateralToSell(_amount);
 
@@ -110,7 +108,7 @@ contract LiquidationHandlerTests is Base {
     function test_kickTrigger_priceTooLow(
         uint256 _amount
     ) public {
-        vm.assume(_amount > liquidationHandler.DUST_THRESHOLD() && _amount < maxFuzzAmount);
+        _amount = bound(_amount, liquidationHandler.DUST_THRESHOLD() + 1, maxFuzzAmount);
 
         // Airdrop collateral to the auction contract
         airdrop(address(collateralToken), address(auction), _amount);
@@ -142,10 +140,86 @@ contract LiquidationHandlerTests is Base {
         assertFalse(auction.isActive(address(collateralToken)), "E4");
     }
 
-    // @todo -- here -- operation.t.sol/test_tendActiveAuction
-    // function test_kick_activeAuction
-    // function test_kick_cappedByMaxAuctionAmount
-    // function test_kick_settleAuctionAndKickNewOne
+    function test_kick_activeAuction(
+        uint256 _amount
+    ) public {
+        _amount = bound(_amount, liquidationHandler.DUST_THRESHOLD() + 1, liquidationHandler.MAX_AUCTION_AMOUNT() / 2 - 1);
+
+        // Airdrop collateral to the auction contract
+        airdrop(address(collateralToken), address(auction), _amount);
+
+        // Make sure kick trigger is true
+        assertTrue(liquidationHandler.kick_trigger(), "E0");
+
+        // Kick it
+        vm.prank(keeper);
+        liquidationHandler.kick();
+
+        assertTrue(auction.isActive(address(collateralToken)), "E1");
+        assertEq(auction.available(address(collateralToken)), _amount, "E2");
+
+        uint256 startingPriceBefore = auction.startingPrice();
+
+        // Airdrop more collateral so that we can to kick again
+        airdrop(address(collateralToken), address(auction), _amount, true);
+
+        // Kick again, with new lot
+        vm.prank(keeper);
+        liquidationHandler.kick();
+
+        assertTrue(auction.isActive(address(collateralToken)), "E3");
+        assertEq(auction.available(address(collateralToken)), _amount * 2, "E4");
+        assertApproxEqAbs(auction.startingPrice(), startingPriceBefore * 2, 1, "E5");
+    }
+
+    function test_kick_cappedByMaxAuctionAmount(
+        uint256 _amount
+    ) public {
+        _amount = bound(_amount, liquidationHandler.MAX_AUCTION_AMOUNT(), maxFuzzAmount);
+
+        // How much we expect to be left in the liq handler after kicking
+        uint256 _expectedRemaining = _amount - liquidationHandler.MAX_AUCTION_AMOUNT();
+
+        // Airdrop collateral to the auction contract
+        airdrop(address(collateralToken), address(liquidationHandler), _amount);
+
+        // Kick it
+        vm.prank(keeper);
+        liquidationHandler.kick();
+
+        assertTrue(auction.isActive(address(collateralToken)), "E1");
+        assertEq(auction.available(address(collateralToken)), liquidationHandler.MAX_AUCTION_AMOUNT(), "E2");
+        assertEq(collateralToken.balanceOf(address(liquidationHandler)), _expectedRemaining, "E3");
+    }
+
+    function test_take_goesToLender(
+        uint256 _amount
+    ) public {
+        _amount = bound(_amount, liquidationHandler.DUST_THRESHOLD() + 1, maxFuzzAmount);
+
+        // Airdrop collateral to the auction contract
+        airdrop(address(collateralToken), address(auction), _amount);
+
+        // Make sure kick trigger is true
+        assertTrue(liquidationHandler.kick_trigger(), "E0");
+
+        // Kick it
+        vm.prank(keeper);
+        liquidationHandler.kick();
+
+        // Airdrop borrow tokens to taker
+        uint256 _amountNeeded = auction.getAmountNeeded(address(collateralToken));
+        airdrop(address(borrowToken), liquidator, _amountNeeded);
+
+        // Take it
+        vm.startPrank(liquidator);
+        borrowToken.approve(address(auction), _amountNeeded);
+        auction.take(address(collateralToken));
+        vm.stopPrank();
+
+        assertEq(auction.available(address(collateralToken)), 0, "E1");
+        assertEq(borrowToken.balanceOf(address(lender)), _amountNeeded, "E2");
+    }
 
     function test_kick_notKeeper(
         address _notKeeper
@@ -198,8 +272,5 @@ contract LiquidationHandlerTests is Base {
         vm.prank(_notOwner);
         liquidationHandler.set_keeper(_newKeeper);
     }
-
-    // function test_processLiquidationWithDutch
-
 
 }

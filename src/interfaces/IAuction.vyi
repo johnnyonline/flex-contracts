@@ -28,9 +28,16 @@ def enable(_from: address):
 def kick(_token: address) -> uint256:
     ...
 
+
+@external
+def setReceiver(_receiver: address):
+    ...
+
+
 @external
 def setMinimumPrice(_minimumPrice: uint256):
     ...
+
 
 @external
 def setStartingPrice(_startingPrice: uint256):

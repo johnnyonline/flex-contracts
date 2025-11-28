@@ -12,7 +12,7 @@ contract CloseTroveTests is Base {
     // 1. lend
     // 2. borrow all available liquidity
     // 3. close trove
-    function test_closeTrove(
+    function test_closeTrove1(
         uint256 _amount
     ) public {
         _amount = bound(_amount, troveManager.MIN_DEBT(), maxFuzzAmount);

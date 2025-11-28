@@ -615,7 +615,7 @@ contract Auction is Governance2Step, ReentrancyGuard {
         address _from,
         uint256 _maxAmount,
         address _takerReceiver,
-        bytes memory _data
+        bytes memory /*_data*/
     ) internal virtual nonReentrant returns (uint256 _amountTaken) {
         AuctionInfo memory auction = auctions[_from];
 

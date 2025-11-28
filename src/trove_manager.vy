@@ -8,7 +8,7 @@
         accrues interest, maintains aggregate debt accounting, and coordinates redemptions with the Lender
         and sorted_troves contracts
 """
-# @todo -- dutch_route/liquidation_handler(test)
+# @todo -- dutch_route
 
 from ethereum.ercs import IERC20
 

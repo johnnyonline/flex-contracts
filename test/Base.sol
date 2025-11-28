@@ -4,6 +4,8 @@ pragma solidity 0.8.23;
 import {IERC20} from "@openzeppelin/contracts/interfaces/IERC20.sol";
 import {IBaseStrategy} from "@tokenized-strategy/interfaces/IBaseStrategy.sol";
 
+import {IAuction} from "../script/interfaces/IAuction.sol";
+
 import {AuctionFactory} from "./Mocks/AuctionFactory.sol";
 
 import "../script/Deploy.s.sol";
@@ -57,7 +59,22 @@ abstract contract Base is Deploy, Test {
         address _to,
         uint256 _amount
     ) public {
-        _token == address(0) ? vm.deal(_to, _amount) : deal({token: _token, to: _to, give: _amount});
+        airdrop(_token, _to, _amount, false);
+    }
+
+    function airdrop(
+        address _token,
+        address _to,
+        uint256 _amount,
+        bool _addToBalance
+    ) public {
+        if (_token == address(0)) {
+            uint256 _balanceBefore = _addToBalance ? _to.balance : 0;
+            vm.deal(_to, _balanceBefore + _amount);
+        } else {
+            uint256 _balanceBefore = _addToBalance ? IERC20(_token).balanceOf(_to) : 0;
+            deal({token: _token, to: _to, give: _balanceBefore + _amount});
+        }
     }
 
     function depositIntoLender(

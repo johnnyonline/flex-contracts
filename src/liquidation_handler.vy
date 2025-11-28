@@ -113,6 +113,7 @@ def __init__(
 
     AUCTION = IAuction(extcall AUCTION_FACTORY.createNewAuction(borrow_token))
     extcall AUCTION.enable(collateral_token)
+    extcall AUCTION.setReceiver(lender)
 
 
 # ============================================================================================
