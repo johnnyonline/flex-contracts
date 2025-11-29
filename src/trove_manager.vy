@@ -8,7 +8,7 @@
         accrues interest, maintains aggregate debt accounting, and coordinates redemptions with the Lender
         and sorted_troves contracts
 """
-# @todo -- dutch_route
+# @todo -- prepare USDC/yvWETH-1 and USDC/yvcrvUSD-2 for mainnet deployment
 
 from ethereum.ercs import IERC20
 

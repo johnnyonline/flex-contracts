@@ -58,12 +58,13 @@ def __init__():
 
 
 @external
-def execute(amount: uint256, receiver: address = msg.sender) -> uint256:
+def execute(amount: uint256, receiver: address) -> uint256:
     """
     @notice Execute the swap from collateral token to borrow token
     @dev Caller should add slippage protection
     @dev Caller should transfer `amount` of collateral tokens to this contract before calling
     @param amount Amount of collateral tokens to swap
+    @param receiver Address to receive the borrow tokens
     @return Amount of borrow tokens received
     """
     # tBTC --> crvUSD
