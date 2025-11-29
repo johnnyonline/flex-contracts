@@ -163,9 +163,10 @@ def kick_trigger() -> DynArray[IAuction, _MAX_AUCTIONS]:
 @external
 def kick(auctions: DynArray[IAuction, _MAX_AUCTIONS]):
     """
-    @notice Kicks off an auction with a starting price
+    @notice Kicks the provided auctions
     @dev Only callable by the keeper
     @dev Uses a higher starting price buffer percentage to allow for takers to re-group
+    @dev Does not set the receiver nor transfer collateral as those are already ready in the auction
     @param auctions List of auctions to kick
     """
     # Make sure the caller is the keeper
@@ -309,12 +310,19 @@ def _get_available_auction() -> IAuction:
         # We consider an auction "active" if it tries to sell more than dust
         is_active: bool = staticcall auction.available(COLLATERAL_TOKEN.address) > DUST_THRESHOLD
 
+        # Skip if active
+        if is_active:
+            continue
+
         # Check if there's enough to kick
         is_kickable: bool = staticcall auction.kickable(COLLATERAL_TOKEN.address) > DUST_THRESHOLD
 
+        # Skip if kickable
+        if is_kickable:
+            continue
+
         # Return if not active and not kickable
-        if not is_active and not is_kickable:
-            return auction
+        return auction
 
     # Otherwise, create a new auction
     new_auction: IAuction = IAuction(extcall AUCTION_FACTORY.createNewAuction(BORROW_TOKEN.address))
