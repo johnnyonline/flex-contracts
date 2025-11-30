@@ -26,8 +26,8 @@ contract LiquidationHandlerTests is Base {
         assertEq(liquidationHandler.AUCTION_FACTORY(), auctionFactory, "E6");
         assertEq(liquidationHandler.BORROW_TOKEN(), address(borrowToken), "E7");
         assertEq(liquidationHandler.COLLATERAL_TOKEN(), address(collateralToken), "E8");
-        assertEq(liquidationHandler.DUST_THRESHOLD(), liqHandlerDustThreshold, "E9");
-        assertEq(liquidationHandler.MAX_AUCTION_AMOUNT(), liqHandlerMaxAuctionAmount, "E10");
+        assertEq(liquidationHandler.DUST_THRESHOLD(), dustThreshold, "E9");
+        assertEq(liquidationHandler.MAX_AUCTION_AMOUNT(), maxAuctionAmount, "E10");
         assertEq(liquidationHandler.STARTING_PRICE_BUFFER_PERCENTAGE(), 115 * 1e16, "E11");
         assertEq(liquidationHandler.EMERGENCY_STARTING_PRICE_BUFFER_PERCENTAGE(), 200 * 1e16, "E12");
         assertEq(liquidationHandler.MINIMUM_PRICE_BUFFER_PERCENTAGE(), 95 * 1e16, "E13");

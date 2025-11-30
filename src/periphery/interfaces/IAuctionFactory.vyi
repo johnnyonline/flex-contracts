@@ -1,0 +1,12 @@
+# @version 0.4.1
+
+
+@external
+def createNewAuction(
+    want: address,
+    receiver: address,
+    governance: address,
+    startingPrice: uint256,
+    salt: bytes32
+) -> address:
+    ...

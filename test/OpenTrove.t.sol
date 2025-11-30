@@ -472,7 +472,7 @@ contract OpenTroveTests is Base {
             0, // lower_hint
             DEFAULT_ANNUAL_INTEREST_RATE, // annual_interest_rate
             type(uint256).max, // max_upfront_fee
-            1, // route_index
+            2, // route_index
             0 // min_debt_out
         );
         vm.stopPrank();
@@ -490,7 +490,7 @@ contract OpenTroveTests is Base {
             0, // lower_hint
             DEFAULT_ANNUAL_INTEREST_RATE, // annual_interest_rate
             type(uint256).max, // max_upfront_fee
-            1, // route_index
+            2, // route_index
             0 // min_debt_out
         );
 
@@ -746,6 +746,251 @@ contract OpenTroveTests is Base {
             type(uint256).max // min_debt_out
         );
         vm.stopPrank();
+    }
+
+    // 1. lend
+    // 2. 1st borrower borrows all
+    // 3. 2nd borrower borrows and redeems 1st borrower using dutch route (non-atomic)
+    function test_openTrove_usingDutchRoute(
+        uint256 _amount
+    ) public {
+        _amount = bound(_amount, troveManager.MIN_DEBT() * 10, maxFuzzAmount);
+
+        // Lend some from lender
+        mintAndDepositIntoLender(userLender, _amount);
+
+        // Calculate how much collateral is needed for the borrow amount
+        uint256 _collateralNeeded = _amount * DEFAULT_TARGET_COLLATERAL_RATIO / priceOracle.price();
+
+        // Borrow all available liquidity from another borrower
+        uint256 _troveIdAnotherBorrower = mintAndOpenTrove(anotherUserBorrower, _collateralNeeded, _amount, DEFAULT_ANNUAL_INTEREST_RATE);
+
+        // Make sure there's no liquidity left in the lender
+        assertEq(borrowToken.balanceOf(address(lender)), 0, "E0");
+
+        // Calculate expected debt (borrow amount + upfront fee)
+        uint256 _expectedDebt = _amount + troveManager.get_upfront_fee(_amount, DEFAULT_ANNUAL_INTEREST_RATE);
+        uint256 _expectedCollateralAfterRedemption = _collateralNeeded - (_expectedDebt * 1e18 / priceOracle.price());
+
+        // Second amount is slightly more than the first amount, just enough to cover the upfront fee
+        uint256 _secondAmount = _amount + troveManager.get_upfront_fee(_amount, DEFAULT_ANNUAL_INTEREST_RATE);
+        uint256 _secondCollateralNeeded = _secondAmount * DEFAULT_TARGET_COLLATERAL_RATIO / priceOracle.price();
+        uint256 _secondExpectedDebt = _secondAmount + troveManager.get_upfront_fee(_secondAmount, DEFAULT_ANNUAL_INTEREST_RATE);
+
+        // Accept ownership of dutch route
+        vm.prank(management);
+        dutchExchangeRoute.accept_ownership();
+
+        // Airdrop some collateral to borrower
+        airdrop(address(collateralToken), userBorrower, _secondCollateralNeeded);
+
+        // Cache userBorrower balance before open trove
+        uint256 _userBorrowerBalanceBefore = borrowToken.balanceOf(userBorrower);
+
+        // Open a trove and redeem from the other borrower using dutch route (route_index=1)
+        vm.startPrank(userBorrower);
+        collateralToken.approve(address(troveManager), _secondCollateralNeeded);
+        uint256 _troveId = troveManager.open_trove(
+            block.timestamp, // owner_index
+            _secondCollateralNeeded, // collateral_amount
+            _secondAmount, // debt_amount
+            0, // upper_hint
+            0, // lower_hint
+            DEFAULT_ANNUAL_INTEREST_RATE, // annual_interest_rate
+            type(uint256).max, // max_upfront_fee
+            1, // route_index (dutch route)
+            0 // min_debt_out (non-atomic, so 0 is expected)
+        );
+        vm.stopPrank();
+
+        // userBorrower should NOT have received borrow tokens yet (dutch auction is non-atomic)
+        assertEq(borrowToken.balanceOf(userBorrower), _userBorrowerBalanceBefore, "E1");
+
+        // Check an auction was created
+        address _auction = dutchExchangeRoute.auctions(0);
+        assertTrue(_auction != address(0), "E2");
+
+        // Auction should be active
+        assertTrue(IAuction(_auction).isActive(address(collateralToken)), "E3");
+
+        // Check collateral is in auction
+        uint256 _auctionAvailable = IAuction(_auction).available(address(collateralToken));
+        assertGt(_auctionAvailable, 0, "E4");
+
+        // Check starting price is set correctly (with 15% buffer)
+        uint256 _expectedStartingPrice =
+            _auctionAvailable * priceOracle.price() / 1e18 * dutchExchangeRoute.STARTING_PRICE_BUFFER_PERCENTAGE() / 1e18 / 1e18;
+        assertEq(IAuction(_auction).startingPrice(), _expectedStartingPrice, "E5");
+
+        // Check minimum price is set correctly (with -5% buffer)
+        uint256 _expectedMinimumPrice = priceOracle.price() * dutchExchangeRoute.MINIMUM_PRICE_BUFFER_PERCENTAGE() / 1e18;
+        assertEq(IAuction(_auction).minimumPrice(), _expectedMinimumPrice, "E6");
+
+        // Check trove info of anotherUserBorrower (should be zombie)
+        ITroveManager.Trove memory _trove = troveManager.troves(_troveIdAnotherBorrower);
+        assertEq(_trove.debt, 0, "E7");
+        assertEq(_trove.collateral, _expectedCollateralAfterRedemption, "E8");
+        assertEq(uint256(_trove.status), uint256(ITroveManager.Status.zombie), "E9");
+
+        // Check trove info of userBorrower
+        _trove = troveManager.troves(_troveId);
+        assertEq(_trove.debt, _secondExpectedDebt, "E10");
+        assertEq(_trove.collateral, _secondCollateralNeeded, "E11");
+        assertEq(_trove.owner, userBorrower, "E12");
+        assertEq(uint256(_trove.status), uint256(ITroveManager.Status.active), "E13");
+
+        // Take the auction
+        uint256 _amountNeeded = IAuction(_auction).getAmountNeeded(address(collateralToken));
+        airdrop(address(borrowToken), liquidator, _amountNeeded);
+        vm.startPrank(liquidator);
+        borrowToken.approve(_auction, _amountNeeded);
+        IAuction(_auction).take(address(collateralToken));
+        vm.stopPrank();
+
+        // Auction should be empty now
+        assertEq(IAuction(_auction).available(address(collateralToken)), 0, "E14");
+        assertFalse(IAuction(_auction).isActive(address(collateralToken)), "E15");
+
+        // userBorrower should have received the borrow tokens (receiver is msg.sender in trove_manager)
+        assertEq(borrowToken.balanceOf(userBorrower), _userBorrowerBalanceBefore + _amountNeeded, "E16");
+
+        // Check exchange handler is empty
+        assertEq(borrowToken.balanceOf(address(exchangeHandler)), 0, "E17");
+        assertEq(collateralToken.balanceOf(address(exchangeHandler)), 0, "E18");
+
+        // Check dutch route is empty
+        assertEq(borrowToken.balanceOf(address(dutchExchangeRoute)), 0, "E19");
+        assertEq(collateralToken.balanceOf(address(dutchExchangeRoute)), 0, "E20");
+    }
+
+    // Test that dutch route creates multiple auctions when multiple borrowers redeem concurrently
+    function test_openTrove_usingDutchRoute_multipleAuctions(
+        uint256 _amount
+    ) public {
+        _amount = bound(_amount, troveManager.MIN_DEBT() * 10, maxFuzzAmount);
+
+        // Lend some from lender
+        mintAndDepositIntoLender(userLender, _amount);
+
+        // Calculate how much collateral is needed for the borrow amount
+        uint256 _collateralNeeded = _amount * DEFAULT_TARGET_COLLATERAL_RATIO / priceOracle.price();
+
+        // Borrow all available liquidity from first victim
+        uint256 _troveIdVictim1 = mintAndOpenTrove(anotherUserBorrower, _collateralNeeded, _amount, DEFAULT_ANNUAL_INTEREST_RATE);
+
+        // Make sure there's no liquidity left in the lender
+        assertEq(borrowToken.balanceOf(address(lender)), 0, "E0");
+
+        // Accept ownership of dutch route
+        vm.prank(management);
+        dutchExchangeRoute.accept_ownership();
+
+        // Calculate victim's debt
+        uint256 _victimDebt = _amount + troveManager.get_upfront_fee(_amount, DEFAULT_ANNUAL_INTEREST_RATE);
+
+        // First redeemer opens trove - redeems victim completely
+        uint256 _firstAmount = _victimDebt;
+        uint256 _firstCollateralNeeded = _firstAmount * DEFAULT_TARGET_COLLATERAL_RATIO / priceOracle.price();
+        airdrop(address(collateralToken), userBorrower, _firstCollateralNeeded);
+
+        vm.startPrank(userBorrower);
+        collateralToken.approve(address(troveManager), _firstCollateralNeeded);
+        uint256 _troveId1 = troveManager.open_trove(
+            block.timestamp, // owner_index
+            _firstCollateralNeeded, // collateral_amount
+            _firstAmount, // debt_amount
+            0, // upper_hint
+            0, // lower_hint
+            DEFAULT_ANNUAL_INTEREST_RATE, // annual_interest_rate
+            type(uint256).max, // max_upfront_fee
+            1, // route_index (dutch route)
+            0 // min_debt_out
+        );
+        vm.stopPrank();
+
+        // First auction should be created
+        address _auction0 = dutchExchangeRoute.auctions(0);
+        assertTrue(IAuction(_auction0).isActive(address(collateralToken)), "E1");
+
+        // First victim should be zombie now
+        ITroveManager.Trove memory _trove = troveManager.troves(_troveIdVictim1);
+        assertEq(uint256(_trove.status), uint256(ITroveManager.Status.zombie), "E2");
+
+        // Create a third borrower address (will be second victim)
+        address _thirdBorrower = address(999);
+
+        // Second victim borrows (first redeemer's trove becomes victim)
+        // But first redeemer hasn't received tokens yet, so they can't be victim
+        // Instead, let's have second redeemer redeem first redeemer
+        uint256 _firstExpectedDebt = _firstAmount + troveManager.get_upfront_fee(_firstAmount, DEFAULT_ANNUAL_INTEREST_RATE);
+        uint256 _secondAmount = _firstExpectedDebt;
+        uint256 _secondCollateralNeeded = _secondAmount * DEFAULT_TARGET_COLLATERAL_RATIO / priceOracle.price();
+        airdrop(address(collateralToken), _thirdBorrower, _secondCollateralNeeded);
+
+        vm.startPrank(_thirdBorrower);
+        collateralToken.approve(address(troveManager), _secondCollateralNeeded);
+        uint256 _troveId2 = troveManager.open_trove(
+            block.timestamp + 1, // owner_index (different to avoid collision)
+            _secondCollateralNeeded, // collateral_amount
+            _secondAmount, // debt_amount
+            0, // upper_hint
+            0, // lower_hint
+            DEFAULT_ANNUAL_INTEREST_RATE, // annual_interest_rate
+            type(uint256).max, // max_upfront_fee
+            1, // route_index (dutch route)
+            0 // min_debt_out
+        );
+        vm.stopPrank();
+
+        // Second auction should be created (different from first) since first is still active
+        address _auction1 = dutchExchangeRoute.auctions(1);
+        assertTrue(IAuction(_auction1).isActive(address(collateralToken)), "E3");
+        assertNotEq(_auction0, _auction1, "E4");
+
+        // Both borrowers should not have received tokens yet
+        assertEq(borrowToken.balanceOf(userBorrower), 0, "E5");
+        assertEq(borrowToken.balanceOf(_thirdBorrower), 0, "E6");
+
+        // Take both auctions
+        uint256 _amountNeeded0 = IAuction(_auction0).getAmountNeeded(address(collateralToken));
+        airdrop(address(borrowToken), liquidator, _amountNeeded0);
+        vm.startPrank(liquidator);
+        borrowToken.approve(_auction0, _amountNeeded0);
+        IAuction(_auction0).take(address(collateralToken));
+        vm.stopPrank();
+
+        uint256 _amountNeeded1 = IAuction(_auction1).getAmountNeeded(address(collateralToken));
+        airdrop(address(borrowToken), liquidator, _amountNeeded1);
+        vm.startPrank(liquidator);
+        borrowToken.approve(_auction1, _amountNeeded1);
+        IAuction(_auction1).take(address(collateralToken));
+        vm.stopPrank();
+
+        // Now borrowers should have received their tokens
+        assertEq(borrowToken.balanceOf(userBorrower), _amountNeeded0, "E7");
+        assertEq(borrowToken.balanceOf(_thirdBorrower), _amountNeeded1, "E8");
+
+        // Both auctions should be empty
+        assertFalse(IAuction(_auction0).isActive(address(collateralToken)), "E9");
+        assertFalse(IAuction(_auction1).isActive(address(collateralToken)), "E10");
+
+        // Check exchange handler is empty
+        assertEq(borrowToken.balanceOf(address(exchangeHandler)), 0, "E11");
+        assertEq(collateralToken.balanceOf(address(exchangeHandler)), 0, "E12");
+
+        // Check dutch route is empty
+        assertEq(borrowToken.balanceOf(address(dutchExchangeRoute)), 0, "E13");
+        assertEq(collateralToken.balanceOf(address(dutchExchangeRoute)), 0, "E14");
+
+        // Check second new trove is active (second redeemer redeemed first redeemer)
+        _trove = troveManager.troves(_troveId2);
+        assertEq(_trove.owner, _thirdBorrower, "E15");
+        assertEq(uint256(_trove.status), uint256(ITroveManager.Status.active), "E16");
+
+        // First redeemer's trove should be zombie (redeemed by second redeemer)
+        _trove = troveManager.troves(_troveId1);
+        assertEq(_trove.owner, userBorrower, "E17");
+        assertEq(uint256(_trove.status), uint256(ITroveManager.Status.zombie), "E18");
     }
 
 }

@@ -3,6 +3,7 @@ pragma solidity 0.8.23;
 
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/ERC20.sol";
 
+import {IDutchExchangeRoute} from "./interfaces/IDutchExchangeRoute.sol";
 import {IExchangeHandler} from "./interfaces/IExchangeHandler.sol";
 import {IExchangeRoute} from "./interfaces/IExchangeRoute.sol";
 import {ILiquidationHandler} from "./interfaces/ILiquidationHandler.sol";
@@ -35,6 +36,7 @@ contract Deploy is Script {
     IPriceOracle public priceOracle;
     ILiquidationHandler public liquidationHandler;
     IExchangeRoute public exchangeRoute;
+    IDutchExchangeRoute public dutchExchangeRoute;
     IExchangeHandler public exchangeHandler;
     ISortedTroves public sortedTroves;
     ITroveManager public troveManager;
@@ -42,8 +44,9 @@ contract Deploy is Script {
     ILender public lender;
 
     uint256 public minimumCollateralRatio = 110 * 1e16; // 110%
-    uint256 public liqHandlerDustThreshold = 1e14; // 0.0001 tBTC
-    uint256 public liqHandlerMaxAuctionAmount = 20e18; // 20 tBTC
+    uint256 public dustThreshold = 1e14; // 0.0001 tBTC
+    uint256 public maxAuctionAmount = 20e18; // 20 tBTC
+    uint256 public minAuctionAmount = 1e16; // 0.01 tBTC
 
     address public management = address(420_420);
     address public emergencyAdmin = address(69_420);
@@ -69,8 +72,8 @@ contract Deploy is Script {
         vm.startBroadcast(_pk);
 
         uint256 _nonce = vm.getNonce(deployer);
-        address _lenderAddress = computeCreateAddress(deployer, _nonce + 6);
-        address _troveManagerAddress = computeCreateAddress(deployer, _nonce + 5);
+        address _lenderAddress = computeCreateAddress(deployer, _nonce + 7);
+        address _troveManagerAddress = computeCreateAddress(deployer, _nonce + 6);
 
         priceOracle = IPriceOracle(deployCode("tbtc_yb_oracle"));
         liquidationHandler = ILiquidationHandler(
@@ -84,13 +87,29 @@ contract Deploy is Script {
                     address(auctionFactory),
                     address(borrowToken),
                     address(collateralToken),
-                    liqHandlerDustThreshold,
-                    liqHandlerMaxAuctionAmount
+                    dustThreshold,
+                    maxAuctionAmount
                 )
             )
         );
         exchangeRoute = IExchangeRoute(deployCode("tbtc_yb_route"));
         exchangeHandler = IExchangeHandler(deployCode("exchange_handler", abi.encode(deployer, address(borrowToken), address(collateralToken))));
+        dutchExchangeRoute = IDutchExchangeRoute(
+            deployCode(
+                "dutch_route",
+                abi.encode(
+                    deployer,
+                    address(exchangeHandler),
+                    address(priceOracle),
+                    auctionFactory,
+                    address(borrowToken),
+                    address(collateralToken),
+                    dustThreshold,
+                    maxAuctionAmount,
+                    minAuctionAmount
+                )
+            )
+        );
         sortedTroves = ISortedTroves(deployCode("sorted_troves", abi.encode(_troveManagerAddress)));
         troveManager = ITroveManager(
             deployCode(
@@ -117,6 +136,9 @@ contract Deploy is Script {
 
         // Set up the liquidation handler and transfer ownership to management
         setupLiquidationHandler();
+
+        // Set up the dutch route and transfer ownership to management
+        setupDutchRoute();
 
         if (isTest) {
             vm.label({account: address(priceOracle), newLabel: "PriceOracle"});
@@ -155,12 +177,18 @@ contract Deploy is Script {
 
     function setupExchangeRoute() public {
         exchangeHandler.add_route(address(exchangeRoute));
+        exchangeHandler.add_route(address(dutchExchangeRoute));
         exchangeHandler.transfer_ownership(management);
     }
 
     function setupLiquidationHandler() public {
         liquidationHandler.set_keeper(keeper);
         liquidationHandler.transfer_ownership(management);
+    }
+
+    function setupDutchRoute() public {
+        dutchExchangeRoute.set_keeper(keeper);
+        dutchExchangeRoute.transfer_ownership(management);
     }
 
 }

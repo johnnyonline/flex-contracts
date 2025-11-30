@@ -15,10 +15,11 @@ contract ExchangeHandlerTests is Base {
     function test_setup() public {
         assertEq(exchangeHandler.owner(), management, "E0");
         assertEq(exchangeHandler.pending_owner(), address(0), "E1");
-        assertEq(exchangeHandler.route_index(), 1, "E2");
+        assertEq(exchangeHandler.route_index(), 2, "E2");
         assertNotEq(exchangeHandler.routes(0), address(0), "E3");
-        assertEq(exchangeHandler.BORROW_TOKEN(), address(borrowToken), "E4");
-        assertEq(exchangeHandler.COLLATERAL_TOKEN(), address(collateralToken), "E5");
+        assertNotEq(exchangeHandler.routes(1), address(0), "E4");
+        assertEq(exchangeHandler.BORROW_TOKEN(), address(borrowToken), "E5");
+        assertEq(exchangeHandler.COLLATERAL_TOKEN(), address(collateralToken), "E6");
     }
 
     function test_swap(
@@ -57,7 +58,7 @@ contract ExchangeHandlerTests is Base {
         address _receiver
     ) public {
         _amount = bound(_amount, minFuzzAmount, maxFuzzAmount);
-        vm.assume(_invalidIndex > 0);
+        vm.assume(_invalidIndex > 1);
 
         vm.expectRevert("!route");
         exchangeHandler.swap(_amount, _invalidIndex, _receiver);
@@ -110,8 +111,8 @@ contract ExchangeHandlerTests is Base {
         vm.prank(management);
         exchangeHandler.add_route(_newRoute);
 
-        assertEq(exchangeHandler.routes(1), _newRoute, "E0");
-        assertEq(exchangeHandler.route_index(), 2, "E1");
+        assertEq(exchangeHandler.routes(2), _newRoute, "E0");
+        assertEq(exchangeHandler.route_index(), 3, "E1");
     }
 
     function test_addRoute_invalidCaller(

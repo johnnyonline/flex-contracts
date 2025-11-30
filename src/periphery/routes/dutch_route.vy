@@ -1,7 +1,7 @@
 # @version 0.4.1
 
 """
-@title Exchange Route using the Yearn Dutch Auction
+@title Exchange Route using Yearn Dutch Auctions
 @license MIT
 @author Flex
 @notice Can dump anything
@@ -13,8 +13,8 @@ from .. import ownable_2step as ownable
 
 from ...interfaces import IAuction
 from ...interfaces import IPriceOracle
-from ...interfaces import IAuctionFactory
 
+from ..interfaces import IAuctionFactory
 from ..interfaces import IExchangeRoute
 
 
@@ -61,9 +61,9 @@ STARTING_PRICE_BUFFER_PERCENTAGE: public(constant(uint256)) = _WAD + 15 * 10 ** 
 EMERGENCY_STARTING_PRICE_BUFFER_PERCENTAGE: public(constant(uint256)) = _WAD + 100 * 10 ** 16  # 100%
 MINIMUM_PRICE_BUFFER_PERCENTAGE: public(constant(uint256)) = _WAD - 5 * 10 ** 16  # 5%
 MAX_GAS_PRICE_TO_TRIGGER: public(constant(uint256)) = 50 * 10 ** 9  # 50 gwei
+MAX_AUCTIONS: public(constant(uint256)) = 20
 
 _WAD: constant(uint256) = 10 ** 18
-_MAX_AUCTIONS: constant(uint256) = 20
 
 
 # ============================================================================================
@@ -75,7 +75,7 @@ _MAX_AUCTIONS: constant(uint256) = 20
 keeper: public(address)
 
 # List of auctions
-auctions: public(DynArray[IAuction, _MAX_AUCTIONS])
+auctions: public(DynArray[IAuction, MAX_AUCTIONS])
 
 
 # ============================================================================================
@@ -129,7 +129,7 @@ def __init__(
 
 @external
 @view
-def kick_trigger() -> DynArray[IAuction, _MAX_AUCTIONS]:
+def kick_trigger() -> DynArray[IAuction, MAX_AUCTIONS]:
     """
     @notice Loops through all auctions to see if any needs to be kicked
     @dev This is a view function for external systems
@@ -137,10 +137,10 @@ def kick_trigger() -> DynArray[IAuction, _MAX_AUCTIONS]:
     @return List of auctions that needs to be kicked
     """
     # List of auctions to kick
-    auctions_to_kick: DynArray[IAuction, _MAX_AUCTIONS] = []
+    auctions_to_kick: DynArray[IAuction, MAX_AUCTIONS] = []
 
     # If gas price too high, return empty list
-    if block.basefee <= MAX_GAS_PRICE_TO_TRIGGER:
+    if block.basefee > MAX_GAS_PRICE_TO_TRIGGER:
         return auctions_to_kick
 
     # Loop through auctions
@@ -161,7 +161,7 @@ def kick_trigger() -> DynArray[IAuction, _MAX_AUCTIONS]:
 
 
 @external
-def kick(auctions: DynArray[IAuction, _MAX_AUCTIONS]):
+def kick(auctions: DynArray[IAuction, MAX_AUCTIONS]):
     """
     @notice Kicks the provided auctions
     @dev Only callable by the keeper
@@ -172,7 +172,7 @@ def kick(auctions: DynArray[IAuction, _MAX_AUCTIONS]):
     # Make sure the caller is the keeper
     assert msg.sender == self.keeper, "!keeper"
 
-    # Loop through auctions and kick them
+    # Loop through provided auctions and kick them
     for auction: IAuction in auctions:
         self._kick(auction, EMERGENCY_STARTING_PRICE_BUFFER_PERCENTAGE)
 
@@ -207,7 +207,8 @@ def execute(amount: uint256, receiver: address) -> uint256:
     @notice Execute the swap from collateral token to borrow token
     @dev Only callable by the `exchange_handler` contract
     @dev Caller should transfer `amount` of collateral tokens to this contract before calling
-    @dev This function will kick an auction with up to `MAX_AUCTION_AMOUNT` of collateral tokens
+    @dev Kicks an auction with up to `MAX_AUCTION_AMOUNT` of collateral tokens
+    @dev Can't kick less than `MIN_AUCTION_AMOUNT` of collateral tokens
     @param amount Amount of collateral tokens to swap
     @param receiver Address to receive the borrow tokens
     @return Amount Always `0` as the swap is not atomic
@@ -304,10 +305,17 @@ def _get_available_auction() -> IAuction:
          In that case, the inactive auction should be kicked again and so it's still used by someone
     @return An available auction
     """
+    # Bring auctions into memory
+    auctions: DynArray[IAuction, MAX_AUCTIONS] = self.auctions
+
+    # Make sure we don't exceed max auctions
+    assert len(auctions) < MAX_AUCTIONS, "max_auctions"
+
     # Check existing auctions first
-    for auction: IAuction in self.auctions:
+    for auction: IAuction in auctions:
         # Check if there's an active auction
         # We consider an auction "active" if it tries to sell more than dust
+        # NOTE: an auction could be partially taken and left with a small amount below dust
         is_active: bool = staticcall auction.available(COLLATERAL_TOKEN.address) > DUST_THRESHOLD
 
         # Skip if active
@@ -325,10 +333,16 @@ def _get_available_auction() -> IAuction:
         return auction
 
     # Otherwise, create a new auction
-    new_auction: IAuction = IAuction(extcall AUCTION_FACTORY.createNewAuction(BORROW_TOKEN.address))
+    new_auction: IAuction = IAuction(extcall AUCTION_FACTORY.createNewAuction(
+        BORROW_TOKEN.address,  # want
+        self,  # receiver
+        self,  # governance
+        1_000_000,  # startingPrice
+        keccak256(convert(len(auctions), bytes32))  # salt
+    ))
     extcall new_auction.enable(COLLATERAL_TOKEN.address)
 
     # Add new auction to the list
-    self.auctions.append(new_auction)  # @todo -- what happens when we exceed _MAX_AUCTIONS?
+    self.auctions.append(new_auction)
 
     return new_auction
