@@ -5,7 +5,7 @@ description = "A fixed-rate lending market inspired by Liquity V2"
 readme = "README.md"
 requires-python = ">=3.10"
 dependencies = [
-    "vyper==0.4.1",
+    "vyper==0.4.3",
     "mamushi==0.0.8"
 ]
 

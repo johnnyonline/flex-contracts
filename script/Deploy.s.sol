@@ -8,6 +8,7 @@ import {IExchangeHandler} from "./interfaces/IExchangeHandler.sol";
 import {IExchangeRoute} from "./interfaces/IExchangeRoute.sol";
 import {ILiquidationHandler} from "./interfaces/ILiquidationHandler.sol";
 import {IPriceOracle} from "./interfaces/IPriceOracle.sol";
+import {IRedemptionHandler} from "./interfaces/IRedemptionHandler.sol";
 import {ISortedTroves} from "./interfaces/ISortedTroves.sol";
 import {ITroveManager} from "./interfaces/ITroveManager.sol";
 
@@ -38,6 +39,7 @@ contract Deploy is Script {
     IExchangeRoute public exchangeRoute;
     IDutchExchangeRoute public dutchExchangeRoute;
     IExchangeHandler public exchangeHandler;
+    IRedemptionHandler public redemptionHandler;
     ISortedTroves public sortedTroves;
     ITroveManager public troveManager;
 
@@ -72,8 +74,8 @@ contract Deploy is Script {
         vm.startBroadcast(_pk);
 
         uint256 _nonce = vm.getNonce(deployer);
-        address _lenderAddress = computeCreateAddress(deployer, _nonce + 7);
-        address _troveManagerAddress = computeCreateAddress(deployer, _nonce + 6);
+        address _lenderAddress = computeCreateAddress(deployer, _nonce + 5);
+        address _troveManagerAddress = computeCreateAddress(deployer, _nonce + 4);
 
         priceOracle = IPriceOracle(deployCode("tbtc_yb_oracle"));
         liquidationHandler = ILiquidationHandler(
@@ -92,14 +94,14 @@ contract Deploy is Script {
                 )
             )
         );
-        exchangeRoute = IExchangeRoute(deployCode("tbtc_yb_route"));
-        exchangeHandler = IExchangeHandler(deployCode("exchange_handler", abi.encode(deployer, address(borrowToken), address(collateralToken))));
-        dutchExchangeRoute = IDutchExchangeRoute(
+        // exchangeRoute = IExchangeRoute(deployCode("tbtc_yb_route"));
+        // exchangeHandler = IExchangeHandler(deployCode("exchange_handler", abi.encode(deployer, address(borrowToken), address(collateralToken))));
+        redemptionHandler = IRedemptionHandler(
             deployCode(
-                "dutch_route",
+                "RedemptionHandler",
                 abi.encode(
                     deployer,
-                    address(exchangeHandler),
+                    _troveManagerAddress,
                     address(priceOracle),
                     auctionFactory,
                     address(borrowToken),
@@ -110,14 +112,30 @@ contract Deploy is Script {
                 )
             )
         );
-        sortedTroves = ISortedTroves(deployCode("sorted_troves", abi.encode(_troveManagerAddress)));
+        // dutchExchangeRoute = IDutchExchangeRoute(
+        //     deployCode(
+        //         "dutch_route",
+        //         abi.encode(
+        //             deployer,
+        //             address(exchangeHandler),
+        //             address(priceOracle),
+        //             auctionFactory,
+        //             address(borrowToken),
+        //             address(collateralToken),
+        //             dustThreshold,
+        //             maxAuctionAmount,
+        //             minAuctionAmount
+        //         )
+        //     )
+        // );
+        sortedTroves = ISortedTroves(deployCode("SortedTroves", abi.encode(_troveManagerAddress)));
         troveManager = ITroveManager(
             deployCode(
-                "trove_manager",
+                "TroveManager",
                 abi.encode(
                     _lenderAddress,
                     address(liquidationHandler),
-                    address(exchangeHandler),
+                    address(redemptionHandler),
                     address(priceOracle),
                     address(sortedTroves),
                     address(borrowToken),
@@ -131,20 +149,21 @@ contract Deploy is Script {
         lender = deployLender(isTest);
         require(address(lender) == _lenderAddress, "!lenderAddress");
 
-        // Set up the exchange route and transfer ownership to management
-        setupExchangeRoute();
+        // // Set up the exchange route and transfer ownership to management
+        // setupExchangeRoute();
 
         // Set up the liquidation handler and transfer ownership to management
         setupLiquidationHandler();
 
-        // Set up the dutch route and transfer ownership to management
-        setupDutchRoute();
+        // // Set up the dutch route and transfer ownership to management
+        // setupDutchRoute();
 
         if (isTest) {
             vm.label({account: address(priceOracle), newLabel: "PriceOracle"});
             vm.label({account: address(liquidationHandler), newLabel: "LiquidationHandler"});
             vm.label({account: address(exchangeRoute), newLabel: "ExchangeRoute"});
             vm.label({account: address(exchangeHandler), newLabel: "ExchangeHandler"});
+            vm.label({account: address(redemptionHandler), newLabel: "RedemptionHandler"});
             vm.label({account: address(sortedTroves), newLabel: "SortedTroves"});
             vm.label({account: address(troveManager), newLabel: "TroveManager"});
             vm.label({account: address(lender), newLabel: "Lender"});
@@ -154,6 +173,7 @@ contract Deploy is Script {
             console.log("Liquidation Handler: ", address(liquidationHandler));
             console.log("Exchange Route: ", address(exchangeRoute));
             console.log("Exchange Handler: ", address(exchangeHandler));
+            console.log("Redemption Handler: ", address(redemptionHandler));
             console.log("Sorted Troves: ", address(sortedTroves));
             console.log("Trove Manager: ", address(troveManager));
             console.log("Lender: ", address(lender));

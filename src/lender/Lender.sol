@@ -19,24 +19,6 @@ contract Lender is BaseHooks {
     /// @param depositLimit The new deposit limit
     event DepositLimitSet(uint256 depositLimit);
 
-    /// @notice Emitted when a user sets their exchange route index
-    /// @param user The address of the user
-    /// @param index The index of the exchange route set
-    event ExchangeRouteIndexSet(address indexed user, uint256 indexed index);
-
-    // ============================================================================================
-    // Structs
-    // ============================================================================================
-
-    /// @notice Per-withdrawal context used when freeing funds
-    /// @dev Populated in `_preWithdrawHook` and cleared in `_postWithdrawHook`
-    ///      Used by `_freeFunds()` and the trove_manager to know which exchange route
-    ///      and potentially receiver to use for the current withdrawal
-    struct WithdrawContext {
-        uint32 routeIndex;
-        address receiver;
-    }
-
     // ============================================================================================
     // Constants
     // ============================================================================================
@@ -48,19 +30,12 @@ contract Lender is BaseHooks {
     // Storage
     // ============================================================================================
 
+    /// @notice The receiver of auction proceeds
+    address private _auctionProceedsReceiver;
+
     /// @notice The strategy deposit limit
     /// @dev Initialized to `type(uint256).max` (no limit) in constructor
     uint256 public depositLimit;
-
-    /// @notice Holds per-withdrawal settings (exchange route + receiver)
-    /// @dev Set in `_preWithdrawHook` and deleted in `_postWithdrawHook`
-    ///      Used by `_freeFunds()` (and downstream trove_manager and exchange) to know
-    ///      which exchange route to use and potentially where redeemed tokens should be sent
-    WithdrawContext public withdrawContext;
-
-    /// @notice Mapping of exchange route indices for a lender
-    /// @dev Used to indicate which exchange route to use when redeeming collateral
-    mapping(address => uint32) public exchangeRouteIndices; // lender --> index
 
     // ============================================================================================
     // Constructor
@@ -109,46 +84,20 @@ contract Lender is BaseHooks {
     }
 
     // ============================================================================================
-    // External mutative functions
-    // ============================================================================================
-
-    /// @notice Set the exchange route index for the caller
-    /// @param _index The index of the exchange route to use
-    function setExchangeRouteIndex(uint32 _index) external {
-        exchangeRouteIndices[msg.sender] = _index;
-        emit ExchangeRouteIndexSet(msg.sender, _index);
-    }
-
-    // ============================================================================================
     // Internal mutative functions
     // ============================================================================================
 
     /// @notice Hook called before the TokenizedStrategy's withdraw/redeem
-    /// @dev Loads the caller's configured exchange route index and receiver
-    ///      into `withdrawContext` so that `_freeFunds()` and the trove_manager
-    ///      know how to process this withdrawal
+    /// @dev Sets the receiver of auction proceeds to the withdraw/redeem receiver
     function _preWithdrawHook(
         uint256 /*_assets*/,
         uint256 /*_shares*/,
         address _receiver,
-        address _owner,
-        uint256 /*_maxLoss*/
-    ) internal override {
-        // Set the route index and receiver for this withdrawal
-        withdrawContext = WithdrawContext({routeIndex: exchangeRouteIndices[_owner], receiver: _receiver});
-    }
-
-    /// @notice Hook called after the TokenizedStrategy's withdraw/redeem
-    /// @dev Clears the temporary `exchangeRouteIndex` variable
-    function _postWithdrawHook(
-        uint256 /*_assets*/,
-        uint256 /*_shares*/,
-        address /*_receiver*/,
         address /*_owner*/,
         uint256 /*_maxLoss*/
     ) internal override {
-        // Reset the withdrawal context
-        delete withdrawContext;
+        // Set the receiver of auction proceeds
+        _auctionProceedsReceiver = _receiver;
     }
 
     /// @inheritdoc BaseStrategy
@@ -158,9 +107,9 @@ contract Lender is BaseHooks {
 
     /// @inheritdoc BaseStrategy
     function _freeFunds(uint256 _amount) internal override {
-        // Try to free `_amount` by selling borrower's collateral through the
-        // currently-selected exchange route (set in `_preWithdrawHook`)
-        TROVE_MANAGER.redeem(_amount, withdrawContext.routeIndex);
+        // Try to free `_amount` by auctioning collateral for borrow tokens
+        // Auction proceeds will be sent to `_auctionProceedsReceiver` which is set in the `_preWithdrawHook`
+        TROVE_MANAGER.redeem(_amount, _auctionProceedsReceiver);
     }
 
     /// @inheritdoc BaseStrategy

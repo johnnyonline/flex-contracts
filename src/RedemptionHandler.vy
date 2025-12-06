@@ -1,21 +1,19 @@
-# @version 0.4.1
+# @version 0.4.3
 
 """
-@title Exchange Route using Yearn Dutch Auctions
+@title Redemption Handler
 @license MIT
 @author Flex
-@notice Can dump anything
+@notice Handles selling collateral tokens to borrow tokens via a Yearn Dutch Auction
 """
 
 from ethereum.ercs import IERC20
 
-from .. import ownable_2step as ownable
+from periphery import ownable_2step as ownable
 
-from ...interfaces import IAuction
-from ...interfaces import IPriceOracle
-
-from ..interfaces import IAuctionFactory
-from ..interfaces import IExchangeRoute
+from interfaces import IAuction
+from interfaces import IPriceOracle
+from interfaces import IAuctionFactory
 
 
 # ============================================================================================
@@ -33,19 +31,11 @@ exports: (
 
 
 # ============================================================================================
-# Interfaces
-# ============================================================================================
-
-
-implements: IExchangeRoute
-
-
-# ============================================================================================
 # Constants
 # ============================================================================================
 
 
-EXCHANGE_HANDLER: public(immutable(address))
+TROVE_MANAGER: public(immutable(address))
 
 PRICE_ORACLE: public(immutable(IPriceOracle))
 AUCTION_FACTORY: public(immutable(IAuctionFactory))
@@ -86,7 +76,7 @@ auctions: public(DynArray[IAuction, MAX_AUCTIONS])
 @deploy
 def __init__(
     owner: address,
-    exchange_handler: address,
+    trove_manager: address,
     price_oracle: address,
     auction_factory: address,
     borrow_token: address,
@@ -98,7 +88,7 @@ def __init__(
     """
     @notice Initialize the contract
     @param owner Address of the initial owner
-    @param exchange_handler Address of the exchange handler contract
+    @param trove_manager Address of the trove manager contract
     @param price_oracle Address of the price oracle contract
     @param auction_factory Address of the auction factory contract
     @param borrow_token Address of the borrow token
@@ -109,7 +99,7 @@ def __init__(
     """
     ownable.__init__(owner)
 
-    EXCHANGE_HANDLER = exchange_handler
+    TROVE_MANAGER = trove_manager
 
     PRICE_ORACLE = IPriceOracle(price_oracle)
     AUCTION_FACTORY = IAuctionFactory(auction_factory)
@@ -127,32 +117,32 @@ def __init__(
 # ============================================================================================
 
 
-@external
-@view
-def kick_trigger() -> DynArray[IAuction, MAX_AUCTIONS]:
-    """
-    @notice Loops through all auctions to see if any needs to be kicked
-    @dev This is a view function for external systems
-    @dev Need to manually kick if auction stopped as a result of price being too low
-    @return List of auctions that needs to be kicked
-    """
-    # List of auctions to kick
-    auctions_to_kick: DynArray[IAuction, MAX_AUCTIONS] = []
+# @external
+# @view
+# def kick_trigger() -> DynArray[IAuction, MAX_AUCTIONS]:
+#     """
+#     @notice Loops through all auctions to see if any needs to be kicked
+#     @dev This is a view function for external systems
+#     @dev Need to manually kick if auction stopped as a result of price being too low
+#     @return List of auctions that needs to be kicked
+#     """
+#     # List of auctions to kick
+#     auctions_to_kick: DynArray[IAuction, MAX_AUCTIONS] = []
 
-    # If gas price too high, return empty list
-    if block.basefee > MAX_GAS_PRICE_TO_TRIGGER:
-        return auctions_to_kick
+#     # If gas price too high, return empty list
+#     if block.basefee > MAX_GAS_PRICE_TO_TRIGGER:
+#         return auctions_to_kick
 
-    # Loop through auctions
-    for auction: IAuction in self.auctions:
-        # Check if there's enough to kick
-        is_kickable: bool = staticcall auction.kickable(COLLATERAL_TOKEN.address) > DUST_THRESHOLD
+#     # Loop through auctions
+#     for auction: IAuction in self.auctions:
+#         # Check if there's enough to kick
+#         is_kickable: bool = staticcall auction.kickable(COLLATERAL_TOKEN.address) > DUST_THRESHOLD
 
-        # If kickable, add to the list
-        if is_kickable:
-            auctions_to_kick.append(auction)
+#         # If kickable, add to the list
+#         if is_kickable:
+#             auctions_to_kick.append(auction)
 
-    return auctions_to_kick
+#     return auctions_to_kick
 
 
 # ============================================================================================
@@ -160,21 +150,21 @@ def kick_trigger() -> DynArray[IAuction, MAX_AUCTIONS]:
 # ============================================================================================
 
 
-@external
-def kick(auctions: DynArray[IAuction, MAX_AUCTIONS]):
-    """
-    @notice Kicks the provided auctions
-    @dev Only callable by the keeper
-    @dev Uses a higher starting price buffer percentage to allow for takers to re-group
-    @dev Does not set the receiver nor transfer collateral as those are already ready in the auction
-    @param auctions List of auctions to kick
-    """
-    # Make sure the caller is the keeper
-    assert msg.sender == self.keeper, "!keeper"
+# @external
+# def kick(auctions: DynArray[IAuction, MAX_AUCTIONS]):
+#     """
+#     @notice Kicks the provided auctions
+#     @dev Only callable by the keeper
+#     @dev Uses a higher starting price buffer percentage to allow for takers to re-group
+#     @dev Does not set the receiver nor transfer collateral as those are already ready in the auction
+#     @param auctions List of auctions to kick
+#     """
+#     # Make sure the caller is the keeper
+#     assert msg.sender == self.keeper, "!keeper"
 
-    # Loop through provided auctions and kick them
-    for auction: IAuction in auctions:
-        self._kick(auction, EMERGENCY_STARTING_PRICE_BUFFER_PERCENTAGE)
+#     # Loop through provided auctions and kick them
+#     for auction: IAuction in auctions:
+#         self._kick(auction, EMERGENCY_STARTING_PRICE_BUFFER_PERCENTAGE)
 
 
 # ============================================================================================
@@ -202,34 +192,34 @@ def set_keeper(new_keeper: address):
 
 
 @external
-def execute(amount: uint256, receiver: address) -> uint256:
+def kick(amount: uint256, receiver: address):
     """
-    @notice Execute the swap from collateral token to borrow token
-    @dev Only callable by the `exchange_handler` contract
+    @notice Kicks an auction with `amount` of collateral tokens to swap for borrow tokens
+    @dev Only callable by the `trove_manager` contract
     @dev Caller should transfer `amount` of collateral tokens to this contract before calling
     @dev Kicks an auction with up to `MAX_AUCTION_AMOUNT` of collateral tokens
     @dev Can't kick less than `MIN_AUCTION_AMOUNT` of collateral tokens
-    @param amount Amount of collateral tokens to swap
+    @param amount Amount of collateral tokens to auction
     @param receiver Address to receive the borrow tokens
-    @return Amount Always `0` as the swap is not atomic
     """
-    # Make sure caller is the exchange handler
-    assert msg.sender == EXCHANGE_HANDLER, "!exchange_handler"
+    # Make sure caller is the trove manager
+    assert msg.sender == TROVE_MANAGER, "!trove_manager"
+
+    # Do nothing on zero amount
+    if amount == 0:
+        return
 
     # Make sure `amount` is not too high
-    assert amount <= MAX_AUCTION_AMOUNT, "!max_auction_amount"
+    assert amount <= MAX_AUCTION_AMOUNT, "!max_auction_amount" # @todo -- do we need this?
 
-    # Make sure `amount` is not too low
-    assert amount >= MIN_AUCTION_AMOUNT, "!min_auction_amount"
+    # # Make sure `amount` is not too low
+    # assert amount >= MIN_AUCTION_AMOUNT, "!min_auction_amount" # @todo -- do we need this? -- check cow! it notifies when amount is too low
 
     # Get an available auction
     auction: IAuction = self._get_available_auction()
 
     # Kick the auction
     self._kick(auction, STARTING_PRICE_BUFFER_PERCENTAGE, amount, receiver)
-
-    # Always return 0 as the swap is not atomic
-    return 0
 
 
 # ============================================================================================
@@ -247,7 +237,7 @@ def _kick(
     """
     @notice Kicks off an auction with starting and minimum prices
     @dev Proceeds are sent from the auction contract directly to the `receiver`
-    @param amount Amount of collateral tokens to swap
+    @param amount Amount of collateral tokens to auction
     @param starting_price_buffer_pct Buffer percentage to apply to the collateral price for the starting price
     @param receiver Address to receive the borrow tokens
     @param auction Auction contract to use
@@ -268,10 +258,10 @@ def _kick(
         extcall auction.settle(COLLATERAL_TOKEN.address)
 
     # Get collateral balance in the auction contract
-    collateral_balance_auction: uint256 = staticcall COLLATERAL_TOKEN.balanceOf(auction.address)
+    auction_balance: uint256 = staticcall COLLATERAL_TOKEN.balanceOf(auction.address)
 
     # Total collateral we have to auction
-    available: uint256 = collateral_balance_auction + amount
+    available: uint256 = auction_balance + amount
 
     # Get the collateral price
     collateral_price: uint256 = staticcall PRICE_ORACLE.price()

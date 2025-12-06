@@ -11,6 +11,12 @@
       "rev": "bd325d56b4c62c9c5c1aff048c37c6bb18ac0290"
     }
   },
+  "lib/snekmate": {
+    "tag": {
+      "name": "v0.1.2",
+      "rev": "908aa9cc14816a3220f450174cfe80249b647b3f"
+    }
+  },
   "lib/tokenized-strategy": {
     "tag": {
       "name": "v3.0.4",

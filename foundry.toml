@@ -1,9 +1,10 @@
 [profile.default]
 src = 'src'
 out = 'out'
-libs = ['lib']
+libs = ['lib', 'lib/snekmate/src']
 solc = "0.8.23"
 evm_version = "cancun"
+skip = ["**/lib/snekmate/**"]
 
 remappings = [
     "@openzeppelin/=lib/openzeppelin-contracts/",

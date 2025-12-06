@@ -77,6 +77,35 @@ abstract contract Base is Deploy, Test {
         }
     }
 
+    function takeAuction(
+        address _auction
+    ) public {
+        // Skip time to reach market price
+        // Calculate the number of steps needed to reach oracle price
+        uint256 _stepDuration = IAuction(_auction).stepDuration();
+        uint256 _targetPrice = priceOracle.price();
+        uint256 _currentPrice = IAuction(_auction).price(address(collateralToken));
+        uint256 _steps = 0;
+
+        // Iterate step-by-step until price reaches target
+        while (_currentPrice > _targetPrice && _steps < 1440) {
+            // Max 1440 steps (1 day at 60s/step)
+            _steps++;
+            _currentPrice = IAuction(_auction).price(address(collateralToken), block.timestamp + _steps * _stepDuration);
+            if (_currentPrice == 0) break; // Price went below minimum
+        }
+
+        // Skip to the found time
+        if (_steps > 0) skip(_steps * _stepDuration);
+
+        uint256 _amountNeeded = IAuction(_auction).getAmountNeeded(address(collateralToken));
+        airdrop(address(borrowToken), liquidator, _amountNeeded);
+        vm.startPrank(liquidator);
+        borrowToken.approve(_auction, _amountNeeded);
+        IAuction(_auction).take(address(collateralToken));
+        vm.stopPrank();
+    }
+
     function depositIntoLender(
         address _user,
         uint256 _amount
@@ -128,9 +157,7 @@ abstract contract Base is Deploy, Test {
             0, // upper_hint
             0, // lower_hint
             _annualInterestRate, // annual_interest_rate
-            type(uint256).max, // max_upfront_fee
-            0, // route_index
-            0 // min_debt_out
+            type(uint256).max // max_upfront_fee
         );
         vm.stopPrank();
     }

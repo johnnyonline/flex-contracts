@@ -6,15 +6,6 @@ import {IStrategy} from "@tokenized-strategy/interfaces/IStrategy.sol";
 interface ILender is IStrategy {
 
     // ============================================================================================
-    // Structs
-    // ============================================================================================
-
-    struct WithdrawContext {
-        uint32 routeIndex;
-        address receiver;
-    }
-
-    // ============================================================================================
     // Constants
     // ============================================================================================
 
@@ -25,10 +16,6 @@ interface ILender is IStrategy {
     // ============================================================================================
 
     function depositLimit() external view returns (uint256);
-    function withdrawContext() external view returns (WithdrawContext memory);
-    function exchangeRouteIndices(
-        address _lender
-    ) external view returns (uint32);
 
     // ============================================================================================
     // Management functions
@@ -36,14 +23,6 @@ interface ILender is IStrategy {
 
     function setDepositLimit(
         uint256 _depositLimit
-    ) external;
-
-    // ============================================================================================
-    // External mutative functions
-    // ============================================================================================
-
-    function setExchangeRouteIndex(
-        uint32 _index
     ) external;
 
 }

@@ -109,9 +109,7 @@ interface ITroveManager {
         uint256 upper_hint,
         uint256 lower_hint,
         uint256 annual_interest_rate,
-        uint256 max_upfront_fee,
-        uint256 route_index,
-        uint256 min_debt_out
+        uint256 max_upfront_fee
     ) external returns (uint256);
 
     // ============================================================================================
