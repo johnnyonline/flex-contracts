@@ -17,7 +17,7 @@
 
 
 # @todo -- here -- review what's been done and continue uncommenting
-# 1. use only dutch_route (remove atomic exchange) // now liquidation_handler/etc/cleanup/redemptionHandler test should be instead of dutchExchangeRoute.t.sol / redemptionHandler <--> liqHandler
+# 1. use only dutch_route (remove atomic exchange) // now liquidation_handler/etc/cleanup/redemptionHandler test, should be instead of dutchExchangeRoute.t.sol / redemptionHandler <--> liqHandler
 # 2. test open_trove with non-18 decimals tokens
 # 3. keep implementing functions (with decimals scaling where necessary)
 
