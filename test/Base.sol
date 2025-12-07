@@ -79,7 +79,7 @@ abstract contract Base is Deploy, Test {
 
     function takeAuction(
         address _auction
-    ) public {
+    ) public returns (uint256) {
         // Skip time to reach market price
         // Calculate the number of steps needed to reach oracle price
         uint256 _stepDuration = IAuction(_auction).stepDuration();
@@ -104,6 +104,9 @@ abstract contract Base is Deploy, Test {
         borrowToken.approve(_auction, _amountNeeded);
         IAuction(_auction).take(address(collateralToken));
         vm.stopPrank();
+
+        // Return the time skipped
+        return _steps * _stepDuration;
     }
 
     function depositIntoLender(

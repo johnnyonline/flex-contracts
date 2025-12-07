@@ -15,7 +15,7 @@ contract RedeemTests is Base {
         vm.assume(_wrongCaller != address(lender));
 
         vm.expectRevert("!lender");
-        troveManager.redeem(0, 0);
+        troveManager.redeem(0, address(0));
     }
 
 }

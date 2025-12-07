@@ -127,9 +127,7 @@ interface ITroveManager {
     function borrow(
         uint256 trove_id,
         uint256 debt_amount,
-        uint256 max_upfront_fee,
-        uint256 route_index,
-        uint256 min_debt_out
+        uint256 max_upfront_fee
     ) external;
     function repay(
         uint256 trove_id,
@@ -168,7 +166,7 @@ interface ITroveManager {
 
     function redeem(
         uint256 amount,
-        uint256 route_index
+        address receiver
     ) external returns (uint256);
 
 }

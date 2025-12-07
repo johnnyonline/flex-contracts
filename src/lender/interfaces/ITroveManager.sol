@@ -5,6 +5,9 @@ interface ITroveManager {
 
     function BORROW_TOKEN() external view returns (address);
     function sync_total_debt() external returns (uint256);
-    function redeem(uint256 amount, address receiver) external;
+    function redeem(
+        uint256 amount,
+        address receiver
+    ) external;
 
 }

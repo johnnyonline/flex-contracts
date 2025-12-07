@@ -60,9 +60,9 @@ contract AddCollateralTests is Base {
         assertEq(troveManager.collateral_balance(), _collateralNeeded, "E21");
         assertEq(troveManager.zombie_trove_id(), 0, "E22");
 
-        // Check exchange is empty
-        assertEq(borrowToken.balanceOf(address(exchangeHandler)), 0, "E23");
-        assertEq(collateralToken.balanceOf(address(exchangeHandler)), 0, "E24");
+        // Check redemption handler is empty
+        assertEq(borrowToken.balanceOf(address(redemptionHandler)), 0, "E23");
+        assertEq(collateralToken.balanceOf(address(redemptionHandler)), 0, "E24");
 
         // Finally add collateral
         airdrop(address(collateralToken), userBorrower, _collateralAmountToAdd);
@@ -104,13 +104,9 @@ contract AddCollateralTests is Base {
         assertEq(troveManager.total_weighted_debt(), _expectedDebt * DEFAULT_ANNUAL_INTEREST_RATE, "E45");
         assertEq(troveManager.collateral_balance(), _collateralNeeded + _collateralAmountToAdd, "E46");
 
-        // Check exchange is empty
-        assertEq(borrowToken.balanceOf(address(exchangeHandler)), 0, "E47");
-        assertEq(collateralToken.balanceOf(address(exchangeHandler)), 0, "E48");
-
-        // Check exchange route is empty
-        assertEq(borrowToken.balanceOf(address(exchangeRoute)), 0, "E49");
-        assertEq(collateralToken.balanceOf(address(exchangeRoute)), 0, "E50");
+        // Check redemption handler is empty
+        assertEq(borrowToken.balanceOf(address(redemptionHandler)), 0, "E47");
+        assertEq(collateralToken.balanceOf(address(redemptionHandler)), 0, "E48");
     }
 
     function test_addCollateral_zeroCollateral(
@@ -176,7 +172,7 @@ contract AddCollateralTests is Base {
         lender.redeem(_amountToPull, userLender, userLender);
 
         // Make sure trove is a zombie trove
-        assertEq(uint256(troveManager.troves(_troveId).status), uint256(ITroveManager.Status.zombie), "E25");
+        assertEq(uint256(troveManager.troves(_troveId).status), uint256(ITroveManager.Status.zombie), "E0");
 
         // Try to add collateral to a non-active trove
         vm.prank(userBorrower);
