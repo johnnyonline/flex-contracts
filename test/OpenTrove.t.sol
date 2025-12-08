@@ -156,7 +156,7 @@ contract OpenTroveTests is Base {
         uint256 _troveId = mintAndOpenTrove(userBorrower, _secondCollateralNeeded, _secondAmount, DEFAULT_ANNUAL_INTEREST_RATE);
 
         // Check an auction was created
-        address _auction = redemptionHandler.auctions(0);
+        address _auction = dutchDesk.auctions(0);
         assertTrue(_auction != address(0), "E1");
 
         // Auction should be active
@@ -169,12 +169,12 @@ contract OpenTroveTests is Base {
         // Check starting price is set correctly (with buffer)
         assertEq(
             IAuction(_auction).startingPrice(),
-            _auctionAvailable * priceOracle.price() / 1e18 * redemptionHandler.STARTING_PRICE_BUFFER_PERCENTAGE() / 1e18 / 1e18,
+            _auctionAvailable * priceOracle.price() / 1e18 * dutchDesk.STARTING_PRICE_BUFFER_PERCENTAGE() / 1e18 / 1e18,
             "E4"
         );
 
         // Check minimum price is set correctly (with buffer)
-        assertEq(IAuction(_auction).minimumPrice(), priceOracle.price() * redemptionHandler.MINIMUM_PRICE_BUFFER_PERCENTAGE() / 1e18, "E5");
+        assertEq(IAuction(_auction).minimumPrice(), priceOracle.price() * dutchDesk.MINIMUM_PRICE_BUFFER_PERCENTAGE() / 1e18, "E5");
 
         // Take the auction
         takeAuction(_auction);
@@ -227,9 +227,9 @@ contract OpenTroveTests is Base {
         assertEq(troveManager.collateral_balance(), _secondCollateralNeeded + _expectedCollateralAfterRedemption, "E38");
         assertEq(troveManager.zombie_trove_id(), 0, "E39");
 
-        // Check redemption handler is empty
-        assertEq(borrowToken.balanceOf(address(redemptionHandler)), 0, "E40");
-        assertEq(collateralToken.balanceOf(address(redemptionHandler)), 0, "E41");
+        // Check dutch desk is empty
+        assertEq(borrowToken.balanceOf(address(dutchDesk)), 0, "E40");
+        assertEq(collateralToken.balanceOf(address(dutchDesk)), 0, "E41");
     }
 
     // 1. lend
@@ -274,35 +274,31 @@ contract OpenTroveTests is Base {
         uint256 _expectedCollateralAfterRedemption = _collateralNeeded - ((_secondAmount - _firstAmount) * 1e18 / priceOracle.price());
 
         // Check an auction was created
-        assertTrue(redemptionHandler.auctions(0) != address(0), "E1");
+        assertTrue(dutchDesk.auctions(0) != address(0), "E1");
 
         // Auction should be active
-        assertTrue(IAuction(redemptionHandler.auctions(0)).isActive(address(collateralToken)), "E2");
+        assertTrue(IAuction(dutchDesk.auctions(0)).isActive(address(collateralToken)), "E2");
 
         // Check collateral is in auction
-        uint256 _auctionAvailable = IAuction(redemptionHandler.auctions(0)).available(address(collateralToken));
+        uint256 _auctionAvailable = IAuction(dutchDesk.auctions(0)).available(address(collateralToken));
         assertGt(_auctionAvailable, 0, "E3");
 
         // Check starting price is set correctly (with buffer)
         assertEq(
-            IAuction(redemptionHandler.auctions(0)).startingPrice(),
-            _auctionAvailable * priceOracle.price() / 1e18 * redemptionHandler.STARTING_PRICE_BUFFER_PERCENTAGE() / 1e18 / 1e18,
+            IAuction(dutchDesk.auctions(0)).startingPrice(),
+            _auctionAvailable * priceOracle.price() / 1e18 * dutchDesk.STARTING_PRICE_BUFFER_PERCENTAGE() / 1e18 / 1e18,
             "E4"
         );
 
         // Check minimum price is set correctly (with buffer)
-        assertEq(
-            IAuction(redemptionHandler.auctions(0)).minimumPrice(),
-            priceOracle.price() * redemptionHandler.MINIMUM_PRICE_BUFFER_PERCENTAGE() / 1e18,
-            "E5"
-        );
+        assertEq(IAuction(dutchDesk.auctions(0)).minimumPrice(), priceOracle.price() * dutchDesk.MINIMUM_PRICE_BUFFER_PERCENTAGE() / 1e18, "E5");
 
         // Take the auction
-        takeAuction(redemptionHandler.auctions(0));
+        takeAuction(dutchDesk.auctions(0));
 
         // Auction should be empty now
-        assertEq(IAuction(redemptionHandler.auctions(0)).available(address(collateralToken)), 0, "E6");
-        assertFalse(IAuction(redemptionHandler.auctions(0)).isActive(address(collateralToken)), "E7");
+        assertEq(IAuction(dutchDesk.auctions(0)).available(address(collateralToken)), 0, "E6");
+        assertFalse(IAuction(dutchDesk.auctions(0)).isActive(address(collateralToken)), "E7");
 
         // Make sure there's no liquidity left in the lender
         assertEq(borrowToken.balanceOf(address(lender)), 0, "E8");
@@ -355,9 +351,9 @@ contract OpenTroveTests is Base {
         assertEq(troveManager.collateral_balance(), _secondCollateralNeeded + _expectedCollateralAfterRedemption, "E39");
         assertEq(troveManager.zombie_trove_id(), 0, "E40");
 
-        // Check redemption handler is empty
-        assertEq(borrowToken.balanceOf(address(redemptionHandler)), 0, "E41");
-        assertEq(collateralToken.balanceOf(address(redemptionHandler)), 0, "E42");
+        // Check dutch desk is empty
+        assertEq(borrowToken.balanceOf(address(dutchDesk)), 0, "E41");
+        assertEq(collateralToken.balanceOf(address(dutchDesk)), 0, "E42");
     }
 
     // 1. lend
@@ -407,35 +403,31 @@ contract OpenTroveTests is Base {
         uint256 _expectedCollateralAfterRedemption = _collateralNeeded - (_secondAmount * 1e18 / priceOracle.price());
 
         // Check an auction was created
-        assertTrue(redemptionHandler.auctions(0) != address(0), "E1");
+        assertTrue(dutchDesk.auctions(0) != address(0), "E1");
 
         // Auction should be active
-        assertTrue(IAuction(redemptionHandler.auctions(0)).isActive(address(collateralToken)), "E2");
+        assertTrue(IAuction(dutchDesk.auctions(0)).isActive(address(collateralToken)), "E2");
 
         // Check collateral is in auction
-        uint256 _auctionAvailable = IAuction(redemptionHandler.auctions(0)).available(address(collateralToken));
+        uint256 _auctionAvailable = IAuction(dutchDesk.auctions(0)).available(address(collateralToken));
         assertGt(_auctionAvailable, 0, "E3");
 
         // Check starting price is set correctly (with buffer)
         assertEq(
-            IAuction(redemptionHandler.auctions(0)).startingPrice(),
-            _auctionAvailable * priceOracle.price() / 1e18 * redemptionHandler.STARTING_PRICE_BUFFER_PERCENTAGE() / 1e18 / 1e18,
+            IAuction(dutchDesk.auctions(0)).startingPrice(),
+            _auctionAvailable * priceOracle.price() / 1e18 * dutchDesk.STARTING_PRICE_BUFFER_PERCENTAGE() / 1e18 / 1e18,
             "E4"
         );
 
         // Check minimum price is set correctly (with buffer)
-        assertEq(
-            IAuction(redemptionHandler.auctions(0)).minimumPrice(),
-            priceOracle.price() * redemptionHandler.MINIMUM_PRICE_BUFFER_PERCENTAGE() / 1e18,
-            "E5"
-        );
+        assertEq(IAuction(dutchDesk.auctions(0)).minimumPrice(), priceOracle.price() * dutchDesk.MINIMUM_PRICE_BUFFER_PERCENTAGE() / 1e18, "E5");
 
         // Take the auction
-        takeAuction(redemptionHandler.auctions(0));
+        takeAuction(dutchDesk.auctions(0));
 
         // Auction should be empty now
-        assertEq(IAuction(redemptionHandler.auctions(0)).available(address(collateralToken)), 0, "E6");
-        assertFalse(IAuction(redemptionHandler.auctions(0)).isActive(address(collateralToken)), "E7");
+        assertEq(IAuction(dutchDesk.auctions(0)).available(address(collateralToken)), 0, "E6");
+        assertFalse(IAuction(dutchDesk.auctions(0)).isActive(address(collateralToken)), "E7");
 
         // Calculate expected debt for the second borrower
         uint256 _secondExpectedDebt = _secondAmount + troveManager.get_upfront_fee(_secondAmount, DEFAULT_ANNUAL_INTEREST_RATE);
@@ -491,9 +483,9 @@ contract OpenTroveTests is Base {
         assertEq(troveManager.collateral_balance(), _secondCollateralNeeded + _expectedCollateralAfterRedemption, "E39");
         assertEq(troveManager.zombie_trove_id(), _troveIdAnotherBorrower, "E40");
 
-        // Check redemption handler is empty
-        assertEq(borrowToken.balanceOf(address(redemptionHandler)), 0, "E41");
-        assertEq(collateralToken.balanceOf(address(redemptionHandler)), 0, "E42");
+        // Check dutch desk is empty
+        assertEq(borrowToken.balanceOf(address(dutchDesk)), 0, "E41");
+        assertEq(collateralToken.balanceOf(address(dutchDesk)), 0, "E42");
     }
 
     function test_openTrove_zeroCollateral() public {
@@ -677,7 +669,7 @@ contract OpenTroveTests is Base {
         uint256 _troveId1 = mintAndOpenTrove(userBorrower, _firstCollateralNeeded, _firstAmount, DEFAULT_ANNUAL_INTEREST_RATE);
 
         // First auction should be created
-        address _auction0 = redemptionHandler.auctions(0);
+        address _auction0 = dutchDesk.auctions(0);
         assertTrue(_auction0 != address(0), "E1");
         assertTrue(IAuction(_auction0).isActive(address(collateralToken)), "E2");
 
@@ -696,7 +688,7 @@ contract OpenTroveTests is Base {
         uint256 _troveId2 = mintAndOpenTrove(_thirdBorrower, _secondCollateralNeeded, _secondAmount, DEFAULT_ANNUAL_INTEREST_RATE);
 
         // Second auction should be created (different from first) since first is still active
-        address _auction1 = redemptionHandler.auctions(1);
+        address _auction1 = dutchDesk.auctions(1);
         assertTrue(_auction1 != address(0), "E4");
         assertTrue(IAuction(_auction1).isActive(address(collateralToken)), "E5");
         assertNotEq(_auction0, _auction1, "E6");
@@ -713,9 +705,9 @@ contract OpenTroveTests is Base {
         assertFalse(IAuction(_auction0).isActive(address(collateralToken)), "E9");
         assertFalse(IAuction(_auction1).isActive(address(collateralToken)), "E10");
 
-        // Check redemption handler is empty
-        assertEq(borrowToken.balanceOf(address(redemptionHandler)), 0, "E11");
-        assertEq(collateralToken.balanceOf(address(redemptionHandler)), 0, "E12");
+        // Check dutch desk is empty
+        assertEq(borrowToken.balanceOf(address(dutchDesk)), 0, "E11");
+        assertEq(collateralToken.balanceOf(address(dutchDesk)), 0, "E12");
 
         // Check second new trove is active (second redeemer redeemed first redeemer)
         _trove = troveManager.troves(_troveId2);

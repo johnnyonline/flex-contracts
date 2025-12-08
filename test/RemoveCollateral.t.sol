@@ -68,9 +68,9 @@ contract RemoveCollateralTests is Base {
         assertEq(troveManager.collateral_balance(), _collateralNeeded, "E21");
         assertEq(troveManager.zombie_trove_id(), 0, "E22");
 
-        // Check redemption handler is empty
-        assertEq(borrowToken.balanceOf(address(redemptionHandler)), 0, "E23");
-        assertEq(collateralToken.balanceOf(address(redemptionHandler)), 0, "E24");
+        // Check dutch desk is empty
+        assertEq(borrowToken.balanceOf(address(dutchDesk)), 0, "E23");
+        assertEq(collateralToken.balanceOf(address(dutchDesk)), 0, "E24");
 
         // Finally remove collateral
         vm.prank(userBorrower);
@@ -110,9 +110,9 @@ contract RemoveCollateralTests is Base {
         assertEq(troveManager.collateral_balance(), _collateralNeeded - _collateralToRemove, "E46");
         assertEq(troveManager.zombie_trove_id(), 0, "E47");
 
-        // Check redemption handler is empty
-        assertEq(borrowToken.balanceOf(address(redemptionHandler)), 0, "E48");
-        assertEq(collateralToken.balanceOf(address(redemptionHandler)), 0, "E49");
+        // Check dutch desk is empty
+        assertEq(borrowToken.balanceOf(address(dutchDesk)), 0, "E48");
+        assertEq(collateralToken.balanceOf(address(dutchDesk)), 0, "E49");
     }
 
     function test_removeCollateral_zeroCollateral(

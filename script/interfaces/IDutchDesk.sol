@@ -1,25 +1,24 @@
 // SPDX-License-Identifier: MIT
 pragma solidity 0.8.23;
 
-interface ILiquidationHandler {
+interface IDutchDesk {
 
     // ============================================================================================
     // Constants
     // ============================================================================================
 
-    function LENDER() external view returns (address);
     function TROVE_MANAGER() external view returns (address);
-    function AUCTION() external view returns (address);
     function PRICE_ORACLE() external view returns (address);
+    function LIQUIDATION_AUCTION() external view returns (address);
     function AUCTION_FACTORY() external view returns (address);
     function BORROW_TOKEN() external view returns (address);
     function COLLATERAL_TOKEN() external view returns (address);
     function DUST_THRESHOLD() external view returns (uint256);
-    function MAX_AUCTION_AMOUNT() external view returns (uint256);
     function STARTING_PRICE_BUFFER_PERCENTAGE() external view returns (uint256);
     function EMERGENCY_STARTING_PRICE_BUFFER_PERCENTAGE() external view returns (uint256);
     function MINIMUM_PRICE_BUFFER_PERCENTAGE() external view returns (uint256);
     function MAX_GAS_PRICE_TO_TRIGGER() external view returns (uint256);
+    function MAX_AUCTIONS() external view returns (uint256);
 
     // ============================================================================================
     // Storage
@@ -27,20 +26,26 @@ interface ILiquidationHandler {
 
     function owner() external view returns (address);
     function pending_owner() external view returns (address);
-    function use_auction() external view returns (bool);
     function keeper() external view returns (address);
+    function auctions(
+        uint256 index
+    ) external view returns (address);
 
     // ============================================================================================
     // View functions
     // ============================================================================================
 
-    function kick_trigger() external view returns (bool);
+    function emergency_kick_trigger(
+        bool is_redemption
+    ) external view returns (address[] memory);
 
     // ============================================================================================
     // Keeper functions
     // ============================================================================================
 
-    function kick() external;
+    function emergency_kick(
+        address[] memory
+    ) external;
 
     // ============================================================================================
     // Owner functions
@@ -50,7 +55,6 @@ interface ILiquidationHandler {
         address new_owner
     ) external;
     function accept_ownership() external;
-    function toggle_use_auction() external;
     function set_keeper(
         address new_keeper
     ) external;
@@ -59,10 +63,10 @@ interface ILiquidationHandler {
     // Mutative functions
     // ============================================================================================
 
-    function process(
-        uint256 collateral_amount,
-        uint256 debt_amount,
-        address liquidator
+    function kick(
+        uint256 amount,
+        address receiver,
+        bool is_redemption
     ) external;
 
 }

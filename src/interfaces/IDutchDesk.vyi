@@ -7,5 +7,5 @@
 
 
 @external
-def process(collateral_amount: uint256, debt_amount: uint256, liquidator: address):
+def kick(amount: uint256, receiver: address = empty(address), is_redemption: bool = False):
     ...

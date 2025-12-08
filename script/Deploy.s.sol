@@ -3,9 +3,8 @@ pragma solidity 0.8.23;
 
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/ERC20.sol";
 
-import {ILiquidationHandler} from "./interfaces/ILiquidationHandler.sol";
+import {IDutchDesk} from "./interfaces/IDutchDesk.sol";
 import {IPriceOracle} from "./interfaces/IPriceOracle.sol";
-import {IRedemptionHandler} from "./interfaces/IRedemptionHandler.sol";
 import {ISortedTroves} from "./interfaces/ISortedTroves.sol";
 import {ITroveManager} from "./interfaces/ITroveManager.sol";
 
@@ -32,8 +31,7 @@ contract Deploy is Script {
     address public deployer;
 
     IPriceOracle public priceOracle;
-    IRedemptionHandler public redemptionHandler;
-    ILiquidationHandler public liquidationHandler;
+    IDutchDesk public dutchDesk;
     ISortedTroves public sortedTroves;
     ITroveManager public troveManager;
 
@@ -68,13 +66,13 @@ contract Deploy is Script {
         vm.startBroadcast(_pk);
 
         uint256 _nonce = vm.getNonce(deployer);
-        address _lenderAddress = computeCreateAddress(deployer, _nonce + 5);
-        address _troveManagerAddress = computeCreateAddress(deployer, _nonce + 4);
+        address _lenderAddress = computeCreateAddress(deployer, _nonce + 4);
+        address _troveManagerAddress = computeCreateAddress(deployer, _nonce + 3);
 
-        priceOracle = IPriceOracle(deployCode("tbtc_yb_oracle"));
-        liquidationHandler = ILiquidationHandler(
+        priceOracle = IPriceOracle(deployCode("tbtc_to_crvusd_oracle"));
+        dutchDesk = IDutchDesk(
             deployCode(
-                "liquidation_handler",
+                "dutch_desk",
                 abi.encode(
                     deployer,
                     _lenderAddress,
@@ -83,35 +81,17 @@ contract Deploy is Script {
                     address(auctionFactory),
                     address(borrowToken),
                     address(collateralToken),
-                    dustThreshold,
-                    maxAuctionAmount
+                    dustThreshold
                 )
             )
         );
-        redemptionHandler = IRedemptionHandler(
-            deployCode(
-                "RedemptionHandler",
-                abi.encode(
-                    deployer,
-                    _troveManagerAddress,
-                    address(priceOracle),
-                    auctionFactory,
-                    address(borrowToken),
-                    address(collateralToken),
-                    dustThreshold,
-                    maxAuctionAmount,
-                    minAuctionAmount
-                )
-            )
-        );
-        sortedTroves = ISortedTroves(deployCode("SortedTroves", abi.encode(_troveManagerAddress)));
+        sortedTroves = ISortedTroves(deployCode("sorted_troves", abi.encode(_troveManagerAddress)));
         troveManager = ITroveManager(
             deployCode(
-                "TroveManager",
+                "trove_manager",
                 abi.encode(
                     _lenderAddress,
-                    address(liquidationHandler),
-                    address(redemptionHandler),
+                    address(dutchDesk),
                     address(priceOracle),
                     address(sortedTroves),
                     address(borrowToken),
@@ -125,21 +105,20 @@ contract Deploy is Script {
         lender = deployLender(isTest);
         require(address(lender) == _lenderAddress, "!lenderAddress");
 
-        // Set up the liquidation handler and transfer ownership to management
-        setupLiquidationHandler();
+        // Set up the Dutch Desk
+        dutchDesk.set_keeper(keeper);
+        dutchDesk.transfer_ownership(management);
 
         if (isTest) {
             vm.label({account: address(priceOracle), newLabel: "PriceOracle"});
-            vm.label({account: address(redemptionHandler), newLabel: "RedemptionHandler"});
-            vm.label({account: address(liquidationHandler), newLabel: "LiquidationHandler"});
+            vm.label({account: address(dutchDesk), newLabel: "DutchDesk"});
             vm.label({account: address(sortedTroves), newLabel: "SortedTroves"});
             vm.label({account: address(troveManager), newLabel: "TroveManager"});
             vm.label({account: address(lender), newLabel: "Lender"});
         } else {
             console.log("---------------------------------");
             console.log("Price Oracle: ", address(priceOracle));
-            console.log("Redemption Handler: ", address(redemptionHandler));
-            console.log("Liquidation Handler: ", address(liquidationHandler));
+            console.log("Dutch Desk: ", address(dutchDesk));
             console.log("Sorted Troves: ", address(sortedTroves));
             console.log("Trove Manager: ", address(troveManager));
             console.log("Lender: ", address(lender));
@@ -159,11 +138,6 @@ contract Deploy is Script {
             _lender.setPendingManagement(management);
             _lender.setEmergencyAdmin(emergencyAdmin);
         }
-    }
-
-    function setupLiquidationHandler() public {
-        liquidationHandler.set_keeper(keeper);
-        liquidationHandler.transfer_ownership(management);
     }
 
 }

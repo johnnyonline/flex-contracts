@@ -61,9 +61,9 @@ contract CloseTroveTests is Base {
         assertEq(troveManager.collateral_balance(), _collateralNeeded, "E21");
         assertEq(troveManager.zombie_trove_id(), 0, "E22");
 
-        // Check redemption handler is empty
-        assertEq(borrowToken.balanceOf(address(redemptionHandler)), 0, "E23");
-        assertEq(collateralToken.balanceOf(address(redemptionHandler)), 0, "E24");
+        // Check dutch desk is empty
+        assertEq(borrowToken.balanceOf(address(dutchDesk)), 0, "E23");
+        assertEq(collateralToken.balanceOf(address(dutchDesk)), 0, "E24");
 
         // Airdrop the the expected debt to the borrower
         airdrop(address(borrowToken), userBorrower, _expectedDebt);
@@ -107,9 +107,9 @@ contract CloseTroveTests is Base {
         assertEq(troveManager.collateral_balance(), 0, "E45");
         assertEq(troveManager.zombie_trove_id(), 0, "E46");
 
-        // Check redemption handler is empty
-        assertEq(borrowToken.balanceOf(address(redemptionHandler)), 0, "E47");
-        assertEq(collateralToken.balanceOf(address(redemptionHandler)), 0, "E48");
+        // Check dutch desk is empty
+        assertEq(borrowToken.balanceOf(address(dutchDesk)), 0, "E47");
+        assertEq(collateralToken.balanceOf(address(dutchDesk)), 0, "E48");
     }
 
     function test_closeTrove_notOwner(

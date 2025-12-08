@@ -60,9 +60,9 @@ contract AddCollateralTests is Base {
         assertEq(troveManager.collateral_balance(), _collateralNeeded, "E21");
         assertEq(troveManager.zombie_trove_id(), 0, "E22");
 
-        // Check redemption handler is empty
-        assertEq(borrowToken.balanceOf(address(redemptionHandler)), 0, "E23");
-        assertEq(collateralToken.balanceOf(address(redemptionHandler)), 0, "E24");
+        // Check dutch desk is empty
+        assertEq(borrowToken.balanceOf(address(dutchDesk)), 0, "E23");
+        assertEq(collateralToken.balanceOf(address(dutchDesk)), 0, "E24");
 
         // Finally add collateral
         airdrop(address(collateralToken), userBorrower, _collateralAmountToAdd);
@@ -104,9 +104,9 @@ contract AddCollateralTests is Base {
         assertEq(troveManager.total_weighted_debt(), _expectedDebt * DEFAULT_ANNUAL_INTEREST_RATE, "E45");
         assertEq(troveManager.collateral_balance(), _collateralNeeded + _collateralAmountToAdd, "E46");
 
-        // Check redemption handler is empty
-        assertEq(borrowToken.balanceOf(address(redemptionHandler)), 0, "E47");
-        assertEq(collateralToken.balanceOf(address(redemptionHandler)), 0, "E48");
+        // Check dutch desk is empty
+        assertEq(borrowToken.balanceOf(address(dutchDesk)), 0, "E47");
+        assertEq(collateralToken.balanceOf(address(dutchDesk)), 0, "E48");
     }
 
     function test_addCollateral_zeroCollateral(

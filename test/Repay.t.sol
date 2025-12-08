@@ -63,9 +63,9 @@ contract RepayTests is Base {
         assertEq(troveManager.collateral_balance(), _collateralNeeded, "E21");
         assertEq(troveManager.zombie_trove_id(), 0, "E22");
 
-        // Check redemption handler is empty
-        assertEq(borrowToken.balanceOf(address(redemptionHandler)), 0, "E23");
-        assertEq(collateralToken.balanceOf(address(redemptionHandler)), 0, "E24");
+        // Check dutch desk is empty
+        assertEq(borrowToken.balanceOf(address(dutchDesk)), 0, "E23");
+        assertEq(collateralToken.balanceOf(address(dutchDesk)), 0, "E24");
 
         // Finally repay the trove back down to min debt
         vm.startPrank(userBorrower);
@@ -108,9 +108,9 @@ contract RepayTests is Base {
         assertEq(troveManager.collateral_balance(), _collateralNeeded, "E47");
         assertEq(troveManager.zombie_trove_id(), 0, "E48");
 
-        // Check redemption handler is empty
-        assertEq(borrowToken.balanceOf(address(redemptionHandler)), 0, "E49");
-        assertEq(collateralToken.balanceOf(address(redemptionHandler)), 0, "E50");
+        // Check dutch desk is empty
+        assertEq(borrowToken.balanceOf(address(dutchDesk)), 0, "E49");
+        assertEq(collateralToken.balanceOf(address(dutchDesk)), 0, "E50");
     }
 
     function test_repay_zeroAmount(

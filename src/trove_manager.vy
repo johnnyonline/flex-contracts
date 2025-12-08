@@ -8,24 +8,18 @@
         accrues interest, maintains aggregate debt accounting, and coordinates redemptions with the Lender
         and sorted_troves contracts
 """
-# @todo -- prepare USDC/yvWETH-1 and USDC/yvcrvUSD-2 for mainnet deployment (zappers/tests...) (maybe dont use a wrapper...)
 # @todo -- test make sure sorted_troves callers are correct
-# @todo -- add `assert` to `default_return_value` e.g. assert extcall _ASSET.transfer(receiver, assets, default_return_value=True), "erc4626: transfer operation did not succeed"
-# @todo -- camallCase contract names
-# @todo -- use self.name = concat(_name, " LLYFI")?
 # @todo -- lowercap all revert messages
 
 
-# @todo -- here -- review what's been done and continue uncommenting
-# 1. use only dutch_route (remove atomic exchange) // now liquidation_handler/etc/cleanup/redemptionHandler test, should be instead of dutchExchangeRoute.t.sol / redemptionHandler <--> liqHandler
-# 2. test open_trove with non-18 decimals tokens
-# 3. keep implementing functions (with decimals scaling where necessary)
+# @todo -- here
+# 1. test open_trove with non-18 decimals tokens
+# 2. keep implementing functions (with decimals scaling where necessary)
 
 from ethereum.ercs import IERC20
 from ethereum.ercs import IERC20Detailed
 
-from interfaces import ILiquidationHandler
-from interfaces import IRedemptionHandler
+from interfaces import IDutchDesk
 from interfaces import IPriceOracle
 from interfaces import ISortedTroves
 
@@ -139,8 +133,7 @@ struct Trove:
 
 LENDER: public(immutable(address))
 
-LIQUIDATION_HANDLER: public(immutable(ILiquidationHandler))
-REDEMPTION_HANDLER: public(immutable(IRedemptionHandler))
+DUTCH_DESK: public(immutable(IDutchDesk))
 PRICE_ORACLE: public(immutable(IPriceOracle))
 SORTED_TROVES: public(immutable(ISortedTroves))
 
@@ -149,10 +142,10 @@ COLLATERAL_TOKEN: public(immutable(IERC20))
 
 MINIMUM_COLLATERAL_RATIO: public(immutable(uint256))  # e.g., `110 * _ONE_PCT` for 110%
 
-MIN_DEBT: public(constant(uint256)) = 500 * 10 ** 18
+MIN_DEBT: public(constant(uint256)) = 500 * 10 ** 18 # @todo -- test what number makes sense from gas perspective
 MIN_ANNUAL_INTEREST_RATE: public(constant(uint256)) = _ONE_PCT // 2  # 0.5%
 MAX_ANNUAL_INTEREST_RATE: public(constant(uint256)) = 250 * _ONE_PCT  # 250%
-UPFRONT_INTEREST_PERIOD: public(constant(uint256)) = 7 * 24 * 60 * 60  # 7 days
+UPFRONT_INTEREST_PERIOD: public(constant(uint256)) = 7 * 24 * 60 * 60  # 7 days # @todo -- make 14 days?
 INTEREST_RATE_ADJ_COOLDOWN: public(constant(uint256)) = 7 * 24 * 60 * 60  # 7 days
 
 _COLLATERAL_TOKEN_DECIMALS: immutable(uint256)
@@ -160,9 +153,10 @@ _BORROW_TOKEN_DECIMALS: immutable(uint256)
 
 _WAD: constant(uint256) = 10 ** 18
 _ONE_PCT: constant(uint256) = _WAD // 100
-_MAX_ITERATIONS: constant(uint256) = 1000
-_MAX_LIQUIDATION_BATCH_SIZE: constant(uint256) = 50
+_MAX_ITERATIONS: constant(uint256) = 1000 # @todo -- test what number makes sense from gas perspective
+_MAX_LIQUIDATION_BATCH_SIZE: constant(uint256) = 50 # @todo -- test what number makes sense from gas perspective
 _ONE_YEAR: constant(uint256) = 365 * 60 * 60 * 24
+_REDEMPTION_AUCTION: constant(bool) = True
 
 
 # ============================================================================================
@@ -198,8 +192,7 @@ troves: public(HashMap[uint256, Trove])
 @deploy
 def __init__(
     lender: address,
-    liquidation_handler: address,
-    redemption_handler: address,
+    dutch_desk: address,
     price_oracle: address,
     sorted_troves: address,
     borrow_token: address,
@@ -207,8 +200,7 @@ def __init__(
     minimum_collateral_ratio: uint256
 ):
     LENDER = lender
-    LIQUIDATION_HANDLER = ILiquidationHandler(liquidation_handler)
-    REDEMPTION_HANDLER = IRedemptionHandler(redemption_handler)
+    DUTCH_DESK = IDutchDesk(dutch_desk)
     PRICE_ORACLE = IPriceOracle(price_oracle)
     SORTED_TROVES = ISortedTroves(sorted_troves)
     BORROW_TOKEN = IERC20(borrow_token)
@@ -456,7 +448,7 @@ def open_trove(
     )
 
     # Pull the collateral tokens from caller
-    extcall COLLATERAL_TOKEN.transferFrom(msg.sender, self, collateral_amount, default_return_value=True)
+    assert extcall COLLATERAL_TOKEN.transferFrom(msg.sender, self, collateral_amount, default_return_value=True)
 
     # Deliver borrow tokens to the caller, redeem if liquidity is insufficient
     self._transfer_borrow_tokens(debt_amount)
@@ -509,7 +501,7 @@ def add_collateral(trove_id: uint256, collateral_amount: uint256):
     self.collateral_balance += collateral_amount
 
     # Pull the collateral tokens from caller
-    extcall COLLATERAL_TOKEN.transferFrom(msg.sender, self, collateral_amount, default_return_value=True)
+    assert extcall COLLATERAL_TOKEN.transferFrom(msg.sender, self, collateral_amount, default_return_value=True)
 
     # Emit event
     log AddCollateral(
@@ -562,7 +554,7 @@ def remove_collateral(trove_id: uint256, collateral_amount: uint256):
     self.collateral_balance -= collateral_amount
 
     # Transfer the collateral tokens to caller
-    extcall COLLATERAL_TOKEN.transfer(msg.sender, collateral_amount, default_return_value=True)
+    assert extcall COLLATERAL_TOKEN.transfer(msg.sender, collateral_amount, default_return_value=True)
 
     # Emit event
     log RemoveCollateral(
@@ -702,7 +694,7 @@ def repay(trove_id: uint256, debt_amount: uint256):
     )
 
     # Pull the borrow tokens from caller and transfer them to the lender
-    extcall BORROW_TOKEN.transferFrom(msg.sender, LENDER, debt_to_repay, default_return_value=True)
+    assert extcall BORROW_TOKEN.transferFrom(msg.sender, LENDER, debt_to_repay, default_return_value=True)
 
     # Emit event
     log Repay(
@@ -859,10 +851,10 @@ def close_trove(trove_id: uint256):
     extcall SORTED_TROVES.remove(trove_id)
 
     # Pull the borrow tokens from caller and transfer them to the lender
-    extcall BORROW_TOKEN.transferFrom(msg.sender, LENDER, trove_debt_after_interest, default_return_value=True)
+    assert extcall BORROW_TOKEN.transferFrom(msg.sender, LENDER, trove_debt_after_interest, default_return_value=True)
 
     # Transfer the collateral tokens to caller
-    extcall COLLATERAL_TOKEN.transfer(msg.sender, old_trove.collateral, default_return_value=True)
+    assert extcall COLLATERAL_TOKEN.transfer(msg.sender, old_trove.collateral, default_return_value=True)
 
     # Emit event
     log CloseTrove(
@@ -922,10 +914,10 @@ def close_zombie_trove(trove_id: uint256):
         )
 
         # Pull the borrow tokens from caller and transfer them to the lender
-        extcall BORROW_TOKEN.transferFrom(msg.sender, LENDER, trove_debt_after_interest, default_return_value=True)
+        assert extcall BORROW_TOKEN.transferFrom(msg.sender, LENDER, trove_debt_after_interest, default_return_value=True)
 
     # Transfer the collateral tokens to caller
-    extcall COLLATERAL_TOKEN.transfer(msg.sender, old_trove.collateral, default_return_value=True)
+    assert extcall COLLATERAL_TOKEN.transfer(msg.sender, old_trove.collateral, default_return_value=True)
 
     # Emit event
     log CloseZombieTrove(
@@ -945,7 +937,7 @@ def close_zombie_trove(trove_id: uint256):
 def liquidate_troves(trove_ids: uint256[_MAX_LIQUIDATION_BATCH_SIZE]):
     """
     @notice Liquidate a list of unhealthy Troves
-    @dev Uses the `liquidation_handler` contract to sell the collateral tokens
+    @dev Uses the `dutch_desk` contract to auction off the collateral tokens
     @param trove_ids List of unique identifiers of the unhealthy Troves
     """
     # Make sure that first trove id is non-zero
@@ -995,11 +987,11 @@ def liquidate_troves(trove_ids: uint256[_MAX_LIQUIDATION_BATCH_SIZE]):
         total_weighted_debt_to_decrease, # weighted_debt_decrease
     )
 
-    # Transfer collateral tokens to the liquidation handler for selling. Proceeds will be sent to the lender
-    extcall COLLATERAL_TOKEN.transfer(LIQUIDATION_HANDLER.address, total_collateral_to_decrease, default_return_value=True)
+    # Transfer collateral tokens to the dutch desk for selling
+    assert extcall COLLATERAL_TOKEN.transfer(DUTCH_DESK.address, total_collateral_to_decrease, default_return_value=True)
 
-    # Notify the liquidation handler of the liquidation. It will handle selling the collateral and transferring proceeds to the lender
-    extcall LIQUIDATION_HANDLER.process(total_collateral_to_decrease, total_debt_to_decrease, msg.sender)
+    # Kick the auction. Proceeds will be sent to the lender
+    extcall DUTCH_DESK.kick(total_collateral_to_decrease)
 
 
 @internal
@@ -1072,7 +1064,7 @@ def redeem(amount: uint256, receiver: address):
     """
     @notice Attempt to free the specified amount of borrow tokens by selling collateral
     @dev Can only be called by the `lender` contract
-    @dev The collateral is sold using an asynchronous dutch auction via the `RedemptionHandler` contract
+    @dev Uses the `dutch_desk` contract to auction off the redeemed collateral tokens
     @param amount Target amount of borrow tokens to free
     @param receiver Address to transfer the auction proceeds to
     """
@@ -1213,11 +1205,11 @@ def _redeem(amount: uint256, receiver: address = msg.sender):
     # Descale `total_collateral_decrease` to the collateral token decimals if necessary
     descaled_total_collateral_decrease: uint256 = self._scale_from_18_decimals(total_collateral_decrease, _COLLATERAL_TOKEN_DECIMALS)
 
-    # Transfer the collateral tokens to the redemption handler
-    extcall COLLATERAL_TOKEN.transfer(REDEMPTION_HANDLER.address, descaled_total_collateral_decrease, default_return_value=True)
+    # Transfer the collateral tokens to the dutch desk
+    assert extcall COLLATERAL_TOKEN.transfer(DUTCH_DESK.address, descaled_total_collateral_decrease, default_return_value=True)
 
-    # Kick the collateral to borrow tokens auction and transfer proceeds to the caller. Does nothing on zero amount
-    extcall REDEMPTION_HANDLER.kick(descaled_total_collateral_decrease, receiver)
+    # Kick the auction. Proceeds will be sent to the `receiver`
+    extcall DUTCH_DESK.kick(descaled_total_collateral_decrease, receiver, _REDEMPTION_AUCTION)  # Does nothing on zero amount
 
     # Descale `total_debt_decrease` to the borrow token decimals if necessary for the event
     descaled_total_debt_decrease: uint256 = self._scale_from_18_decimals(total_debt_decrease, _BORROW_TOKEN_DECIMALS)
@@ -1403,10 +1395,10 @@ def _transfer_borrow_tokens(amount: uint256):
     if amount > available_liquidity:
         # Transfer whatever we have first
         if available_liquidity > 0:
-            extcall BORROW_TOKEN.transferFrom(LENDER, msg.sender, available_liquidity, default_return_value=True)
+            assert extcall BORROW_TOKEN.transferFrom(LENDER, msg.sender, available_liquidity, default_return_value=True)
 
         # Redeem the difference
         self._redeem(amount - available_liquidity)
     else:
         # Transfer the full amount
-        extcall BORROW_TOKEN.transferFrom(LENDER, msg.sender, amount, default_return_value=True)
+        assert extcall BORROW_TOKEN.transferFrom(LENDER, msg.sender, amount, default_return_value=True)

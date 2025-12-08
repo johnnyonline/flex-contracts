@@ -62,9 +62,9 @@ contract AdjustRateTests is Base {
         assertEq(troveManager.collateral_balance(), _collateralNeeded, "E21");
         assertEq(troveManager.zombie_trove_id(), 0, "E22");
 
-        // Check redemption handler is empty
-        assertEq(borrowToken.balanceOf(address(redemptionHandler)), 0, "E23");
-        assertEq(collateralToken.balanceOf(address(redemptionHandler)), 0, "E24");
+        // Check dutch desk is empty
+        assertEq(borrowToken.balanceOf(address(dutchDesk)), 0, "E23");
+        assertEq(collateralToken.balanceOf(address(dutchDesk)), 0, "E24");
 
         // Skip time to be able to adjust the rate again without upfront fee
         skip(troveManager.INTEREST_RATE_ADJ_COOLDOWN());
@@ -112,9 +112,9 @@ contract AdjustRateTests is Base {
         assertEq(troveManager.collateral_balance(), _collateralNeeded, "E47");
         assertEq(troveManager.zombie_trove_id(), 0, "E48");
 
-        // Check redemption handler is empty
-        assertEq(borrowToken.balanceOf(address(redemptionHandler)), 0, "E49");
-        assertEq(collateralToken.balanceOf(address(redemptionHandler)), 0, "E50");
+        // Check dutch desk is empty
+        assertEq(borrowToken.balanceOf(address(dutchDesk)), 0, "E49");
+        assertEq(collateralToken.balanceOf(address(dutchDesk)), 0, "E50");
     }
 
     // 1. lend
@@ -169,9 +169,9 @@ contract AdjustRateTests is Base {
         assertEq(troveManager.collateral_balance(), _collateralNeeded, "E21");
         assertEq(troveManager.zombie_trove_id(), 0, "E22");
 
-        // Check redemption handler is empty
-        assertEq(borrowToken.balanceOf(address(redemptionHandler)), 0, "E23");
-        assertEq(collateralToken.balanceOf(address(redemptionHandler)), 0, "E24");
+        // Check dutch desk is empty
+        assertEq(borrowToken.balanceOf(address(dutchDesk)), 0, "E23");
+        assertEq(collateralToken.balanceOf(address(dutchDesk)), 0, "E24");
 
         // Skip time but still be within the cooldown period
         skip(troveManager.INTEREST_RATE_ADJ_COOLDOWN() / 2);
@@ -224,9 +224,9 @@ contract AdjustRateTests is Base {
         assertEq(troveManager.collateral_balance(), _collateralNeeded, "E47");
         assertEq(troveManager.zombie_trove_id(), 0, "E48");
 
-        // Check redemption handler is empty
-        assertEq(borrowToken.balanceOf(address(redemptionHandler)), 0, "E49");
-        assertEq(collateralToken.balanceOf(address(redemptionHandler)), 0, "E50");
+        // Check dutch desk is empty
+        assertEq(borrowToken.balanceOf(address(dutchDesk)), 0, "E49");
+        assertEq(collateralToken.balanceOf(address(dutchDesk)), 0, "E50");
     }
 
     // 1. lend
@@ -306,9 +306,9 @@ contract AdjustRateTests is Base {
         assertEq(troveManager.collateral_balance(), _collateralNeeded * 2, "E32");
         assertEq(troveManager.zombie_trove_id(), 0, "E33");
 
-        // Check redemption handler is empty
-        assertEq(borrowToken.balanceOf(address(redemptionHandler)), 0, "E34");
-        assertEq(collateralToken.balanceOf(address(redemptionHandler)), 0, "E35");
+        // Check dutch desk is empty
+        assertEq(borrowToken.balanceOf(address(dutchDesk)), 0, "E34");
+        assertEq(collateralToken.balanceOf(address(dutchDesk)), 0, "E35");
 
         // Skip time to be able to adjust the rate again without upfront fee
         skip(troveManager.INTEREST_RATE_ADJ_COOLDOWN());
@@ -376,9 +376,9 @@ contract AdjustRateTests is Base {
         assertEq(troveManager.collateral_balance(), _collateralNeeded * 2, "E67");
         assertEq(troveManager.zombie_trove_id(), 0, "E68");
 
-        // Check redemption handler is empty
-        assertEq(borrowToken.balanceOf(address(redemptionHandler)), 0, "E69");
-        assertEq(collateralToken.balanceOf(address(redemptionHandler)), 0, "E70");
+        // Check dutch desk is empty
+        assertEq(borrowToken.balanceOf(address(dutchDesk)), 0, "E69");
+        assertEq(collateralToken.balanceOf(address(dutchDesk)), 0, "E70");
     }
 
     function test_adjustRate_rateTooLow(

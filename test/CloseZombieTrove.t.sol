@@ -70,9 +70,9 @@ contract CloseZombieTroveTests is Base {
         assertEq(troveManager.collateral_balance(), _collateralNeeded, "E21");
         assertEq(troveManager.zombie_trove_id(), 0, "E22");
 
-        // Check redemption handler is empty
-        assertEq(borrowToken.balanceOf(address(redemptionHandler)), 0, "E23");
-        assertEq(collateralToken.balanceOf(address(redemptionHandler)), 0, "E24");
+        // Check dutch desk is empty
+        assertEq(borrowToken.balanceOf(address(dutchDesk)), 0, "E23");
+        assertEq(collateralToken.balanceOf(address(dutchDesk)), 0, "E24");
 
         // Pull enough liquidity to make trove a zombie trove (but above 0 debt)
         uint256 _amountToPull = _amount - 100 ether;
@@ -86,7 +86,7 @@ contract CloseZombieTroveTests is Base {
         vm.stopPrank();
 
         // Take the auction
-        uint256 _timeSkipped = takeAuction(redemptionHandler.auctions(0));
+        uint256 _timeSkipped = takeAuction(dutchDesk.auctions(0));
 
         // Do some intermediate checks on lender
         assertEq(borrowToken.balanceOf(address(lender)), 0, "E25");
@@ -144,9 +144,9 @@ contract CloseZombieTroveTests is Base {
         assertEq(troveManager.collateral_balance(), 0, "E51");
         assertEq(troveManager.zombie_trove_id(), 0, "E52");
 
-        // Check redemption handler is empty
-        assertEq(borrowToken.balanceOf(address(redemptionHandler)), 0, "E53");
-        assertEq(collateralToken.balanceOf(address(redemptionHandler)), 0, "E54");
+        // Check dutch desk is empty
+        assertEq(borrowToken.balanceOf(address(dutchDesk)), 0, "E53");
+        assertEq(collateralToken.balanceOf(address(dutchDesk)), 0, "E54");
     }
 
     // // 1. lend
@@ -202,9 +202,9 @@ contract CloseZombieTroveTests is Base {
         assertEq(troveManager.collateral_balance(), _collateralNeeded, "E21");
         assertEq(troveManager.zombie_trove_id(), 0, "E22");
 
-        // Check redemption handler is empty
-        assertEq(borrowToken.balanceOf(address(redemptionHandler)), 0, "E23");
-        assertEq(collateralToken.balanceOf(address(redemptionHandler)), 0, "E24");
+        // Check dutch desk is empty
+        assertEq(borrowToken.balanceOf(address(dutchDesk)), 0, "E23");
+        assertEq(collateralToken.balanceOf(address(dutchDesk)), 0, "E24");
 
         // Expected profit is just the upfront fee
         uint256 _expectedProfit = troveManager.get_upfront_fee(_amount, DEFAULT_ANNUAL_INTEREST_RATE);
@@ -232,7 +232,7 @@ contract CloseZombieTroveTests is Base {
         vm.stopPrank();
 
         // Take the auction
-        takeAuction(redemptionHandler.auctions(0));
+        takeAuction(dutchDesk.auctions(0));
 
         // Make sure lender got his funds
         assertApproxEqRel(borrowToken.balanceOf(address(userLender)), _amountToPull, 3e16, "E27"); // 3%. Slippage
@@ -270,9 +270,9 @@ contract CloseZombieTroveTests is Base {
         assertEq(troveManager.collateral_balance(), _expectedCollateralAfterRedemption, "E48");
         assertEq(troveManager.zombie_trove_id(), 0, "E49");
 
-        // Check redemption handler is empty
-        assertEq(borrowToken.balanceOf(address(redemptionHandler)), 0, "E50");
-        assertEq(collateralToken.balanceOf(address(redemptionHandler)), 0, "E51");
+        // Check dutch desk is empty
+        assertEq(borrowToken.balanceOf(address(dutchDesk)), 0, "E50");
+        assertEq(collateralToken.balanceOf(address(dutchDesk)), 0, "E51");
 
         // Finally close the zombie trove
         vm.prank(userBorrower);
@@ -312,9 +312,9 @@ contract CloseZombieTroveTests is Base {
         assertEq(troveManager.collateral_balance(), 0, "E73");
         assertEq(troveManager.zombie_trove_id(), 0, "E74");
 
-        // Check redemption handler is empty
-        assertEq(borrowToken.balanceOf(address(redemptionHandler)), 0, "E75");
-        assertEq(collateralToken.balanceOf(address(redemptionHandler)), 0, "E76");
+        // Check dutch desk is empty
+        assertEq(borrowToken.balanceOf(address(dutchDesk)), 0, "E75");
+        assertEq(collateralToken.balanceOf(address(dutchDesk)), 0, "E76");
     }
 
     function test_closeZombieTrove_notOwner(

@@ -79,9 +79,9 @@ contract LendTests is Base {
         assertEq(troveManager.collateral_balance(), _collateralNeeded, "E22");
         assertEq(troveManager.zombie_trove_id(), 0, "E23");
 
-        // Check redemption handler is empty
-        assertEq(borrowToken.balanceOf(address(redemptionHandler)), 0, "E24");
-        assertEq(collateralToken.balanceOf(address(redemptionHandler)), 0, "E25");
+        // Check dutch desk is empty
+        assertEq(borrowToken.balanceOf(address(dutchDesk)), 0, "E24");
+        assertEq(collateralToken.balanceOf(address(dutchDesk)), 0, "E25");
 
         // Skip some time, calculate expected interest
         uint256 _daysToSkip = 90 days;
@@ -114,7 +114,7 @@ contract LendTests is Base {
         uint256 _expectedTime = block.timestamp;
 
         // Check an auction was created
-        address _auction = redemptionHandler.auctions(0);
+        address _auction = dutchDesk.auctions(0);
         assertTrue(_auction != address(0), "E29");
         assertTrue(IAuction(_auction).isActive(address(collateralToken)), "E30");
         assertGt(IAuction(_auction).available(address(collateralToken)), 0, "E31");
@@ -163,9 +163,9 @@ contract LendTests is Base {
         assertApproxEqRel(troveManager.collateral_balance(), _expectedCollateralAfterRedemption, 5e15, "E56"); // 0.5%
         assertEq(troveManager.zombie_trove_id(), 0, "E57");
 
-        // Check redemption handler is empty
-        assertEq(borrowToken.balanceOf(address(redemptionHandler)), 0, "E58");
-        assertEq(collateralToken.balanceOf(address(redemptionHandler)), 0, "E59");
+        // Check dutch desk is empty
+        assertEq(borrowToken.balanceOf(address(dutchDesk)), 0, "E58");
+        assertEq(collateralToken.balanceOf(address(dutchDesk)), 0, "E59");
     }
 
     // 1. lend
@@ -228,9 +228,9 @@ contract LendTests is Base {
         assertEq(troveManager.collateral_balance(), _collateralNeeded, "E22");
         assertEq(troveManager.zombie_trove_id(), 0, "E23");
 
-        // Check redemption handler is empty
-        assertEq(borrowToken.balanceOf(address(redemptionHandler)), 0, "E24");
-        assertEq(collateralToken.balanceOf(address(redemptionHandler)), 0, "E25");
+        // Check dutch desk is empty
+        assertEq(borrowToken.balanceOf(address(dutchDesk)), 0, "E24");
+        assertEq(collateralToken.balanceOf(address(dutchDesk)), 0, "E25");
 
         // Skip some time, calculate expected interest
         uint256 _daysToSkip = 90 days;
@@ -255,7 +255,7 @@ contract LendTests is Base {
         uint256 _expectedTime = block.timestamp;
 
         // Check an auction was created
-        address _auction = redemptionHandler.auctions(0);
+        address _auction = dutchDesk.auctions(0);
         assertTrue(_auction != address(0), "E27");
         assertTrue(IAuction(_auction).isActive(address(collateralToken)), "E28");
         assertGt(IAuction(_auction).available(address(collateralToken)), 0, "E29");
@@ -303,9 +303,9 @@ contract LendTests is Base {
         assertApproxEqRel(troveManager.collateral_balance(), _expectedCollateralAfterRedemption, 5e15, "E53"); // 0.5%
         assertEq(troveManager.zombie_trove_id(), _troveId, "E54");
 
-        // Check redemption handler is empty
-        assertEq(borrowToken.balanceOf(address(redemptionHandler)), 0, "E55");
-        assertEq(collateralToken.balanceOf(address(redemptionHandler)), 0, "E56");
+        // Check dutch desk is empty
+        assertEq(borrowToken.balanceOf(address(dutchDesk)), 0, "E55");
+        assertEq(collateralToken.balanceOf(address(dutchDesk)), 0, "E56");
     }
 
     // Test that multiple auctions are created for concurrent redemptions
@@ -329,7 +329,7 @@ contract LendTests is Base {
         vm.prank(userLender);
         lender.redeem(_amount, userLender, userLender);
 
-        address _auction0 = redemptionHandler.auctions(0);
+        address _auction0 = dutchDesk.auctions(0);
         assertTrue(_auction0 != address(0), "E0");
         assertTrue(IAuction(_auction0).isActive(address(collateralToken)), "E1");
 
@@ -337,7 +337,7 @@ contract LendTests is Base {
         vm.prank(anotherUserBorrower);
         lender.redeem(_amount, anotherUserBorrower, anotherUserBorrower);
 
-        address _auction1 = redemptionHandler.auctions(1);
+        address _auction1 = dutchDesk.auctions(1);
         assertTrue(_auction1 != address(0), "E2");
         assertTrue(IAuction(_auction1).isActive(address(collateralToken)), "E3");
         assertNotEq(_auction0, _auction1, "E4");
@@ -350,9 +350,9 @@ contract LendTests is Base {
         assertFalse(IAuction(_auction0).isActive(address(collateralToken)), "E5");
         assertFalse(IAuction(_auction1).isActive(address(collateralToken)), "E6");
 
-        // Check redemption handler is empty
-        assertEq(borrowToken.balanceOf(address(redemptionHandler)), 0, "E7");
-        assertEq(collateralToken.balanceOf(address(redemptionHandler)), 0, "E8");
+        // Check dutch desk is empty
+        assertEq(borrowToken.balanceOf(address(dutchDesk)), 0, "E7");
+        assertEq(collateralToken.balanceOf(address(dutchDesk)), 0, "E8");
     }
 
     function test_setDepositLimit(
