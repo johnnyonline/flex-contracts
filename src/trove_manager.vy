@@ -8,10 +8,6 @@
         accrues interest, maintains aggregate debt accounting, and coordinates redemptions with the Lender
         and sorted_troves contracts
 """
-# @todo -- test make sure sorted_troves callers are correct
-# @todo -- lowercap all revert messages
-
-
 # @todo -- here
 # 1. test open_trove with non-18 decimals tokens
 # 2. keep implementing functions (with decimals scaling where necessary)

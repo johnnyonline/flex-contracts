@@ -227,7 +227,7 @@ def kick(amount: uint256, receiver: address = empty(address), is_redemption: boo
 
 
 @internal
-def _kick( # @todo -- default to liquidation auction
+def _kick(
     auction: IAuction,
     starting_price_buffer_pct: uint256,
     receiver: address = empty(address),

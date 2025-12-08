@@ -205,5 +205,73 @@ contract SortedTrovesTests is Base {
         assertEq(_count, 10, "E8");
     }
 
+    function test_insert_notTroveManager(
+        address _notTroveManager
+    ) public {
+        vm.assume(_notTroveManager != address(troveManager));
+
+        vm.expectRevert("!trove_manager");
+        vm.prank(_notTroveManager);
+        sortedTroves.insert(1, 1e18, 0, 0);
+    }
+
+    function test_insert_troveExists() public {
+        uint256 _collateral = 10 ether;
+        uint256 _debt = 1000 ether;
+
+        mintAndDepositIntoLender(userLender, _debt);
+        uint256 _troveId = mintAndOpenTrove(userBorrower, _collateral, _debt, troveManager.MIN_ANNUAL_INTEREST_RATE());
+
+        vm.expectRevert("exists");
+        vm.prank(address(troveManager));
+        sortedTroves.insert(_troveId, 1e18, 0, 0);
+    }
+
+    function test_insert_invalidId() public {
+        vm.expectRevert("!trove_id");
+        vm.prank(address(troveManager));
+        sortedTroves.insert(0, 1e18, 0, 0);
+    }
+
+    function test_remove_notTroveManager(
+        address _notTroveManager
+    ) public {
+        vm.assume(_notTroveManager != address(troveManager));
+
+        vm.expectRevert("!trove_manager");
+        vm.prank(_notTroveManager);
+        sortedTroves.remove(1);
+    }
+
+    function test_remove_troveDoesNotExist(
+        uint256 _troveId
+    ) public {
+        vm.assume(_troveId != 0);
+
+        vm.expectRevert("!exists");
+        vm.prank(address(troveManager));
+        sortedTroves.remove(_troveId);
+    }
+
+    function test_reInsert_notTroveManager(
+        address _notTroveManager
+    ) public {
+        vm.assume(_notTroveManager != address(troveManager));
+
+        vm.expectRevert("!trove_manager");
+        vm.prank(_notTroveManager);
+        sortedTroves.re_insert(1, 1e18, 0, 0);
+    }
+
+    function test_reInsert_troveDoesNotExist(
+        uint256 _troveId
+    ) public {
+        vm.assume(_troveId != 0);
+
+        vm.expectRevert("!exists");
+        vm.prank(address(troveManager));
+        sortedTroves.re_insert(_troveId, 1e18, 0, 0);
+    }
+
 }
 

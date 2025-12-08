@@ -203,12 +203,19 @@ def insert(trove_id: uint256, annual_interest_rate: uint256, prev_id: uint256, n
     @param prev_id ID of previous Trove for the insert position
     @param next_id ID of next Trove for the insert position
     """
-    assert msg.sender == TROVE_MANAGER.address, "not trove manager"
-    assert not self._contains(trove_id), "trove exists"
-    assert trove_id != _ROOT_NODE_ID, "invalid id"
+    # Make sure caller is the trove manager
+    assert msg.sender == TROVE_MANAGER.address, "!trove_manager"
 
+    # Make sure the trove is not already in the list
+    assert not self._contains(trove_id), "exists"
+
+    # Make sure trove_id is not the ROOT node
+    assert trove_id != _ROOT_NODE_ID, "!trove_id"
+
+    # Insert the node
     self._insert(trove_id, annual_interest_rate, prev_id, next_id)
 
+    # Mark node as existing and increase size
     self._nodes[trove_id].exists = True
     self._size += 1
 
@@ -219,11 +226,16 @@ def remove(trove_id: uint256):
     @notice Remove a Trove from the list
     @param trove_id Trove's ID
     """
-    assert msg.sender == TROVE_MANAGER.address, "not trove manager"
-    assert self._contains(trove_id), "trove does not exist"
+    # Make sure caller is the trove manager
+    assert msg.sender == TROVE_MANAGER.address, "!trove_manager"
 
+    # Make sure the trove is in the list
+    assert self._contains(trove_id), "!exists"
+
+    # Remove the node
     self._remove(trove_id)
 
+    # Delete the node from storage and decrease size
     self._nodes[trove_id] = empty(Node)
     self._size -= 1
 
@@ -237,9 +249,13 @@ def re_insert(trove_id: uint256, new_annual_interest_rate: uint256, prev_id: uin
     @param prev_id ID of previous Trove for the new insert position
     @param next_id ID of next Trove for the new insert position
     """
-    assert msg.sender == TROVE_MANAGER.address, "not trove manager"
-    assert self._contains(trove_id), "trove does not exist"
+    # Make sure caller is the trove manager
+    assert msg.sender == TROVE_MANAGER.address, "!trove_manager"
 
+    # Make sure the trove is in the list
+    assert self._contains(trove_id), "!exists"
+
+    # Re-insert the node at the new position
     self._re_insert(trove_id, new_annual_interest_rate, prev_id, next_id)
 
 
