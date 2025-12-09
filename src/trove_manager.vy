@@ -9,8 +9,10 @@
         and sorted_troves contracts
 """
 # @todo -- here
-# 1. test open_trove with non-18 decimals tokens
-# 2. keep implementing functions (with decimals scaling where necessary)
+# 1. test open_trove with non-18 decimals tokens -- done
+# 2. keep implementing functions (with decimals scaling where necessary) (add_collateral)
+# 3. add is_kickable check to `emergency_kick`
+# 4. test views
 
 from ethereum.ercs import IERC20
 from ethereum.ercs import IERC20Detailed
@@ -147,12 +149,15 @@ INTEREST_RATE_ADJ_COOLDOWN: public(constant(uint256)) = 7 * 24 * 60 * 60  # 7 da
 _COLLATERAL_TOKEN_DECIMALS: immutable(uint256)
 _BORROW_TOKEN_DECIMALS: immutable(uint256)
 
+_BASE_DECIMALS: constant(uint256) = 18
 _WAD: constant(uint256) = 10 ** 18
 _ONE_PCT: constant(uint256) = _WAD // 100
 _MAX_ITERATIONS: constant(uint256) = 1000 # @todo -- test what number makes sense from gas perspective
 _MAX_LIQUIDATION_BATCH_SIZE: constant(uint256) = 50 # @todo -- test what number makes sense from gas perspective
 _ONE_YEAR: constant(uint256) = 365 * 60 * 60 * 24
 _REDEMPTION_AUCTION: constant(bool) = True
+_ROUND_UP: constant(bool) = True
+_DESCALE: constant(bool) = False
 
 
 # ============================================================================================
@@ -218,12 +223,22 @@ def __init__(
 def get_upfront_fee(debt_amount: uint256, annual_interest_rate: uint256) -> uint256:
     """
     @notice Calculate the upfront fee for borrowing a specified amount of debt at a given annual interest rate
+    @dev `debt_amount` is specified in the borrow token's decimals
     @dev The fee represents prepaid interest over `UPFRONT_INTEREST_PERIOD` using the system's average rate after the new debt
     @param debt_amount The amount of debt to be borrowed
     @param annual_interest_rate The annual interest rate for the debt
     @return upfront_fee The calculated upfront fee
     """
-    return self._get_upfront_fee(debt_amount, annual_interest_rate)
+    # Scale `debt_amount` to 18 decimals if necessary
+    scaled_debt_amount: uint256 = self._scale_decimals(debt_amount, _BORROW_TOKEN_DECIMALS)
+
+    # Calculate the upfront fee in 18 decimals
+    upfront_fee: uint256 = self._get_upfront_fee(scaled_debt_amount, annual_interest_rate)
+
+    # Descale the `upfront_fee` back to the borrow token decimals if necessary and round up
+    descaled_upfront_fee: uint256 = self._scale_decimals(upfront_fee, _BORROW_TOKEN_DECIMALS, _DESCALE, _ROUND_UP)
+
+    return descaled_upfront_fee
 
 
 @external
@@ -391,8 +406,8 @@ def open_trove(
     assert self.troves[trove_id].status == empty(Status), "!empty"
 
     # Scale `collateral_amount` and `debt_amount` to 18 decimals if necessary
-    scaled_collateral_amount: uint256 = self._scale_to_18_decimals(collateral_amount, _COLLATERAL_TOKEN_DECIMALS)
-    scaled_debt_amount: uint256 = self._scale_to_18_decimals(debt_amount, _BORROW_TOKEN_DECIMALS)
+    scaled_debt_amount: uint256 = self._scale_decimals(debt_amount, _BORROW_TOKEN_DECIMALS)
+    scaled_collateral_amount: uint256 = self._scale_decimals(collateral_amount, _COLLATERAL_TOKEN_DECIMALS)
 
     # Calculate the upfront fee and make sure the user is ok with it
     upfront_fee: uint256 = self._get_upfront_fee(scaled_debt_amount, annual_interest_rate, max_upfront_fee)
@@ -449,8 +464,8 @@ def open_trove(
     # Deliver borrow tokens to the caller, redeem if liquidity is insufficient
     self._transfer_borrow_tokens(debt_amount)
 
-    # Descale the `upfront_fee` back to the borrow token decimals for event
-    descaled_upfront_fee: uint256 = self._scale_from_18_decimals(upfront_fee, _BORROW_TOKEN_DECIMALS)
+    # Descale the `upfront_fee` back to the borrow token decimals if necessary and round up
+    descaled_upfront_fee: uint256 = self._scale_decimals(upfront_fee, _BORROW_TOKEN_DECIMALS, _DESCALE, _ROUND_UP)
 
     # Emit event
     log OpenTrove(
@@ -1095,10 +1110,9 @@ def _redeem(amount: uint256, receiver: address = msg.sender):
         is_zombie_trove = True
     else:
         trove_to_redeem = staticcall SORTED_TROVES.last()
-    
 
     # Scale the `amount` to 18 decimals if necessary
-    scaled_amount: uint256 = self._scale_to_18_decimals(amount, _BORROW_TOKEN_DECIMALS)
+    scaled_amount: uint256 = self._scale_decimals(amount, _BORROW_TOKEN_DECIMALS)
 
     # Cache the amount of debt we need to free
     remaining_debt_to_free: uint256 = scaled_amount
@@ -1198,8 +1212,8 @@ def _redeem(amount: uint256, receiver: address = msg.sender):
     # Update the contract's recorded collateral balance
     self.collateral_balance -= total_collateral_decrease
 
-    # Descale `total_collateral_decrease` to the collateral token decimals if necessary
-    descaled_total_collateral_decrease: uint256 = self._scale_from_18_decimals(total_collateral_decrease, _COLLATERAL_TOKEN_DECIMALS)
+    # Descale `total_collateral_decrease` to the collateral token decimals if necessary and round down
+    descaled_total_collateral_decrease: uint256 = self._scale_decimals(total_collateral_decrease, _COLLATERAL_TOKEN_DECIMALS, _DESCALE)
 
     # Transfer the collateral tokens to the dutch desk
     assert extcall COLLATERAL_TOKEN.transfer(DUTCH_DESK.address, descaled_total_collateral_decrease, default_return_value=True)
@@ -1207,8 +1221,8 @@ def _redeem(amount: uint256, receiver: address = msg.sender):
     # Kick the auction. Proceeds will be sent to the `receiver`
     extcall DUTCH_DESK.kick(descaled_total_collateral_decrease, receiver, _REDEMPTION_AUCTION)  # Does nothing on zero amount
 
-    # Descale `total_debt_decrease` to the borrow token decimals if necessary for the event
-    descaled_total_debt_decrease: uint256 = self._scale_from_18_decimals(total_debt_decrease, _BORROW_TOKEN_DECIMALS)
+    # Descale `total_debt_decrease` to the borrow token decimals if necessary and round down
+    descaled_total_debt_decrease: uint256 = self._scale_decimals(total_debt_decrease, _BORROW_TOKEN_DECIMALS, _DESCALE)
 
     # Emit event
     log Redeem(
@@ -1225,26 +1239,28 @@ def _redeem(amount: uint256, receiver: address = msg.sender):
 
 @internal
 @pure
-def _scale_to_18_decimals(amount: uint256, decimals: uint256) -> uint256:
+def _scale_decimals(amount: uint256, decimals: uint256, scale_up: bool = True, round_up: bool = False) -> uint256:
     """
-    @notice Scale a value to 18 decimals
+    @notice Scale a value to or from 18 decimals
     @param amount The amount to scale
-    @param decimals The current number of decimals of the value
-    @return scaled_amount The amount scaled to 18 decimals
+    @param decimals The token's native decimals
+    @param scale_up True to scale up to 18 decimals, False to descale from 18
+    @param round_up Whether to round up when descaling (ignored when scaling up)
+    @return The scaled amount
     """
-    return amount * 10 ** (_WAD - decimals) if decimals < 18 else amount # @todo -- this and `_scale_from_18_decimals` should fail with usdc. add `and amount > 0`?
+    if decimals == 18 or amount == 0:
+        return amount
 
+    scaled_amount: uint256 = 0
+    scale_factor: uint256 = 10 ** (_BASE_DECIMALS - decimals)
+    if scale_up:
+        scaled_amount = amount * scale_factor
+    else:
+        scaled_amount = amount // scale_factor
+        if round_up and amount % scale_factor != 0:
+            scaled_amount += 1
 
-@internal
-@pure
-def _scale_from_18_decimals(amount: uint256, decimals: uint256) -> uint256:
-    """
-    @notice Scale a value from 18 decimals to a target number of decimals
-    @param amount The amount to scale
-    @param decimals The target number of decimals
-    @return scaled_amount The amount scaled to the target number of decimals
-    """
-    return amount // 10 ** (_WAD - decimals) if decimals < 18 else amount
+    return scaled_amount
 
 
 @internal

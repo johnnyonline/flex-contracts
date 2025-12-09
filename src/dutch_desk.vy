@@ -8,6 +8,7 @@
 """
 
 from ethereum.ercs import IERC20
+from ethereum.ercs import IERC20Detailed
 
 from periphery import ownable_2step as ownable
 
@@ -45,6 +46,8 @@ BORROW_TOKEN: public(immutable(IERC20))
 COLLATERAL_TOKEN: public(immutable(IERC20))
 
 DUST_THRESHOLD: public(immutable(uint256))
+
+_COLLATERAL_TOKEN_PRECISION: immutable(uint256)
 
 STARTING_PRICE_BUFFER_PERCENTAGE: public(constant(uint256)) = _WAD + 15 * 10 ** 16  # 15%
 EMERGENCY_STARTING_PRICE_BUFFER_PERCENTAGE: public(constant(uint256)) = _WAD + 100 * 10 ** 16  # 100%
@@ -102,6 +105,9 @@ def __init__(
     BORROW_TOKEN = IERC20(borrow_token)
     COLLATERAL_TOKEN = IERC20(collateral_token)
     DUST_THRESHOLD = dust_threshold
+
+    _COLLATERAL_TOKEN_PRECISION = 10 ** convert(staticcall IERC20Detailed(collateral_token).decimals(), uint256)
+    assert _COLLATERAL_TOKEN_PRECISION <= _WAD, "!decimals"
 
     LIQUIDATION_AUCTION = IAuction(extcall AUCTION_FACTORY.createNewAuction(borrow_token))
     extcall LIQUIDATION_AUCTION.enable(collateral_token)
@@ -266,7 +272,7 @@ def _kick(
 
     # Set the starting price with buffer to the collateral price
     # Starting price is an unscaled "lot size"
-    extcall auction.setStartingPrice(available * collateral_price // _WAD * starting_price_buffer_pct // _WAD // _WAD)
+    extcall auction.setStartingPrice(available * collateral_price // _WAD * starting_price_buffer_pct // _WAD // _COLLATERAL_TOKEN_PRECISION)
 
     # Set the minimum price with buffer to the collateral price
     # Minimum price is per token and is scaled to 1e18

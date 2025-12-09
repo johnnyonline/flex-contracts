@@ -38,9 +38,8 @@ contract Deploy is Script {
     ILender public lender;
 
     uint256 public minimumCollateralRatio = 110 * 1e16; // 110%
-    uint256 public dustThreshold = 1e14; // 0.0001 tBTC
-    uint256 public maxAuctionAmount = 20e18; // 20 tBTC
-    uint256 public minAuctionAmount = 1e16; // 0.01 tBTC
+    // uint256 public dustThreshold = 1e14; // 0.0001 tBTC
+    uint256 public dustThreshold = 1e4; // 0.0001 WBTC
 
     address public management = address(420_420);
     address public emergencyAdmin = address(69_420);
@@ -49,8 +48,10 @@ contract Deploy is Script {
 
     address public auctionFactory;
 
-    IERC20 public borrowToken = IERC20(0xf939E0A03FB07F59A73314E73794Be0E57ac1b4E); // crvUSD
-    IERC20 public collateralToken = IERC20(0x18084fbA666a33d37592fA2633fD49a74DD93a88); // tBTC
+    // IERC20 public borrowToken = IERC20(0xf939E0A03FB07F59A73314E73794Be0E57ac1b4E); // crvUSD
+    IERC20 public borrowToken = IERC20(0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48); // USDC
+    // IERC20 public collateralToken = IERC20(0x18084fbA666a33d37592fA2633fD49a74DD93a88); // tBTC
+    IERC20 public collateralToken = IERC20(0x2260FAC5E5542a773Aa44fBCfeDf7C193bc2C599); // WBTC
 
     function run() public {
         uint256 _pk = isTest ? 42_069 : vm.envUint("DEPLOYER_PRIVATE_KEY");
