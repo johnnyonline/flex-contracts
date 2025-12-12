@@ -8,5 +8,5 @@
 
 @external
 @view
-def price() -> uint256:
+def price(scaled: bool = True) -> uint256:
     ...

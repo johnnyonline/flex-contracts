@@ -3,6 +3,14 @@ pragma solidity 0.8.23;
 
 import "./Base.sol";
 
+interface IPriceOracleScaled {
+    function price() external view returns (uint256);
+}
+
+interface IPriceOracleNotScaled {
+    function price(bool _scaled) external view returns (uint256);
+}
+
 contract LiquidateTests is Base {
 
     function setUp() public override {
@@ -21,7 +29,7 @@ contract LiquidateTests is Base {
     // 2. borrow all available liquidity
     // 3. collateral price drops
     // 4. liquidate trove
-    function test_liquidateTrove(
+    function test_liquidateTrove1(
         uint256 _amount
     ) public {
         _amount = bound(_amount, troveManager.MIN_DEBT(), maxFuzzAmount);
@@ -30,7 +38,8 @@ contract LiquidateTests is Base {
         mintAndDepositIntoLender(userLender, _amount);
 
         // Calculate how much collateral is needed for the borrow amount
-        uint256 _collateralNeeded = _amount * DEFAULT_TARGET_COLLATERAL_RATIO / priceOracle.price();
+        uint256 _collateralNeeded =
+            (_amount * DEFAULT_TARGET_COLLATERAL_RATIO / BORROW_TOKEN_PRECISION) * ORACLE_PRICE_SCALE / priceOracle.price();
 
         // Calculate expected debt (borrow amount + upfront fee)
         uint256 _expectedDebt = _amount + troveManager.get_upfront_fee(_amount, DEFAULT_ANNUAL_INTEREST_RATE);
@@ -48,7 +57,12 @@ contract LiquidateTests is Base {
         assertEq(_trove.owner, userBorrower, "E5");
         assertEq(_trove.pending_owner, address(0), "E6");
         assertEq(uint256(_trove.status), uint256(ITroveManager.Status.active), "E7");
-        assertApproxEqRel(_trove.collateral * priceOracle.price() / _trove.debt, DEFAULT_TARGET_COLLATERAL_RATIO, 1e15, "E8"); // 0.1%
+        assertApproxEqRel(
+            (_trove.collateral * priceOracle.price() / ORACLE_PRICE_SCALE) * BORROW_TOKEN_PRECISION / _trove.debt,
+            DEFAULT_TARGET_COLLATERAL_RATIO,
+            1e15,
+            "E8"
+        ); // 0.1%
 
         // Check sorted troves
         assertFalse(sortedTroves.empty(), "E9");
@@ -74,18 +88,21 @@ contract LiquidateTests is Base {
         assertEq(borrowToken.balanceOf(address(dutchDesk)), 0, "E23");
         assertEq(collateralToken.balanceOf(address(dutchDesk)), 0, "E24");
 
-        // CR = collateral * price / debt, so price_at_MCR = MCR * debt / collateral
+        // CR = (collateral * price / ORACLE_PRICE_SCALE) * BORROW_TOKEN_PRECISION / debt
+        // So price_at_MCR = MCR * debt * ORACLE_PRICE_SCALE / (collateral * BORROW_TOKEN_PRECISION)
         // We want to be 1% below MCR
-        uint256 _priceDropToBelowMCR = troveManager.MINIMUM_COLLATERAL_RATIO() * _trove.debt * 99 / 100 / _trove.collateral;
+        uint256 _priceDropToBelowMCR = troveManager.MINIMUM_COLLATERAL_RATIO() * _trove.debt * ORACLE_PRICE_SCALE * 99 / (100 * _trove.collateral * BORROW_TOKEN_PRECISION);
+        uint256 _priceDropToBelowMCR18 = _priceDropToBelowMCR * COLLATERAL_TOKEN_PRECISION * WAD / (ORACLE_PRICE_SCALE * BORROW_TOKEN_PRECISION); // @todo -- here -- fails with crvusd?
 
         // Drop collateral price to put trove below MCR
-        vm.mockCall(address(priceOracle), abi.encodeWithSelector(IPriceOracle.price.selector), abi.encode(_priceDropToBelowMCR));
+        vm.mockCall(address(priceOracle), abi.encodeWithSelector(IPriceOracleScaled.price.selector), abi.encode(_priceDropToBelowMCR));
+        vm.mockCall(address(priceOracle), abi.encodeWithSelector(IPriceOracleNotScaled.price.selector, false), abi.encode(_priceDropToBelowMCR18));
 
         // Make sure price actually dropped
         assertEq(priceOracle.price(), _priceDropToBelowMCR, "E25");
 
         // Calculate Trove's collateral ratio after price drop
-        uint256 _troveCollateralRatioAfter = _trove.collateral * priceOracle.price() / _trove.debt;
+        uint256 _troveCollateralRatioAfter = (_trove.collateral * priceOracle.price() / ORACLE_PRICE_SCALE) * BORROW_TOKEN_PRECISION / _trove.debt;
 
         // Make sure Trove is below MCR
         assertLt(_troveCollateralRatioAfter, troveManager.MINIMUM_COLLATERAL_RATIO(), "E26");
@@ -99,11 +116,9 @@ contract LiquidateTests is Base {
 
         // Check auction starting price and minimum price
         address _liquidationAuction = dutchDesk.LIQUIDATION_AUCTION();
-        // Starting price = available * price / WAD * STARTING_PRICE_BUFFER_PERCENTAGE / WAD / WAD
-        uint256 _expectedStartingPrice = _collateralNeeded * _priceDropToBelowMCR / 1e18 * dutchDesk.STARTING_PRICE_BUFFER_PERCENTAGE() / 1e18 / 1e18;
+        uint256 _expectedStartingPrice = _collateralNeeded * _priceDropToBelowMCR18 / 1e18 * dutchDesk.STARTING_PRICE_BUFFER_PERCENTAGE() / 1e18 / COLLATERAL_TOKEN_PRECISION;
         assertEq(IAuction(_liquidationAuction).startingPrice(), _expectedStartingPrice, "E27");
-        // Minimum price = price * MINIMUM_PRICE_BUFFER_PERCENTAGE / WAD
-        uint256 _expectedMinimumPrice = _priceDropToBelowMCR * dutchDesk.MINIMUM_PRICE_BUFFER_PERCENTAGE() / 1e18;
+        uint256 _expectedMinimumPrice = _priceDropToBelowMCR18 * dutchDesk.MINIMUM_PRICE_BUFFER_PERCENTAGE() / WAD;
         assertEq(IAuction(_liquidationAuction).minimumPrice(), _expectedMinimumPrice, "E28");
 
         // Take the auction
@@ -170,7 +185,8 @@ contract LiquidateTests is Base {
         uint256 _halfAmount = _amount / 2;
 
         // Calculate how much collateral is needed for the borrow amount
-        uint256 _collateralNeeded = _halfAmount * DEFAULT_TARGET_COLLATERAL_RATIO / priceOracle.price();
+        uint256 _collateralNeeded =
+            (_halfAmount * DEFAULT_TARGET_COLLATERAL_RATIO / BORROW_TOKEN_PRECISION) * ORACLE_PRICE_SCALE / priceOracle.price();
 
         // Calculate expected debt (borrow amount + upfront fee)
         uint256 _expectedDebt = _halfAmount + troveManager.get_upfront_fee(_halfAmount, DEFAULT_ANNUAL_INTEREST_RATE);
@@ -188,7 +204,12 @@ contract LiquidateTests is Base {
         assertEq(_trove.owner, userBorrower, "E5");
         assertEq(_trove.pending_owner, address(0), "E6");
         assertEq(uint256(_trove.status), uint256(ITroveManager.Status.active), "E7");
-        assertApproxEqRel(_trove.collateral * priceOracle.price() / _trove.debt, DEFAULT_TARGET_COLLATERAL_RATIO, 1e15, "E8"); // 0.1%
+        assertApproxEqRel(
+            (_trove.collateral * priceOracle.price() / ORACLE_PRICE_SCALE) * BORROW_TOKEN_PRECISION / _trove.debt,
+            DEFAULT_TARGET_COLLATERAL_RATIO,
+            1e15,
+            "E8"
+        ); // 0.1%
 
         // Check sorted troves
         assertFalse(sortedTroves.empty(), "E9");
@@ -227,7 +248,12 @@ contract LiquidateTests is Base {
         assertEq(_trove.owner, anotherUserBorrower, "E30");
         assertEq(_trove.pending_owner, address(0), "E31");
         assertEq(uint256(_trove.status), uint256(ITroveManager.Status.active), "E32");
-        assertApproxEqRel(_trove.collateral * priceOracle.price() / _trove.debt, DEFAULT_TARGET_COLLATERAL_RATIO, 1e15, "E33"); // 0.1%
+        assertApproxEqRel(
+            (_trove.collateral * priceOracle.price() / ORACLE_PRICE_SCALE) * BORROW_TOKEN_PRECISION / _trove.debt,
+            DEFAULT_TARGET_COLLATERAL_RATIO,
+            1e15,
+            "E33"
+        ); // 0.1%
 
         // Check sorted troves
         assertFalse(sortedTroves.empty(), "E34");
@@ -254,18 +280,21 @@ contract LiquidateTests is Base {
         assertEq(borrowToken.balanceOf(address(dutchDesk)), 0, "E49");
         assertEq(collateralToken.balanceOf(address(dutchDesk)), 0, "E50");
 
-        // CR = collateral * price / debt, so price_at_MCR = MCR * debt / collateral
+        // CR = (collateral * price / ORACLE_PRICE_SCALE) * BORROW_TOKEN_PRECISION / debt
+        // So price_at_MCR = MCR * debt * ORACLE_PRICE_SCALE / (collateral * BORROW_TOKEN_PRECISION)
         // We want to be 1% below MCR
-        uint256 _priceDropToBelowMCR = troveManager.MINIMUM_COLLATERAL_RATIO() * _trove.debt * 99 / 100 / _trove.collateral;
+        uint256 _priceDropToBelowMCR = troveManager.MINIMUM_COLLATERAL_RATIO() * _trove.debt * ORACLE_PRICE_SCALE * 99 / (100 * _trove.collateral * BORROW_TOKEN_PRECISION);
+        uint256 _priceDropToBelowMCR18 = _priceDropToBelowMCR * COLLATERAL_TOKEN_PRECISION * WAD / (ORACLE_PRICE_SCALE * BORROW_TOKEN_PRECISION);
 
         // Drop collateral price to put trove below MCR
-        vm.mockCall(address(priceOracle), abi.encodeWithSelector(IPriceOracle.price.selector), abi.encode(_priceDropToBelowMCR));
+        vm.mockCall(address(priceOracle), abi.encodeWithSelector(IPriceOracleScaled.price.selector), abi.encode(_priceDropToBelowMCR));
+        vm.mockCall(address(priceOracle), abi.encodeWithSelector(IPriceOracleNotScaled.price.selector, false), abi.encode(_priceDropToBelowMCR18));
 
         // Make sure price actually dropped
         assertEq(priceOracle.price(), _priceDropToBelowMCR, "E51");
 
         // Calculate Trove's collateral ratio after price drop
-        uint256 _troveCollateralRatioAfter = _trove.collateral * priceOracle.price() / _trove.debt;
+        uint256 _troveCollateralRatioAfter = (_trove.collateral * priceOracle.price() / ORACLE_PRICE_SCALE) * BORROW_TOKEN_PRECISION / _trove.debt;
 
         // Make sure Trove is below MCR
         assertLt(_troveCollateralRatioAfter, troveManager.MINIMUM_COLLATERAL_RATIO(), "E52");
@@ -279,18 +308,16 @@ contract LiquidateTests is Base {
         vm.stopPrank();
 
         // Check auction starting price and minimum price
-        address _liquidationAuction = dutchDesk.LIQUIDATION_AUCTION();
-        // Starting price = available * price / WAD * STARTING_PRICE_BUFFER_PERCENTAGE / WAD / WAD
+        // Starting price = available * price / 1e18 * STARTING_PRICE_BUFFER_PERCENTAGE / 1e18 / COLLATERAL_TOKEN_PRECISION
         // Note: both troves liquidated in same tx, so collateral = _collateralNeeded * 2
-        uint256 _expectedStartingPrice =
-            _collateralNeeded * 2 * _priceDropToBelowMCR / 1e18 * dutchDesk.STARTING_PRICE_BUFFER_PERCENTAGE() / 1e18 / 1e18;
-        assertEq(IAuction(_liquidationAuction).startingPrice(), _expectedStartingPrice, "E53");
+        uint256 _expectedStartingPrice = _collateralNeeded * 2 * _priceDropToBelowMCR18 / 1e18 * dutchDesk.STARTING_PRICE_BUFFER_PERCENTAGE() / 1e18 / COLLATERAL_TOKEN_PRECISION;
+        assertEq(IAuction(dutchDesk.LIQUIDATION_AUCTION()).startingPrice(), _expectedStartingPrice, "E53");
         // Minimum price = price * MINIMUM_PRICE_BUFFER_PERCENTAGE / WAD
-        uint256 _expectedMinimumPrice = _priceDropToBelowMCR * dutchDesk.MINIMUM_PRICE_BUFFER_PERCENTAGE() / 1e18;
-        assertEq(IAuction(_liquidationAuction).minimumPrice(), _expectedMinimumPrice, "E54");
+        uint256 _expectedMinimumPrice = _priceDropToBelowMCR18 * dutchDesk.MINIMUM_PRICE_BUFFER_PERCENTAGE() / WAD;
+        assertEq(IAuction(dutchDesk.LIQUIDATION_AUCTION()).minimumPrice(), _expectedMinimumPrice, "E54");
 
         // Take the auction
-        takeAuction(_liquidationAuction);
+        takeAuction(dutchDesk.LIQUIDATION_AUCTION());
 
         // Make sure lender got all the borrow tokens back + liquidation fee
         assertGe(borrowToken.balanceOf(address(lender)), _expectedDebt * 2, "E55");
@@ -392,7 +419,8 @@ contract LiquidateTests is Base {
         uint256 _halfAmount = _amount / 2;
 
         // Calculate how much collateral is needed for the borrow amount
-        uint256 _collateralNeeded = _halfAmount * DEFAULT_TARGET_COLLATERAL_RATIO / priceOracle.price();
+        uint256 _collateralNeeded =
+            (_halfAmount * DEFAULT_TARGET_COLLATERAL_RATIO / BORROW_TOKEN_PRECISION) * ORACLE_PRICE_SCALE / priceOracle.price();
 
         // Calculate expected debt (borrow amount + upfront fee)
         uint256 _expectedDebt = _halfAmount + troveManager.get_upfront_fee(_halfAmount, DEFAULT_ANNUAL_INTEREST_RATE);
@@ -419,17 +447,27 @@ contract LiquidateTests is Base {
 
         // CR = collateral * price / debt, so price_at_MCR = MCR * debt / collateral
         // We want to be 1% below MCR
-        uint256 _priceDropToBelowMCR = troveManager.MINIMUM_COLLATERAL_RATIO() * _trove1.debt * 99 / 100 / _trove1.collateral;
+        uint256 _priceDropToBelowMCR = troveManager.MINIMUM_COLLATERAL_RATIO() * _trove1.debt * 99 / 100 / _trove1.collateral * ORACLE_PRICE_SCALE / BORROW_TOKEN_PRECISION;
+        uint256 _priceDropToBelowMCR18 = _priceDropToBelowMCR * COLLATERAL_TOKEN_PRECISION * WAD / (ORACLE_PRICE_SCALE * BORROW_TOKEN_PRECISION);
 
         // Drop collateral price to put both troves below MCR
-        vm.mockCall(address(priceOracle), abi.encodeWithSelector(IPriceOracle.price.selector), abi.encode(_priceDropToBelowMCR));
+        vm.mockCall(address(priceOracle), abi.encodeWithSelector(IPriceOracleScaled.price.selector), abi.encode(_priceDropToBelowMCR));
+        vm.mockCall(address(priceOracle), abi.encodeWithSelector(IPriceOracleNotScaled.price.selector, false), abi.encode(_priceDropToBelowMCR18));
 
         // Make sure price actually dropped
         assertEq(priceOracle.price(), _priceDropToBelowMCR, "E6");
 
         // Make sure both troves are below MCR
-        assertLt(_trove1.collateral * priceOracle.price() / _trove1.debt, troveManager.MINIMUM_COLLATERAL_RATIO(), "E7");
-        assertLt(_trove2.collateral * priceOracle.price() / _trove2.debt, troveManager.MINIMUM_COLLATERAL_RATIO(), "E8");
+        assertLt(
+            (_trove1.collateral * priceOracle.price() / ORACLE_PRICE_SCALE) * BORROW_TOKEN_PRECISION / _trove1.debt,
+            troveManager.MINIMUM_COLLATERAL_RATIO(),
+            "E7"
+        );
+        assertLt(
+            (_trove2.collateral * priceOracle.price() / ORACLE_PRICE_SCALE) * BORROW_TOKEN_PRECISION / _trove2.debt,
+            troveManager.MINIMUM_COLLATERAL_RATIO(),
+            "E8"
+        );
 
         // Liquidate the first trove
         vm.startPrank(liquidator);
@@ -444,21 +482,21 @@ contract LiquidateTests is Base {
         assertEq(collateralToken.balanceOf(dutchDesk.LIQUIDATION_AUCTION()), _collateralNeeded, "E11");
 
         // Check auction starting price and minimum price after first liquidation
-        // Starting price = available * price / WAD * STARTING_PRICE_BUFFER_PERCENTAGE / WAD / WAD
+        // Starting price = available * price / 1e18 * STARTING_PRICE_BUFFER_PERCENTAGE / 1e18 / COLLATERAL_TOKEN_PRECISION
         assertEq(
             IAuction(dutchDesk.LIQUIDATION_AUCTION()).startingPrice(),
-            _collateralNeeded * _priceDropToBelowMCR / 1e18 * dutchDesk.STARTING_PRICE_BUFFER_PERCENTAGE() / 1e18 / 1e18,
+            _collateralNeeded * _priceDropToBelowMCR18 / 1e18 * dutchDesk.STARTING_PRICE_BUFFER_PERCENTAGE() / 1e18 / COLLATERAL_TOKEN_PRECISION,
             "E12"
         );
         // Minimum price = price * MINIMUM_PRICE_BUFFER_PERCENTAGE / WAD
-        uint256 _expectedMinimumPrice = _priceDropToBelowMCR * dutchDesk.MINIMUM_PRICE_BUFFER_PERCENTAGE() / 1e18;
+        // uint256 _expectedMinimumPrice = _priceDropToBelowMCR18 * dutchDesk.MINIMUM_PRICE_BUFFER_PERCENTAGE() / WAD;
         assertEq(
-            IAuction(dutchDesk.LIQUIDATION_AUCTION()).minimumPrice(), _priceDropToBelowMCR * dutchDesk.MINIMUM_PRICE_BUFFER_PERCENTAGE() / 1e18, "E13"
+            IAuction(dutchDesk.LIQUIDATION_AUCTION()).minimumPrice(), _priceDropToBelowMCR18 * dutchDesk.MINIMUM_PRICE_BUFFER_PERCENTAGE() / WAD, "E13"
         );
 
         // Check first trove is liquidated
         _trove1 = troveManager.troves(_troveId1);
-        assertEq(uint256(_trove1.status), uint256(ITroveManager.Status.liquidated), "E14");
+        assertEq(uint256(troveManager.troves(_troveId1).status), uint256(ITroveManager.Status.liquidated), "E14");
 
         // Check second trove is still active
         _trove2 = troveManager.troves(_troveId2);
@@ -482,10 +520,10 @@ contract LiquidateTests is Base {
 
         // Check auction starting price and minimum price after second liquidation (combined collateral)
         uint256 _expectedStartingPrice2 =
-            _collateralNeeded * 2 * _priceDropToBelowMCR / 1e18 * dutchDesk.STARTING_PRICE_BUFFER_PERCENTAGE() / 1e18 / 1e18;
+            _collateralNeeded * 2 * _priceDropToBelowMCR18 / 1e18 * dutchDesk.STARTING_PRICE_BUFFER_PERCENTAGE() / 1e18 / COLLATERAL_TOKEN_PRECISION;
         assertEq(IAuction(dutchDesk.LIQUIDATION_AUCTION()).startingPrice(), _expectedStartingPrice2, "E20");
         // Minimum price should be the same (based on collateral price, not amount)
-        assertEq(IAuction(dutchDesk.LIQUIDATION_AUCTION()).minimumPrice(), _expectedMinimumPrice, "E21");
+        assertEq(IAuction(dutchDesk.LIQUIDATION_AUCTION()).minimumPrice(), _priceDropToBelowMCR18 * dutchDesk.MINIMUM_PRICE_BUFFER_PERCENTAGE() / WAD, "E21");
 
         // Take the auction (takes all collateral from both troves)
         takeAuction(dutchDesk.LIQUIDATION_AUCTION());
@@ -537,7 +575,8 @@ contract LiquidateTests is Base {
         mintAndDepositIntoLender(userLender, _amount);
 
         // Calculate how much collateral is needed for the borrow amount
-        uint256 _collateralNeeded = _amount * DEFAULT_TARGET_COLLATERAL_RATIO / priceOracle.price();
+        uint256 _collateralNeeded =
+            (_amount * DEFAULT_TARGET_COLLATERAL_RATIO / BORROW_TOKEN_PRECISION) * ORACLE_PRICE_SCALE / priceOracle.price();
 
         // Open a trove
         uint256 _troveId = mintAndOpenTrove(userBorrower, _collateralNeeded, _amount, DEFAULT_ANNUAL_INTEREST_RATE);

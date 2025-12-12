@@ -36,25 +36,26 @@ exports: (
 # ============================================================================================
 
 
+# Contracts
 TROVE_MANAGER: public(immutable(address))
-
 PRICE_ORACLE: public(immutable(IPriceOracle))
 LIQUIDATION_AUCTION: public(immutable(IAuction))
 AUCTION_FACTORY: public(immutable(IAuctionFactory))
 
+# Tokens
 BORROW_TOKEN: public(immutable(IERC20))
 COLLATERAL_TOKEN: public(immutable(IERC20))
 
+# Parameters
 DUST_THRESHOLD: public(immutable(uint256))
-
-_COLLATERAL_TOKEN_PRECISION: immutable(uint256)
-
+MAX_AUCTIONS: public(constant(uint256)) = 20 # @todo -- test what number makes sense from gas perspective
+MAX_GAS_PRICE_TO_TRIGGER: public(constant(uint256)) = 50 * 10 ** 9  # 50 gwei
+MINIMUM_PRICE_BUFFER_PERCENTAGE: public(constant(uint256)) = _WAD - 5 * 10 ** 16  # 5%
 STARTING_PRICE_BUFFER_PERCENTAGE: public(constant(uint256)) = _WAD + 15 * 10 ** 16  # 15%
 EMERGENCY_STARTING_PRICE_BUFFER_PERCENTAGE: public(constant(uint256)) = _WAD + 100 * 10 ** 16  # 100%
-MINIMUM_PRICE_BUFFER_PERCENTAGE: public(constant(uint256)) = _WAD - 5 * 10 ** 16  # 5%
-MAX_GAS_PRICE_TO_TRIGGER: public(constant(uint256)) = 50 * 10 ** 9  # 50 gwei
-MAX_AUCTIONS: public(constant(uint256)) = 20 # @todo -- test what number makes sense from gas perspective
 
+# Internal constants
+_COLLATERAL_TOKEN_PRECISION: immutable(uint256)
 _WAD: constant(uint256) = 10 ** 18
 
 
@@ -268,11 +269,13 @@ def _kick(
     available: uint256 = collateral_balance_self + collateral_balance_auction
 
     # Get the collateral price
-    collateral_price: uint256 = staticcall PRICE_ORACLE.price()
+    collateral_price: uint256 = staticcall PRICE_ORACLE.price(False) # Price in 1e18 format
 
     # Set the starting price with buffer to the collateral price
     # Starting price is an unscaled "lot size"
-    extcall auction.setStartingPrice(available * collateral_price // _WAD * starting_price_buffer_pct // _WAD // _COLLATERAL_TOKEN_PRECISION)
+    extcall auction.setStartingPrice(
+        available * collateral_price // _WAD * starting_price_buffer_pct // _WAD // _COLLATERAL_TOKEN_PRECISION
+    )
 
     # Set the minimum price with buffer to the collateral price
     # Minimum price is per token and is scaled to 1e18

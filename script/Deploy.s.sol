@@ -37,7 +37,7 @@ contract Deploy is Script {
 
     ILender public lender;
 
-    uint256 public minimumCollateralRatio = 110 * 1e16; // 110%
+    uint256 public minimumCollateralRatio = 110; // 110%
     // uint256 public dustThreshold = 1e14; // 0.0001 tBTC
     uint256 public dustThreshold = 1e4; // 0.0001 WBTC
 
@@ -70,7 +70,7 @@ contract Deploy is Script {
         address _lenderAddress = computeCreateAddress(deployer, _nonce + 4);
         address _troveManagerAddress = computeCreateAddress(deployer, _nonce + 3);
 
-        priceOracle = IPriceOracle(deployCode("tbtc_to_crvusd_oracle"));
+        priceOracle = IPriceOracle(deployCode("tbtc_to_crvusd_oracle", abi.encode(address(borrowToken), address(collateralToken))));
         dutchDesk = IDutchDesk(
             deployCode(
                 "dutch_desk",

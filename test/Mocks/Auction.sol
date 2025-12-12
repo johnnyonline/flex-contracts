@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0
 pragma solidity >=0.8.18;
-
 import {Maths} from "./Maths.sol";
+import "forge-std/console2.sol";
 // import {ITaker} from "../interfaces/ITaker.sol";
 // import {GPv2Order} from "../libraries/GPv2Order.sol";
 import {Governance2Step} from "./Governance2Step.sol";
@@ -338,6 +338,7 @@ contract Auction is Governance2Step, ReentrancyGuard {
 
         // Apply the decay to get the current price
         uint256 currentPrice = Maths.rmul(initialPrice, decayMultiplier);
+        // console2.log("currentPrice before min:", currentPrice);
 
         // Return price `0` if below the minimum price
         return currentPrice < minimumPrice ? 0 : currentPrice;

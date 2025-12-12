@@ -20,7 +20,8 @@ contract AddCollateralTests is Base {
         mintAndDepositIntoLender(userLender, _amount);
 
         // Calculate how much collateral is needed for the borrow amount
-        uint256 _collateralNeeded = _amount * DEFAULT_TARGET_COLLATERAL_RATIO / priceOracle.price();
+        uint256 _collateralNeeded =
+            (_amount * DEFAULT_TARGET_COLLATERAL_RATIO / BORROW_TOKEN_PRECISION) * ORACLE_PRICE_SCALE / priceOracle.price();
 
         // Calculate expected debt (borrow amount + upfront fee)
         uint256 _expectedDebt = _amount + troveManager.get_upfront_fee(_amount, DEFAULT_ANNUAL_INTEREST_RATE);
@@ -38,7 +39,12 @@ contract AddCollateralTests is Base {
         assertEq(_trove.owner, userBorrower, "E5");
         assertEq(_trove.pending_owner, address(0), "E6");
         assertEq(uint256(_trove.status), uint256(ITroveManager.Status.active), "E7");
-        assertApproxEqRel(_trove.collateral * priceOracle.price() / _trove.debt, DEFAULT_TARGET_COLLATERAL_RATIO, 1e15, "E8"); // 0.1%
+        assertApproxEqRel(
+            (_trove.collateral * priceOracle.price() / ORACLE_PRICE_SCALE) * BORROW_TOKEN_PRECISION / _trove.debt,
+            DEFAULT_TARGET_COLLATERAL_RATIO,
+            1e15,
+            "E8"
+        ); // 0.1%
 
         // Check sorted troves
         assertFalse(sortedTroves.empty(), "E9");
@@ -83,7 +89,11 @@ contract AddCollateralTests is Base {
         assertEq(_trove.owner, userBorrower, "E30");
         assertEq(_trove.pending_owner, address(0), "E31");
         assertEq(uint256(_trove.status), uint256(ITroveManager.Status.active), "E32");
-        assertGt(_trove.collateral * priceOracle.price() / _trove.debt, DEFAULT_TARGET_COLLATERAL_RATIO - 1e15, "E33");
+        assertGt(
+            (_trove.collateral * priceOracle.price() / ORACLE_PRICE_SCALE) * BORROW_TOKEN_PRECISION / _trove.debt,
+            DEFAULT_TARGET_COLLATERAL_RATIO * 999 / 1000, // Decrease by 0.1%
+            "E33"
+        );
 
         // Check sorted troves
         assertFalse(sortedTroves.empty(), "E34");
@@ -118,7 +128,8 @@ contract AddCollateralTests is Base {
         mintAndDepositIntoLender(userLender, _amount);
 
         // Calculate how much collateral is needed for the borrow amount
-        uint256 _collateralNeeded = _amount * DEFAULT_TARGET_COLLATERAL_RATIO / priceOracle.price();
+        uint256 _collateralNeeded =
+            (_amount * DEFAULT_TARGET_COLLATERAL_RATIO / BORROW_TOKEN_PRECISION) * ORACLE_PRICE_SCALE / priceOracle.price();
 
         // Open a trove
         uint256 _troveId = mintAndOpenTrove(userBorrower, _collateralNeeded, _amount, DEFAULT_ANNUAL_INTEREST_RATE);
@@ -139,7 +150,8 @@ contract AddCollateralTests is Base {
         mintAndDepositIntoLender(userLender, _amount);
 
         // Calculate how much collateral is needed for the borrow amount
-        uint256 _collateralNeeded = _amount * DEFAULT_TARGET_COLLATERAL_RATIO / priceOracle.price();
+        uint256 _collateralNeeded =
+            (_amount * DEFAULT_TARGET_COLLATERAL_RATIO / BORROW_TOKEN_PRECISION) * ORACLE_PRICE_SCALE / priceOracle.price();
 
         // Open a trove
         uint256 _troveId = mintAndOpenTrove(userBorrower, _collateralNeeded, _amount, DEFAULT_ANNUAL_INTEREST_RATE);
@@ -159,13 +171,14 @@ contract AddCollateralTests is Base {
         mintAndDepositIntoLender(userLender, _amount);
 
         // Calculate how much collateral is needed for the borrow amount
-        uint256 _collateralNeeded = _amount * DEFAULT_TARGET_COLLATERAL_RATIO / priceOracle.price();
+        uint256 _collateralNeeded =
+            (_amount * DEFAULT_TARGET_COLLATERAL_RATIO / BORROW_TOKEN_PRECISION) * ORACLE_PRICE_SCALE / priceOracle.price();
 
         // Open a trove
         uint256 _troveId = mintAndOpenTrove(userBorrower, _collateralNeeded, _amount, DEFAULT_ANNUAL_INTEREST_RATE);
 
         // Pull enough liquidity to make trove a zombie trove (but above 0 debt)
-        uint256 _amountToPull = _amount - 100 ether;
+        uint256 _amountToPull = _amount - 100 * BORROW_TOKEN_PRECISION;
 
         // Pull liquidity from lender to make trove a zombie trove (but above 0 debt)
         vm.prank(userLender);
