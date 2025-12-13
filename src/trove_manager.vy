@@ -9,8 +9,10 @@
         and sorted_troves contracts
 """
 # @todo -- here
-# 1. finish fixing tests
-# 2. add is_kickable check to `emergency_kick`
+# 1. add is_kickable check to `emergency_kick`
+# 2. use dos resistant auction?
+# 3. fix dutch desk tests
+# 4. test trove manager setup
 
 from ethereum.ercs import IERC20
 from ethereum.ercs import IERC20Detailed
@@ -1340,7 +1342,7 @@ def _sync_total_debt() -> uint256:
     """
     # Calculate the pending aggregate interest
     pending_agg_interest: uint256 = (
-        self.total_weighted_debt * (block.timestamp - self.last_debt_update_time)) // (_ONE_YEAR * _BORROW_TOKEN_PRECISION
+        (self.total_weighted_debt * (block.timestamp - self.last_debt_update_time)) // (_ONE_YEAR * _BORROW_TOKEN_PRECISION)
     )
 
     # Calculate the new total debt after interest

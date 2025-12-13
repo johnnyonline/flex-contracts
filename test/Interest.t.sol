@@ -26,7 +26,7 @@ contract InterestTests is Base {
         mintAndDepositIntoLender(userLender, _amount);
 
         // Calculate how much collateral is needed for the borrow amount
-        uint256 _collateralNeeded = _amount * DEFAULT_TARGET_COLLATERAL_RATIO / priceOracle.price();
+        uint256 _collateralNeeded = (_amount * DEFAULT_TARGET_COLLATERAL_RATIO / BORROW_TOKEN_PRECISION) * ORACLE_PRICE_SCALE / priceOracle.price();
 
         // Calculate expected debt (borrow amount + upfront fee)
         uint256 _upfrontFee = troveManager.get_upfront_fee(_amount, _rate);
@@ -45,8 +45,8 @@ contract InterestTests is Base {
         skip(_timeElapsed);
 
         // Calculate expected interest
-        // interest = principal * rate * time / (365 days * 1e18)
-        uint256 _expectedInterest = _initialDebt * _rate * _timeElapsed / (365 days * 1e18);
+        // interest = principal * rate * time / (365 days * BORROW_TOKEN_PRECISION)
+        uint256 _expectedInterest = _initialDebt * _rate * _timeElapsed / (365 days * BORROW_TOKEN_PRECISION);
 
         // Sync total debt to accrue interest
         uint256 _newTotalDebt = troveManager.sync_total_debt();
@@ -89,7 +89,8 @@ contract InterestTests is Base {
             _amounts[i] = bound(_amounts[i], troveManager.MIN_DEBT(), maxFuzzAmount);
             _boundedRates[i] = bound(_rates[i], troveManager.MIN_ANNUAL_INTEREST_RATE(), troveManager.MAX_ANNUAL_INTEREST_RATE());
 
-            uint256 _collateralNeeded = _amounts[i] * DEFAULT_TARGET_COLLATERAL_RATIO / priceOracle.price();
+            uint256 _collateralNeeded =
+                (_amounts[i] * DEFAULT_TARGET_COLLATERAL_RATIO / BORROW_TOKEN_PRECISION) * ORACLE_PRICE_SCALE / priceOracle.price();
             uint256 _upfrontFee = troveManager.get_upfront_fee(_amounts[i], _boundedRates[i]);
             _initialDebts[i] = _amounts[i] + _upfrontFee;
 
@@ -108,8 +109,8 @@ contract InterestTests is Base {
         skip(_timeElapsed);
 
         // Calculate expected interest using weighted average rate
-        // interest = total_weighted_debt * time / (365 days * 1e18)
-        uint256 _expectedInterest = _totalWeightedDebt * _timeElapsed / (365 days * 1e18);
+        // interest = total_weighted_debt * time / (365 days * BORROW_TOKEN_PRECISION)
+        uint256 _expectedInterest = _totalWeightedDebt * _timeElapsed / (365 days * BORROW_TOKEN_PRECISION);
 
         // Sync total debt to accrue interest
         uint256 _newTotalDebt = troveManager.sync_total_debt();
@@ -142,7 +143,7 @@ contract InterestTests is Base {
         mintAndDepositIntoLender(userLender, _amount);
 
         // Calculate collateral and initial debt
-        uint256 _collateralNeeded = _amount * DEFAULT_TARGET_COLLATERAL_RATIO / priceOracle.price();
+        uint256 _collateralNeeded = (_amount * DEFAULT_TARGET_COLLATERAL_RATIO / BORROW_TOKEN_PRECISION) * ORACLE_PRICE_SCALE / priceOracle.price();
         uint256 _upfrontFee1 = troveManager.get_upfront_fee(_amount, _initialRate);
         uint256 _initialDebt = _amount + _upfrontFee1;
 
@@ -153,7 +154,7 @@ contract InterestTests is Base {
         skip(_timeElapsed1);
 
         // Calculate interest for first period
-        uint256 _interest1 = _initialDebt * _initialRate * _timeElapsed1 / (365 days * 1e18);
+        uint256 _interest1 = _initialDebt * _initialRate * _timeElapsed1 / (365 days * BORROW_TOKEN_PRECISION);
 
         // Adjust rate (no upfront fee since we waited past INTEREST_RATE_ADJ_COOLDOWN)
         vm.prank(userBorrower);
@@ -169,7 +170,7 @@ contract InterestTests is Base {
         skip(_timeElapsed2);
 
         // Calculate interest for second period
-        uint256 _interest2 = _debtAfterAdjustment * _newRate * _timeElapsed2 / (365 days * 1e18);
+        uint256 _interest2 = _debtAfterAdjustment * _newRate * _timeElapsed2 / (365 days * BORROW_TOKEN_PRECISION);
 
         // Sync total debt
         uint256 _newTotalDebt = troveManager.sync_total_debt();

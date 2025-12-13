@@ -14,6 +14,11 @@ contract DutchDeskTests is Base {
         dutchDesk.accept_ownership();
 
         liquidationAuction = IAuction(dutchDesk.LIQUIDATION_AUCTION());
+
+        // Adjust `maxFuzzAmount` to collateral token decimals
+        uint256 _maxFuzzAmount = 1_000_000 ether;
+        if (COLLATERAL_TOKEN_PRECISION < 1e18) maxFuzzAmount = _maxFuzzAmount / (1e18 / COLLATERAL_TOKEN_PRECISION);
+        else maxFuzzAmount = _maxFuzzAmount;
     }
 
     function test_setup() public {
@@ -54,10 +59,11 @@ contract DutchDeskTests is Base {
         assertTrue(liquidationAuction.isActive(address(collateralToken)), "E0");
         assertEq(liquidationAuction.available(address(collateralToken)), _amount, "E1");
 
-        uint256 _expectedStartingPrice = _amount * priceOracle.price() / 1e18 * dutchDesk.STARTING_PRICE_BUFFER_PERCENTAGE() / 1e18 / 1e18;
+        uint256 _expectedStartingPrice =
+            _amount * priceOracle.price(false) / WAD * dutchDesk.STARTING_PRICE_BUFFER_PERCENTAGE() / WAD / COLLATERAL_TOKEN_PRECISION;
         assertEq(liquidationAuction.startingPrice(), _expectedStartingPrice, "E2");
 
-        uint256 _expectedMinimumPrice = priceOracle.price() * dutchDesk.MINIMUM_PRICE_BUFFER_PERCENTAGE() / 1e18;
+        uint256 _expectedMinimumPrice = priceOracle.price(false) * dutchDesk.MINIMUM_PRICE_BUFFER_PERCENTAGE() / WAD;
         assertEq(liquidationAuction.minimumPrice(), _expectedMinimumPrice, "E3");
 
         assertEq(liquidationAuction.receiver(), address(lender), "E4");
@@ -130,10 +136,11 @@ contract DutchDeskTests is Base {
         assertTrue(IAuction(_auction).isActive(address(collateralToken)), "E1");
         assertEq(IAuction(_auction).available(address(collateralToken)), _amount, "E2");
 
-        uint256 _expectedStartingPrice = _amount * priceOracle.price() / 1e18 * dutchDesk.STARTING_PRICE_BUFFER_PERCENTAGE() / 1e18 / 1e18;
+        uint256 _expectedStartingPrice =
+            _amount * priceOracle.price(false) / WAD * dutchDesk.STARTING_PRICE_BUFFER_PERCENTAGE() / WAD / COLLATERAL_TOKEN_PRECISION;
         assertEq(IAuction(_auction).startingPrice(), _expectedStartingPrice, "E3");
 
-        uint256 _expectedMinimumPrice = priceOracle.price() * dutchDesk.MINIMUM_PRICE_BUFFER_PERCENTAGE() / 1e18;
+        uint256 _expectedMinimumPrice = priceOracle.price(false) * dutchDesk.MINIMUM_PRICE_BUFFER_PERCENTAGE() / WAD;
         assertEq(IAuction(_auction).minimumPrice(), _expectedMinimumPrice, "E4");
 
         assertEq(IAuction(_auction).receiver(), userLender, "E5");
@@ -228,7 +235,7 @@ contract DutchDeskTests is Base {
 
     function test_kick_redemption_reusesAuctionWithActiveDust() public {
         uint256 _dustAmount = dutchDesk.DUST_THRESHOLD();
-        uint256 _amount = dutchDesk.DUST_THRESHOLD() + 1;
+        uint256 _amount = dutchDesk.DUST_THRESHOLD() + COLLATERAL_TOKEN_PRECISION;
 
         airdrop(address(collateralToken), address(dutchDesk), _amount);
         vm.prank(address(troveManager));
@@ -426,10 +433,11 @@ contract DutchDeskTests is Base {
 
         assertTrue(liquidationAuction.isActive(address(collateralToken)), "E1");
 
-        uint256 _expectedStartingPrice = _amount * priceOracle.price() / 1e18 * dutchDesk.EMERGENCY_STARTING_PRICE_BUFFER_PERCENTAGE() / 1e18 / 1e18;
+        uint256 _expectedStartingPrice =
+            _amount * priceOracle.price(false) / WAD * dutchDesk.EMERGENCY_STARTING_PRICE_BUFFER_PERCENTAGE() / WAD / COLLATERAL_TOKEN_PRECISION;
         assertEq(liquidationAuction.startingPrice(), _expectedStartingPrice, "E2");
 
-        uint256 _expectedMinimumPrice = priceOracle.price() * dutchDesk.MINIMUM_PRICE_BUFFER_PERCENTAGE() / 1e18;
+        uint256 _expectedMinimumPrice = priceOracle.price(false) * dutchDesk.MINIMUM_PRICE_BUFFER_PERCENTAGE() / WAD;
         assertEq(liquidationAuction.minimumPrice(), _expectedMinimumPrice, "E3");
     }
 
@@ -454,10 +462,11 @@ contract DutchDeskTests is Base {
 
         assertTrue(IAuction(_auction0).isActive(address(collateralToken)), "E1");
 
-        uint256 _expectedStartingPrice = _amount * priceOracle.price() / 1e18 * dutchDesk.EMERGENCY_STARTING_PRICE_BUFFER_PERCENTAGE() / 1e18 / 1e18;
+        uint256 _expectedStartingPrice =
+            _amount * priceOracle.price(false) / WAD * dutchDesk.EMERGENCY_STARTING_PRICE_BUFFER_PERCENTAGE() / WAD / COLLATERAL_TOKEN_PRECISION;
         assertEq(IAuction(_auction0).startingPrice(), _expectedStartingPrice, "E2");
 
-        uint256 _expectedMinimumPrice = priceOracle.price() * dutchDesk.MINIMUM_PRICE_BUFFER_PERCENTAGE() / 1e18;
+        uint256 _expectedMinimumPrice = priceOracle.price(false) * dutchDesk.MINIMUM_PRICE_BUFFER_PERCENTAGE() / WAD;
         assertEq(IAuction(_auction0).minimumPrice(), _expectedMinimumPrice, "E3");
     }
 

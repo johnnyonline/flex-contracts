@@ -23,8 +23,8 @@ contract SortedTrovesTests is Base {
     ) public {
         uint256 _minRate = troveManager.MIN_ANNUAL_INTEREST_RATE();
         uint256 _maxRate = troveManager.MAX_ANNUAL_INTEREST_RATE();
-        uint256 _collateral = 10 ether;
-        uint256 _debt = 1000 ether;
+        uint256 _collateral = 10 * COLLATERAL_TOKEN_PRECISION;
+        uint256 _debt = 1000 * BORROW_TOKEN_PRECISION;
 
         // Fund lender
         mintAndDepositIntoLender(userLender, _debt * 20);
@@ -80,8 +80,8 @@ contract SortedTrovesTests is Base {
     ) public {
         uint256 _minRate = troveManager.MIN_ANNUAL_INTEREST_RATE();
         uint256 _maxRate = troveManager.MAX_ANNUAL_INTEREST_RATE();
-        uint256 _collateral = 10 ether;
-        uint256 _debt = 1000 ether;
+        uint256 _collateral = 10 * COLLATERAL_TOKEN_PRECISION;
+        uint256 _debt = 1000 * BORROW_TOKEN_PRECISION;
 
         // Fund lender
         mintAndDepositIntoLender(userLender, _debt * 20);
@@ -140,8 +140,8 @@ contract SortedTrovesTests is Base {
     ) public {
         uint256 _minRate = troveManager.MIN_ANNUAL_INTEREST_RATE();
         uint256 _maxRate = troveManager.MAX_ANNUAL_INTEREST_RATE();
-        uint256 _collateral = 10 ether;
-        uint256 _debt = 1000 ether;
+        uint256 _collateral = 10 * COLLATERAL_TOKEN_PRECISION;
+        uint256 _debt = 1000 * BORROW_TOKEN_PRECISION;
 
         // Fund lender
         mintAndDepositIntoLender(userLender, _debt * 20);
@@ -216,8 +216,8 @@ contract SortedTrovesTests is Base {
     }
 
     function test_insert_troveExists() public {
-        uint256 _collateral = 10 ether;
-        uint256 _debt = 1000 ether;
+        uint256 _collateral = 10 * COLLATERAL_TOKEN_PRECISION;
+        uint256 _debt = 1000 * BORROW_TOKEN_PRECISION;
 
         mintAndDepositIntoLender(userLender, _debt);
         uint256 _troveId = mintAndOpenTrove(userBorrower, _collateral, _debt, troveManager.MIN_ANNUAL_INTEREST_RATE());
