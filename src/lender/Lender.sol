@@ -71,6 +71,13 @@ contract Lender is BaseHooks {
         return _depositLimit <= _currentAssets ? 0 : _depositLimit - _currentAssets;
     }
 
+    // @inheritdoc BaseStrategy
+    function availableWithdrawLimit(address /*_owner*/) public pure override returns (uint256) {
+        // `type(uint256).max` may not be incorrect if there are no available auctions in `dutch_desk`.
+        // In that case, withdraws may fail if redeeming collateral is needed
+        return type(uint256).max;
+    }
+
     // ============================================================================================
     // Management functions
     // ============================================================================================

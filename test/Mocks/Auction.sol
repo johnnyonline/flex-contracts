@@ -1,5 +1,13 @@
 // SPDX-License-Identifier: AGPL-3.0
 pragma solidity >=0.8.18;
+
+// import {Maths} from "../libraries/Maths.sol";
+// import {ITaker} from "../interfaces/ITaker.sol";
+// import {GPv2Order} from "../libraries/GPv2Order.sol";
+// import {Governance2Step} from "../utils/Governance2Step.sol";
+// import {ERC20} from "@openzeppelin/contracts/token/ERC20/ERC20.sol";
+// import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
+// import {ReentrancyGuard} from "@openzeppelin/contracts/security/ReentrancyGuard.sol";
 import {Maths} from "./Maths.sol";
 import "forge-std/console2.sol";
 // import {ITaker} from "../interfaces/ITaker.sol";
@@ -10,9 +18,7 @@ import {ERC20} from "@openzeppelin/contracts/token/ERC20/ERC20.sol";
 import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 
 interface ICowSettlement {
-
     function domainSeparator() external view returns (bytes32);
-
 }
 
 /**
@@ -21,7 +27,6 @@ interface ICowSettlement {
  *   @notice General use dutch auction contract for token sales.
  */
 contract Auction is Governance2Step, ReentrancyGuard {
-
     // using GPv2Order for GPv2Order.Data;
     using SafeERC20 for ERC20;
 
@@ -35,7 +40,7 @@ contract Auction is Governance2Step, ReentrancyGuard {
     event AuctionKicked(address indexed from, uint256 available);
 
     /// @notice Emitted when the receiver is updated.
-    event UpdatedReceiver(address receiver);
+    event UpdatedReceiver(address indexed receiver);
 
     /// @notice Emitted when the minimum price is updated.
     event UpdatedMinimumPrice(uint256 minimumPrice);
@@ -70,15 +75,21 @@ contract Auction is Governance2Step, ReentrancyGuard {
 
     uint256 internal constant WAD = 1e18;
 
-    address internal constant COW_SETTLEMENT = 0x9008D19f58AAbD9eD0D60971565AA8510560ab41;
+    address internal constant COW_SETTLEMENT =
+        0x9008D19f58AAbD9eD0D60971565AA8510560ab41;
 
-    address internal constant VAULT_RELAYER = 0xC92E8bdf79f0507f65a392b0ab4667716BFE0110;
+    address internal constant VAULT_RELAYER =
+        0xC92E8bdf79f0507f65a392b0ab4667716BFE0110;
 
     /// @notice The time that each auction lasts.
     uint256 internal constant AUCTION_LENGTH = 1 days;
 
     /// @notice Struct to hold the info for `want`.
     TokenInfo internal wantInfo;
+
+    /// @notice Whether only governance can kick auctions.
+    /// @dev Default is false.
+    bool public governanceOnlyKick;
 
     /// @notice The address that will receive the funds in the auction.
     address public receiver;
@@ -129,7 +140,10 @@ contract Auction is Governance2Step, ReentrancyGuard {
         require(decimals <= 18, "unsupported decimals");
 
         // Set variables
-        wantInfo = TokenInfo({tokenAddress: _want, scaler: uint96(WAD / 10 ** decimals)});
+        wantInfo = TokenInfo({
+            tokenAddress: _want,
+            scaler: uint96(WAD / 10 ** decimals)
+        });
 
         receiver = _receiver;
         governance = _governance;
@@ -169,12 +183,14 @@ contract Auction is Governance2Step, ReentrancyGuard {
      * @param _from The address of the token to be auctioned.
      * @return . The available amount for the auction.
      */
-    function available(
-        address _from
-    ) public view virtual returns (uint256) {
+    function available(address _from) public view virtual returns (uint256) {
         if (!isActive(_from)) return 0;
 
-        return Maths.min(auctions[_from].initialAvailable, ERC20(_from).balanceOf(address(this)));
+        return
+            Maths.min(
+                auctions[_from].initialAvailable,
+                ERC20(_from).balanceOf(address(this))
+            );
     }
 
     /**
@@ -182,9 +198,7 @@ contract Auction is Governance2Step, ReentrancyGuard {
      * @param _from The address of the token to be auctioned.
      * @return . The kicked timestamp for the auction.
      */
-    function kicked(
-        address _from
-    ) external view virtual returns (uint256) {
+    function kicked(address _from) external view virtual returns (uint256) {
         return auctions[_from].kicked;
     }
 
@@ -193,16 +207,19 @@ contract Auction is Governance2Step, ReentrancyGuard {
      * @param _from The address of the token to be auctioned.
      * @return . Whether the auction is active.
      */
-    function isActive(
-        address _from
-    ) public view virtual returns (bool) {
+    function isActive(address _from) public view virtual returns (bool) {
         return price(_from, block.timestamp) > 0;
     }
 
     /**
      * @notice Get all the enabled auctions.
      */
-    function getAllEnabledAuctions() external view virtual returns (address[] memory) {
+    function getAllEnabledAuctions()
+        external
+        view
+        virtual
+        returns (address[] memory)
+    {
         return enabledAuctions;
     }
 
@@ -212,9 +229,7 @@ contract Auction is Governance2Step, ReentrancyGuard {
      * @param _from The address of the token to be auctioned.
      * @return uint256 The amount that can be kicked into the auction.
      */
-    function kickable(
-        address _from
-    ) external view virtual returns (uint256) {
+    function kickable(address _from) external view virtual returns (uint256) {
         // If not enough time has passed then `kickable` is 0.
         if (isActive(_from)) return 0;
 
@@ -230,7 +245,12 @@ contract Auction is Governance2Step, ReentrancyGuard {
     function getAmountNeeded(
         address _from
     ) external view virtual returns (uint256) {
-        return _getAmountNeeded(auctions[_from], available(_from), block.timestamp);
+        return
+            _getAmountNeeded(
+                auctions[_from],
+                available(_from),
+                block.timestamp
+            );
     }
 
     /**
@@ -243,7 +263,8 @@ contract Auction is Governance2Step, ReentrancyGuard {
         address _from,
         uint256 _amountToTake
     ) external view virtual returns (uint256) {
-        return _getAmountNeeded(auctions[_from], _amountToTake, block.timestamp);
+        return
+            _getAmountNeeded(auctions[_from], _amountToTake, block.timestamp);
     }
 
     /**
@@ -270,12 +291,16 @@ contract Auction is Governance2Step, ReentrancyGuard {
         uint256 _timestamp
     ) internal view virtual returns (uint256) {
         return
-        // Scale _amountToTake to 1e18
-        (_amountToTake
-                * _auction.scaler
-                * 
+            // Scale _amountToTake to 1e18
+            (_amountToTake *
+                _auction.scaler *
                 // Price is always 1e18
-                _price(_auction.kicked, _auction.initialAvailable * _auction.scaler, _timestamp)) / 1e18 / 
+                _price(
+                    _auction.kicked,
+                    _auction.initialAvailable * _auction.scaler,
+                    _timestamp
+                )) /
+            1e18 /
             // Scale back down to want.
             wantInfo.scaler;
     }
@@ -285,9 +310,7 @@ contract Auction is Governance2Step, ReentrancyGuard {
      * @param _from The address of the token to be auctioned.
      * @return . The price of the auction.
      */
-    function price(
-        address _from
-    ) external view virtual returns (uint256) {
+    function price(address _from) external view virtual returns (uint256) {
         return price(_from, block.timestamp);
     }
 
@@ -302,7 +325,12 @@ contract Auction is Governance2Step, ReentrancyGuard {
         uint256 _timestamp
     ) public view virtual returns (uint256) {
         // Get unscaled price and scale it down.
-        return _price(auctions[_from].kicked, auctions[_from].initialAvailable * auctions[_from].scaler, _timestamp) / wantInfo.scaler;
+        return
+            _price(
+                auctions[_from].kicked,
+                auctions[_from].initialAvailable * auctions[_from].scaler,
+                _timestamp
+            ) / wantInfo.scaler;
     }
 
     /**
@@ -338,7 +366,6 @@ contract Auction is Governance2Step, ReentrancyGuard {
 
         // Apply the decay to get the current price
         uint256 currentPrice = Maths.rmul(initialPrice, decayMultiplier);
-        // console2.log("currentPrice before min:", currentPrice);
 
         // Return price `0` if below the minimum price
         return currentPrice < minimumPrice ? 0 : currentPrice;
@@ -352,9 +379,7 @@ contract Auction is Governance2Step, ReentrancyGuard {
      * @notice Enables a new auction.
      * @param _from The address of the token to be auctioned.
      */
-    function enable(
-        address _from
-    ) external virtual onlyGovernance {
+    function enable(address _from) external virtual onlyGovernance {
         address _want = want();
         require(_from != address(0) && _from != _want, "ZERO ADDRESS");
         require(auctions[_from].scaler == 0, "already enabled");
@@ -379,9 +404,7 @@ contract Auction is Governance2Step, ReentrancyGuard {
      * @dev Only callable by governance.
      * @param _from The address of the token being sold.
      */
-    function disable(
-        address _from
-    ) external virtual {
+    function disable(address _from) external virtual {
         disable(_from, 0);
     }
 
@@ -417,7 +440,9 @@ contract Auction is Governance2Step, ReentrancyGuard {
 
         // Move the id to the last spot if not there.
         if (_index < _enabledAuctions.length - 1) {
-            _enabledAuctions[_index] = _enabledAuctions[_enabledAuctions.length - 1];
+            _enabledAuctions[_index] = _enabledAuctions[
+                _enabledAuctions.length - 1
+            ];
             // Update the array.
             enabledAuctions = _enabledAuctions;
         }
@@ -431,19 +456,32 @@ contract Auction is Governance2Step, ReentrancyGuard {
     function isAnActiveAuction() public view returns (bool) {
         address[] memory _enabledAuctions = enabledAuctions;
         for (uint256 i = 0; i < _enabledAuctions.length; ++i) {
-            if (isActive(_enabledAuctions[i])) return true;
+            if (isActive(_enabledAuctions[i])) {
+                return true;
+            }
         }
         return false;
+    }
+
+    /**
+     * @notice Sets whether only governance can kick auctions.
+     * @param _governanceOnlyKick The new governance only kick setting.
+     */
+    function setGovernanceOnlyKick(
+        bool _governanceOnlyKick
+    ) external virtual onlyGovernance {
+        governanceOnlyKick = _governanceOnlyKick;
     }
 
     /**
      * @notice Sets the receiver address for the auction funds.
      * @param _receiver The new receiver address.
      */
-    function setReceiver(
-        address _receiver
-    ) external virtual onlyGovernance {
+    function setReceiver(address _receiver) external virtual onlyGovernance {
         require(_receiver != address(0), "ZERO ADDRESS");
+
+        // Don't change the receiver when an auction is active.
+        require(!isAnActiveAuction(), "active auction");
 
         receiver = _receiver;
 
@@ -494,7 +532,10 @@ contract Auction is Governance2Step, ReentrancyGuard {
     function setStepDecayRate(
         uint256 _stepDecayRate
     ) external virtual onlyGovernance {
-        require(_stepDecayRate > 0 && _stepDecayRate < 10_000, "invalid decay rate");
+        require(
+            _stepDecayRate > 0 && _stepDecayRate < 10_000,
+            "invalid decay rate"
+        );
 
         // Don't change the decay rate when an auction is active.
         require(!isAnActiveAuction(), "active auction");
@@ -511,7 +552,10 @@ contract Auction is Governance2Step, ReentrancyGuard {
     function setStepDuration(
         uint256 _stepDuration
     ) external virtual onlyGovernance {
-        require(_stepDuration != 0 && _stepDuration < AUCTION_LENGTH, "invalid step duration");
+        require(
+            _stepDuration != 0 && _stepDuration < AUCTION_LENGTH,
+            "invalid step duration"
+        );
 
         require(!isAnActiveAuction(), "active auction");
 
@@ -538,6 +582,8 @@ contract Auction is Governance2Step, ReentrancyGuard {
     function _kick(
         address _from
     ) internal virtual returns (uint256 _available) {
+        if (governanceOnlyKick) _checkGovernance();
+
         require(auctions[_from].scaler != 0, "not enabled");
         require(!isActive(_from), "too soon");
 
@@ -559,9 +605,7 @@ contract Auction is Governance2Step, ReentrancyGuard {
      * @param _from The address of the token to be auctioned.
      * @return . The amount of fromToken taken in the auction.
      */
-    function take(
-        address _from
-    ) external virtual returns (uint256) {
+    function take(address _from) external virtual returns (uint256) {
         return _take(_from, type(uint256).max, msg.sender, new bytes(0));
     }
 
@@ -616,16 +660,23 @@ contract Auction is Governance2Step, ReentrancyGuard {
         address _from,
         uint256 _maxAmount,
         address _takerReceiver,
-        bytes memory /*_data*/
+        bytes memory //_data
     ) internal virtual nonReentrant returns (uint256 _amountTaken) {
         AuctionInfo memory auction = auctions[_from];
 
         // Max amount that can be taken.
-        uint256 _available = Maths.min(auction.initialAvailable, ERC20(_from).balanceOf(address(this)));
+        uint256 _available = Maths.min(
+            auction.initialAvailable,
+            ERC20(_from).balanceOf(address(this))
+        );
         _amountTaken = _available > _maxAmount ? _maxAmount : _available;
 
         // Get the amount needed. Returns 0 if auction not active.
-        uint256 needed = _getAmountNeeded(auction, _amountTaken, block.timestamp);
+        uint256 needed = _getAmountNeeded(
+            auction,
+            _amountTaken,
+            block.timestamp
+        );
 
         require(needed != 0, "zero needed");
 
@@ -713,9 +764,7 @@ contract Auction is Governance2Step, ReentrancyGuard {
      * @dev Only callable by governance in replace of sweep settle and kick.
      * @param _from The address of the token to be auctioned.
      */
-    function forceKick(
-        address _from
-    ) external onlyGovernance {
+    function forceKick(address _from) external onlyGovernance {
         auctions[_from].kicked = uint64(0);
         _kick(_from);
     }
@@ -724,9 +773,7 @@ contract Auction is Governance2Step, ReentrancyGuard {
      * @notice Allows the auction to be stopped if the full amount is taken.
      * @param _from The address of the token to be auctioned.
      */
-    function settle(
-        address _from
-    ) external virtual {
+    function settle(address _from) external virtual {
         require(isActive(_from), "!active");
         require(ERC20(_from).balanceOf(address(this)) == 0, "!empty");
 
@@ -735,12 +782,12 @@ contract Auction is Governance2Step, ReentrancyGuard {
         emit AuctionSettled(_from);
     }
 
-    function sweep(
-        address _token
-    ) external virtual onlyGovernance {
-        ERC20(_token).safeTransfer(msg.sender, ERC20(_token).balanceOf(address(this)));
+    function sweep(address _token) external virtual onlyGovernance {
+        ERC20(_token).safeTransfer(
+            msg.sender,
+            ERC20(_token).balanceOf(address(this))
+        );
 
         emit AuctionSwept(_token, msg.sender);
     }
-
 }

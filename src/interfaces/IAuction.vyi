@@ -28,6 +28,9 @@ def enable(_from: address):
 def kick(_token: address) -> uint256:
     ...
 
+@external
+def setGovernanceOnlyKick(_governanceOnlyKick: bool):
+    ...
 
 @external
 def setReceiver(_receiver: address):

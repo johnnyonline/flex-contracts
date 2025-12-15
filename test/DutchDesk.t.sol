@@ -207,6 +207,20 @@ contract DutchDeskTests is Base {
         vm.expectRevert("max_auctions");
         vm.prank(address(troveManager));
         dutchDesk.kick(_amount, userLender, true);
+
+        // Settle one auction and verify we can kick again
+        address _auctionToSettle = dutchDesk.auctions(0);
+        uint256 _amountNeeded = IAuction(_auctionToSettle).getAmountNeeded(address(collateralToken));
+        airdrop(address(borrowToken), liquidator, _amountNeeded);
+        vm.startPrank(liquidator);
+        borrowToken.approve(_auctionToSettle, _amountNeeded);
+        IAuction(_auctionToSettle).take(address(collateralToken), _amount, liquidator);
+        vm.stopPrank();
+
+        // Now we should be able to kick again
+        vm.prank(address(troveManager));
+        dutchDesk.kick(_amount, userLender, true);
+        assertTrue(IAuction(_auctionToSettle).isActive(address(collateralToken)), "E1");
     }
 
     function test_kick_redemption_doesNotReuseAuctionWithPriceTooLow() public {
@@ -233,7 +247,7 @@ contract DutchDeskTests is Base {
         assertNotEq(_auction0, _auction1, "E4");
     }
 
-    function test_kick_redemption_reusesAuctionWithActiveDust() public {
+    function test_kick_redemption_createsNewAuctionWithActiveDust() public {
         uint256 _dustAmount = dutchDesk.DUST_THRESHOLD();
         uint256 _amount = dutchDesk.DUST_THRESHOLD() + COLLATERAL_TOKEN_PRECISION;
 
@@ -258,10 +272,10 @@ contract DutchDeskTests is Base {
         vm.prank(address(troveManager));
         dutchDesk.kick(_amount, userLender, true);
 
-        vm.expectRevert();
-        dutchDesk.auctions(1);
-
-        assertTrue(IAuction(_auction0).isActive(address(collateralToken)), "E2");
+        // Even with dust remaining, a new auction should be created since the first is still active
+        address _auction1 = dutchDesk.auctions(1);
+        assertNotEq(_auction0, _auction1, "E2");
+        assertTrue(IAuction(_auction1).isActive(address(collateralToken)), "E3");
     }
 
     function test_kick_redemption_reusesAuctionWithKickableDust() public {
@@ -405,7 +419,7 @@ contract DutchDeskTests is Base {
         assertFalse(IAuction(_auction0).isActive(address(collateralToken)), "E0");
 
         airdrop(address(collateralToken), _auction0, _dustAmount);
-        vm.prank(userBorrower);
+        vm.prank(address(dutchDesk));
         IAuction(_auction0).kick(address(collateralToken));
 
         assertLe(IAuction(_auction0).kickable(address(collateralToken)), dutchDesk.DUST_THRESHOLD(), "E1");
@@ -505,14 +519,73 @@ contract DutchDeskTests is Base {
         dutchDesk.emergency_kick(_emptyArray);
     }
 
+    function test_emergencyKick_notKickable(uint256 _amount) public {
+        _amount = bound(_amount, dutchDesk.DUST_THRESHOLD() + 1, maxFuzzAmount);
+
+        airdrop(address(collateralToken), address(dutchDesk), _amount);
+        vm.prank(address(troveManager));
+        dutchDesk.kick(_amount, userLender, true);
+
+        address _auction0 = dutchDesk.auctions(0);
+
+        // Auction is active but not kickable (no time has passed, price hasn't dropped)
+        assertTrue(IAuction(_auction0).isActive(address(collateralToken)), "E0");
+        assertEq(IAuction(_auction0).kickable(address(collateralToken)), 0, "E1");
+
+        // Try to emergency kick an auction that isn't kickable
+        address[] memory _auctionsToKick = new address[](1);
+        _auctionsToKick[0] = _auction0;
+
+        vm.expectRevert("!kickable");
+        vm.prank(keeper);
+        dutchDesk.emergency_kick(_auctionsToKick);
+    }
+
     function test_kick_invalidCaller(
         address _invalidCaller
     ) public {
-        vm.assume(_invalidCaller != address(troveManager));
+        vm.assume(_invalidCaller != address(troveManager) && _invalidCaller != address(dutchDesk));
 
         vm.expectRevert("!trove_manager");
         vm.prank(_invalidCaller);
         dutchDesk.kick(0, userLender, false);
+    }
+
+    function test_auctionKick_onlyDutchDesk(
+        address _invalidCaller,
+        uint256 _amount
+    ) public {
+        vm.assume(_invalidCaller != address(dutchDesk));
+        _amount = bound(_amount, dutchDesk.DUST_THRESHOLD() + 1, maxFuzzAmount);
+
+        // 1. Test LIQUIDATION_AUCTION can only be kicked by dutchDesk
+        IAuction _liquidationAuction = IAuction(dutchDesk.LIQUIDATION_AUCTION());
+        airdrop(address(collateralToken), address(_liquidationAuction), _amount);
+        vm.expectRevert("!governance");
+        vm.prank(_invalidCaller);
+        _liquidationAuction.kick(address(collateralToken));
+
+        // 2. Test redemption auction can only be kicked by dutchDesk
+        // First create a redemption auction
+        airdrop(address(collateralToken), address(dutchDesk), _amount);
+        vm.prank(address(troveManager));
+        dutchDesk.kick(_amount, userLender, true);
+
+        address _redemptionAuction = dutchDesk.auctions(0);
+        assertTrue(_redemptionAuction != address(0), "E1");
+
+        // Take the redemption auction so we can try to kick it again
+        uint256 _amountNeeded = IAuction(_redemptionAuction).getAmountNeeded(address(collateralToken));
+        airdrop(address(borrowToken), liquidator, _amountNeeded);
+        vm.startPrank(liquidator);
+        borrowToken.approve(_redemptionAuction, _amountNeeded);
+        IAuction(_redemptionAuction).take(address(collateralToken), _amount, liquidator);
+        vm.stopPrank();
+
+        // Try to kick redemption auction directly - should fail
+        vm.expectRevert("!governance");
+        vm.prank(_invalidCaller);
+        IAuction(_redemptionAuction).kick(address(collateralToken));
     }
 
     function test_setKeeper(

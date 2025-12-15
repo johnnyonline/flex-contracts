@@ -9,10 +9,7 @@
         and sorted_troves contracts
 """
 # @todo -- here
-# 1. add is_kickable check to `emergency_kick`
-# 2. use dos resistant auction?
-# 3. fix dutch desk tests
-# 4. test trove manager setup
+# 1. test trove manager setup
 
 from ethereum.ercs import IERC20
 from ethereum.ercs import IERC20Detailed

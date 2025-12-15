@@ -111,6 +111,7 @@ def __init__(
     assert _COLLATERAL_TOKEN_PRECISION <= _WAD, "!decimals"
 
     LIQUIDATION_AUCTION = IAuction(extcall AUCTION_FACTORY.createNewAuction(borrow_token))
+    extcall LIQUIDATION_AUCTION.setGovernanceOnlyKick(True)
     extcall LIQUIDATION_AUCTION.enable(collateral_token)
     extcall LIQUIDATION_AUCTION.setReceiver(lender)
 
@@ -177,6 +178,13 @@ def emergency_kick(auctions: DynArray[IAuction, MAX_AUCTIONS]):
 
     # Loop through provided auctions and emergency kick them
     for auction: IAuction in auctions:
+        # Check if there's enough to emergency kick
+        is_kickable: bool = staticcall auction.kickable(COLLATERAL_TOKEN.address) > DUST_THRESHOLD
+
+        # Double check the keeper's integrity
+        assert is_kickable, "!kickable"
+
+        # Kick with higher starting price buffer
         self._kick(auction, EMERGENCY_STARTING_PRICE_BUFFER_PERCENTAGE)
 
 
@@ -250,6 +258,7 @@ def _kick(
     is_active_auction: bool = staticcall auction.isActive(COLLATERAL_TOKEN.address)
 
     # If there's an active auction, sweep if needed, and settle
+    # Only relevant for liquidation auctions, a redemption auction should never be active here
     if is_active_auction:
         # Check if we have anything to sweep
         to_sweep: uint256 = staticcall auction.available(COLLATERAL_TOKEN.address)
@@ -305,21 +314,18 @@ def _get_available_auction() -> IAuction:
     # Bring auctions into memory
     auctions: DynArray[IAuction, MAX_AUCTIONS] = self.auctions
 
-    # Make sure we don't exceed max auctions
-    assert len(auctions) < MAX_AUCTIONS, "max_auctions"
-
     # Check existing auctions first
     for auction: IAuction in auctions:
-        # Check if there's an active auction
-        # We consider an auction "active" if it tries to sell more than dust
-        # NOTE: an auction could be partially taken and left with a small amount below dust
-        is_active: bool = staticcall auction.available(COLLATERAL_TOKEN.address) > DUST_THRESHOLD
+        # Check if the auction is active
+        is_active: bool = staticcall auction.isActive(COLLATERAL_TOKEN.address)
 
         # Skip if active
         if is_active:
             continue
 
         # Check if there's enough to kick
+        # If an auction was stopped due to "price too low", it could be inactive but still kickable
+        # In that case, skip it as it's being used by someone and `emergency_kick` should be called to restart it
         is_kickable: bool = staticcall auction.kickable(COLLATERAL_TOKEN.address) > DUST_THRESHOLD
 
         # Skip if kickable
@@ -328,6 +334,9 @@ def _get_available_auction() -> IAuction:
 
         # Return if not active and not kickable
         return auction
+    
+    # Make sure we don't exceed max auctions
+    assert len(auctions) < MAX_AUCTIONS, "max_auctions"
 
     # Otherwise, create a new auction
     new_auction: IAuction = IAuction(extcall AUCTION_FACTORY.createNewAuction(
@@ -337,6 +346,7 @@ def _get_available_auction() -> IAuction:
         1_000_000,  # startingPrice
         keccak256(convert(len(auctions), bytes32))  # salt
     ))
+    extcall new_auction.setGovernanceOnlyKick(True)
     extcall new_auction.enable(COLLATERAL_TOKEN.address)
 
     # Add new auction to the list
