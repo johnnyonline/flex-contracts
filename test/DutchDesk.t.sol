@@ -519,7 +519,9 @@ contract DutchDeskTests is Base {
         dutchDesk.emergency_kick(_emptyArray);
     }
 
-    function test_emergencyKick_notKickable(uint256 _amount) public {
+    function test_emergencyKick_notKickable(
+        uint256 _amount
+    ) public {
         _amount = bound(_amount, dutchDesk.DUST_THRESHOLD() + 1, maxFuzzAmount);
 
         airdrop(address(collateralToken), address(dutchDesk), _amount);
