@@ -63,5 +63,4 @@ def price(scaled: bool = True) -> uint256:
     @return Price scaled to the required format
     """
     price: uint256 = staticcall _CURVE_POOL.price_oracle()
-    print("Curve Pool Oracle Price:", price, hardhat_compat=True)
     return price * _ORACLE_SCALE_FACTOR // 10 ** _CURVE_POOL_ORACLE_DECIMALS if scaled else price

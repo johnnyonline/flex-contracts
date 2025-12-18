@@ -14,6 +14,8 @@
 from ethereum.ercs import IERC20
 from ethereum.ercs import IERC20Detailed
 
+from snekmate.utils import math
+
 from interfaces import IDutchDesk
 from interfaces import IPriceOracle
 from interfaces import ISortedTroves
@@ -1341,6 +1343,19 @@ def _sync_total_debt() -> uint256:
     pending_agg_interest: uint256 = (
         (self.total_weighted_debt * (block.timestamp - self.last_debt_update_time)) // (_ONE_YEAR * _BORROW_TOKEN_PRECISION)
     )
+    # ----
+    # @todo -- here
+    # Calculate the pending aggregate interest using ceiling division.
+    # Individual trove interest uses floor division, so we use ceiling here to ensure
+    # `total_debt >= sum(trove debts)` always holds. This prevents `total_debt` from
+    # going negative if all troves repay. The difference is small and it should scale
+    # with the number of interest minting events
+    # pending_agg_interest: uint256 = math._ceil_div(
+    #     self.total_weighted_debt * (block.timestamp - self.last_debt_update_time),
+    #     _ONE_YEAR * _BORROW_TOKEN_PRECISION
+    # )
+    # ----
+
 
     # Calculate the new total debt after interest
     new_total_debt: uint256 = self.total_debt + pending_agg_interest

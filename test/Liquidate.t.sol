@@ -35,7 +35,7 @@ contract LiquidateTests is Base {
     // 2. borrow all available liquidity
     // 3. collateral price drops
     // 4. liquidate trove
-    function test_liquidateTrove1(
+    function test_liquidateTrove(
         uint256 _amount
     ) public {
         _amount = bound(_amount, troveManager.MIN_DEBT(), maxFuzzAmount);
