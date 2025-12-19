@@ -115,7 +115,7 @@ contract AdjustRateTests is Base {
         assertEq(borrowToken.balanceOf(userBorrower), _amount, "E44");
 
         // Check global info
-        assertEq(troveManager.total_debt(), _secondExpectedDebt, "E45");
+        assertApproxEqAbs(troveManager.total_debt(), _secondExpectedDebt, 2, "E45");
         assertEq(troveManager.total_weighted_debt(), _secondExpectedDebt * _newAnnualInterestRate, "E46");
         assertEq(troveManager.collateral_balance(), _collateralNeeded, "E47");
         assertEq(troveManager.zombie_trove_id(), 0, "E48");
@@ -236,7 +236,7 @@ contract AdjustRateTests is Base {
         assertEq(borrowToken.balanceOf(userBorrower), _amount, "E44");
 
         // Check global info
-        assertEq(troveManager.total_debt(), _secondExpectedDebt, "E45");
+        assertApproxEqAbs(troveManager.total_debt(), _secondExpectedDebt, 2, "E45");
         assertEq(troveManager.total_weighted_debt(), _secondExpectedDebt * _newAnnualInterestRate, "E46");
         assertEq(troveManager.collateral_balance(), _collateralNeeded, "E47");
         assertEq(troveManager.zombie_trove_id(), 0, "E48");
@@ -406,7 +406,7 @@ contract AdjustRateTests is Base {
                 / (365 days * BORROW_TOKEN_PRECISION));
 
         // Check global info
-        assertApproxEqAbs(troveManager.total_debt(), _expectedDebtWithInterest + _secondExpectedDebt, 1, "E65");
+        assertApproxEqAbs(troveManager.total_debt(), _expectedDebtWithInterest + _secondExpectedDebt, 3, "E65");
         assertEq(
             troveManager.total_weighted_debt(), (_expectedDebt * DEFAULT_ANNUAL_INTEREST_RATE) + (_secondExpectedDebt * _newAnnualInterestRate), "E66"
         );

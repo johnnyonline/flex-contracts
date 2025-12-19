@@ -52,7 +52,7 @@ contract InterestTests is Base {
         uint256 _newTotalDebt = troveManager.sync_total_debt();
 
         // Verify total debt increased by expected interest
-        assertEq(_newTotalDebt, _initialDebt + _expectedInterest, "E3");
+        assertApproxEqAbs(_newTotalDebt, _initialDebt + _expectedInterest, 2, "E3");
 
         // Close trove to verify actual debt owed
         uint256 _debtToRepay = _initialDebt + _expectedInterest;
@@ -65,7 +65,7 @@ contract InterestTests is Base {
         // Verify trove is closed and debt is cleared
         _trove = troveManager.troves(_troveId);
         assertEq(uint256(_trove.status), uint256(ITroveManager.Status.closed), "E4");
-        assertEq(troveManager.total_debt(), 0, "E5");
+        assertApproxEqAbs(troveManager.total_debt(), 0, 2, "E5");
     }
 
     // Test interest accrual on multiple troves with different rates
@@ -116,7 +116,7 @@ contract InterestTests is Base {
         uint256 _newTotalDebt = troveManager.sync_total_debt();
 
         // Verify total debt increased by expected interest
-        assertEq(_newTotalDebt, _totalInitialDebt + _expectedInterest, "E2");
+        assertApproxEqAbs(_newTotalDebt, _totalInitialDebt + _expectedInterest, 2, "E2");
     }
 
     // Test interest accrual after rate adjustment
@@ -176,7 +176,7 @@ contract InterestTests is Base {
         uint256 _newTotalDebt = troveManager.sync_total_debt();
 
         // Verify total debt
-        assertEq(_newTotalDebt, _debtAfterAdjustment + _interest2, "E1");
+        assertApproxEqAbs(_newTotalDebt, _debtAfterAdjustment + _interest2, 2, "E2");
     }
 
 }

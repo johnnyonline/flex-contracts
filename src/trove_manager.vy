@@ -5,11 +5,9 @@
 @license MIT
 @author Flex
 @notice Core contract that manages all Troves. Handles opening, closing, liquidating, and updating borrower positions,
-        accrues interest, maintains aggregate debt accounting, and coordinates redemptions with the Lender
-        and sorted_troves contracts
+        accrues interest, maintains aggregate debt accounting, and coordinates redemptions with the Lender,
+        sorted_troves and dutch_desk contracts
 """
-# @todo -- here
-# 1. test trove manager setup
 
 from ethereum.ercs import IERC20
 from ethereum.ercs import IERC20Detailed
@@ -139,11 +137,11 @@ BORROW_TOKEN: public(immutable(IERC20))
 COLLATERAL_TOKEN: public(immutable(IERC20))
 
 # Parameters
-MIN_DEBT: public(immutable(uint256))  # in borrow token decimals # @todo -- test what number makes sense from gas perspective
+MIN_DEBT: public(immutable(uint256))  # in borrow token decimals
 MINIMUM_COLLATERAL_RATIO: public(immutable(uint256))  # e.g., `110 * _ONE_PCT` for 110%
 MIN_ANNUAL_INTEREST_RATE: public(immutable(uint256)) # e.g., `0.5 * _ONE_PCT` for 0.5%
 MAX_ANNUAL_INTEREST_RATE: public(immutable(uint256)) # e.g., `250 * _ONE_PCT` for 250%
-UPFRONT_INTEREST_PERIOD: public(constant(uint256)) = 7 * 24 * 60 * 60  # 7 days # @todo -- make 14 days?
+UPFRONT_INTEREST_PERIOD: public(constant(uint256)) = 7 * 24 * 60 * 60  # 7 days
 INTEREST_RATE_ADJ_COOLDOWN: public(constant(uint256)) = 7 * 24 * 60 * 60  # 7 days
 
 # Internal constants
@@ -151,7 +149,7 @@ _ONE_PCT: immutable(uint256)
 _BORROW_TOKEN_PRECISION: immutable(uint256)
 _PRICE_ORACLE_PRECISION: constant(uint256) = 10 ** 36
 _WAD: constant(uint256) = 10 ** 18
-_MAX_ITERATIONS: constant(uint256) = 1000 # @todo -- test what number makes sense from gas perspective
+_MAX_ITERATIONS: constant(uint256) = 700
 _MAX_LIQUIDATION_BATCH_SIZE: constant(uint256) = 50 # @todo -- test what number makes sense from gas perspective
 _ONE_YEAR: constant(uint256) = 365 * 60 * 60 * 24
 _REDEMPTION_AUCTION: constant(bool) = True
@@ -1117,6 +1115,9 @@ def _redeem(amount: uint256, receiver: address = msg.sender):
         # Cache Trove info
         trove: Trove = self.troves[trove_to_redeem]
 
+        # Cache the ID of the next Trove to redeem, i.e., the previous Trove in the sorted list
+        next_trove_to_redeem: uint256 = staticcall SORTED_TROVES.prev(trove_to_redeem)
+
         # Don't want to redeem a borrower's own Trove
         if msg.sender != trove.owner:
             # Get the Trove's debt after accruing interest
@@ -1179,9 +1180,9 @@ def _redeem(amount: uint256, receiver: address = msg.sender):
             if remaining_debt_to_free == 0:
                 break
 
-        # Get the next trove to redeem. If we just processed a zombie trove (which is not in the sorted troves list),
-        # get the trove with the lowest interest rate. Otherwise, get the previous trove from the list
-        trove_to_redeem = staticcall SORTED_TROVES.last() if is_zombie_trove else staticcall SORTED_TROVES.prev(trove_to_redeem)
+        # Get the next Trove to redeem. If we just processed a zombie Trove (which is not in the sorted Troves list),
+        # get the Trove with the lowest interest rate. Otherwise, use the previous Trove from the list
+        trove_to_redeem = staticcall SORTED_TROVES.last() if is_zombie_trove else next_trove_to_redeem
 
         # Break if we reached the end of the list
         if trove_to_redeem == 0:
@@ -1339,21 +1340,15 @@ def _sync_total_debt() -> uint256:
     @notice Accrue interest on the total debt and return the updated figure
     @return new_total_debt The updated total debt after accruing interest
     """
-    # Calculate the pending aggregate interest
-    pending_agg_interest: uint256 = (
-        (self.total_weighted_debt * (block.timestamp - self.last_debt_update_time)) // (_ONE_YEAR * _BORROW_TOKEN_PRECISION)
-    )
-    # ----
-    # @todo -- here
     # Calculate the pending aggregate interest using ceiling division.
     # Individual trove interest uses floor division, so we use ceiling here to ensure
     # `total_debt >= sum(trove debts)` always holds. This prevents `total_debt` from
     # going negative if all troves repay. The difference is small and it should scale
     # with the number of interest minting events
-    # pending_agg_interest: uint256 = math._ceil_div(
-    #     self.total_weighted_debt * (block.timestamp - self.last_debt_update_time),
-    #     _ONE_YEAR * _BORROW_TOKEN_PRECISION
-    # )
+    pending_agg_interest: uint256 = math._ceil_div(
+        self.total_weighted_debt * (block.timestamp - self.last_debt_update_time),
+        _ONE_YEAR * _BORROW_TOKEN_PRECISION
+    )
     # ----
 
 

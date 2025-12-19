@@ -110,7 +110,7 @@ contract LendTests is Base {
         (uint256 _profit, uint256 _loss) = lender.report();
 
         // Check return Values
-        assertEq(_profit, _expectedProfit, "E27");
+        assertApproxEqAbs(_profit, _expectedProfit, 2, "E27");
         assertEq(_loss, 0, "E28");
 
         uint256 _balanceBefore = borrowToken.balanceOf(userLender);
@@ -167,7 +167,7 @@ contract LendTests is Base {
         assertEq(borrowToken.balanceOf(userBorrower), _amount, "E53");
 
         // Check global info
-        assertEq(troveManager.total_debt(), 0, "E54");
+        assertApproxEqAbs(troveManager.total_debt(), 0, 2, "E54");
         assertEq(troveManager.total_weighted_debt(), 0, "E55");
         assertApproxEqRel(troveManager.collateral_balance(), _expectedCollateralAfterRedemption, 5e15, "E56"); // 0.5%
         assertEq(troveManager.zombie_trove_id(), 0, "E57");
@@ -317,7 +317,7 @@ contract LendTests is Base {
         assertEq(borrowToken.balanceOf(userBorrower), _amount, "E50");
 
         // Check global info
-        assertEq(troveManager.total_debt(), _expectedProfit, "E51");
+        assertApproxEqAbs(troveManager.total_debt(), _expectedProfit, 2, "E51");
         assertEq(troveManager.total_weighted_debt(), _expectedProfit * DEFAULT_ANNUAL_INTEREST_RATE, "E52");
         assertApproxEqRel(troveManager.collateral_balance(), _expectedCollateralAfterRedemption, 5e15, "E53"); // 0.5%
         assertEq(troveManager.zombie_trove_id(), _troveId, "E54");
@@ -373,6 +373,46 @@ contract LendTests is Base {
         // Check dutch desk is empty
         assertEq(borrowToken.balanceOf(address(dutchDesk)), 0, "E7");
         assertEq(collateralToken.balanceOf(address(dutchDesk)), 0, "E8");
+    }
+
+    // 1. lend
+    // 2. 3 borrowers borrow all liquidity
+    // 3. lender withdraws all liquidity and redeems all 3 borrowers in the same tx
+    function test_lend_redeemMultipleBorrowers() public {
+        uint256 _minDebt = troveManager.MIN_DEBT();
+        uint256 _lenderDeposit = _minDebt * 3;
+
+        // Lend
+        mintAndDepositIntoLender(userLender, _lenderDeposit);
+
+        // 3 borrowers borrow all liquidity
+        for (uint256 i = 0; i < 3; i++) {
+            uint256 _collateralNeeded =
+                (_minDebt * DEFAULT_TARGET_COLLATERAL_RATIO / BORROW_TOKEN_PRECISION) * ORACLE_PRICE_SCALE / priceOracle.price();
+
+            address _borrower = address(uint160(i + 1000));
+            mintAndOpenTrove(_borrower, _collateralNeeded, _minDebt, DEFAULT_ANNUAL_INTEREST_RATE);
+        }
+
+        // Sanity checks
+        assertEq(sortedTroves.size(), 3, "E0");
+        assertEq(borrowToken.balanceOf(address(lender)), 0, "E1");
+
+        // Report profit
+        vm.prank(keeper);
+        lender.report();
+
+        // Lender withdraws all - should redeem all 3 borrowers
+        vm.prank(userLender);
+        lender.redeem(_lenderDeposit, userLender, userLender);
+
+        // Take auction
+        address _auction = dutchDesk.auctions(0);
+        takeAuction(_auction);
+
+        // All 3 troves should be zombies
+        assertEq(sortedTroves.size(), 0, "E2");
+        assertEq(troveManager.total_debt(), 0, "E3");
     }
 
     function test_setDepositLimit(

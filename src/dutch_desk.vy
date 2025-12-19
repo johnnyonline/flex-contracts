@@ -15,7 +15,8 @@ from periphery import ownable_2step as ownable
 from interfaces import IAuction
 from interfaces import IPriceOracle
 from interfaces import IAuctionFactory
-
+# @todo -- auction step size? and buffers
+# @todo -- DUST_THRESHOLD?
 
 # ============================================================================================
 # Modules
