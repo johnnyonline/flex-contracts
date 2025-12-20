@@ -150,7 +150,6 @@ _BORROW_TOKEN_PRECISION: immutable(uint256)
 _PRICE_ORACLE_PRECISION: constant(uint256) = 10 ** 36
 _WAD: constant(uint256) = 10 ** 18
 _MAX_ITERATIONS: constant(uint256) = 700
-_MAX_LIQUIDATION_BATCH_SIZE: constant(uint256) = 50 # @todo -- test what number makes sense from gas perspective
 _ONE_YEAR: constant(uint256) = 365 * 60 * 60 * 24
 _REDEMPTION_AUCTION: constant(bool) = True
 
@@ -933,7 +932,7 @@ def close_zombie_trove(trove_id: uint256):
 
 
 @external
-def liquidate_troves(trove_ids: uint256[_MAX_LIQUIDATION_BATCH_SIZE]):
+def liquidate_troves(trove_ids: uint256[_MAX_ITERATIONS]):
     """
     @notice Liquidate a list of unhealthy Troves
     @dev Uses the `dutch_desk` contract to auction off the collateral tokens

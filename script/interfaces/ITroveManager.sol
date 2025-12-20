@@ -39,18 +39,6 @@ interface ITroveManager {
     // Constants
     // ============================================================================================
 
-    // function LENDER() external view returns (address);
-    // function EXCHANGE() external view returns (address);
-    // function SORTED_TROVES() external view returns (address);
-    // function BORROW_TOKEN() external view returns (address);
-    // function COLLATERAL_TOKEN() external view returns (address);
-    // function MINIMUM_COLLATERAL_RATIO() external view returns (uint256);
-    // function MIN_DEBT() external view returns (uint256);
-    // function MIN_ANNUAL_INTEREST_RATE() external view returns (uint256);
-    // function MAX_ANNUAL_INTEREST_RATE() external view returns (uint256);
-    // function UPFRONT_INTEREST_PERIOD() external view returns (uint256);
-    // function INTEREST_RATE_ADJ_COOLDOWN() external view returns (uint256);
-
     // Contracts
     function LENDER() external view returns (address);
     function DUTCH_DESK() external view returns (address);
@@ -175,7 +163,7 @@ interface ITroveManager {
     // ============================================================================================
 
     function liquidate_troves(
-        uint256[50] calldata trove_ids
+        uint256[700] calldata trove_ids
     ) external;
 
     // ============================================================================================

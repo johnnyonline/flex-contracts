@@ -2,20 +2,8 @@
 pragma solidity 0.8.23;
 
 import "./Base.sol";
-
-interface IPriceOracleScaled {
-
-    function price() external view returns (uint256);
-
-}
-
-interface IPriceOracleNotScaled {
-
-    function price(
-        bool _scaled
-    ) external view returns (uint256);
-
-}
+import {IPriceOracleScaled} from "./interfaces/IPriceOracleScaled.sol";
+import {IPriceOracleNotScaled} from "./interfaces/IPriceOracleNotScaled.sol";
 
 contract LiquidateTests is Base {
 
@@ -125,7 +113,7 @@ contract LiquidateTests is Base {
 
         // Finally, liquidate the trove
         vm.startPrank(liquidator);
-        uint256[MAX_LIQUIDATION_BATCH_SIZE] memory _troveIdsToLiquidate;
+        uint256[MAX_ITERATIONS] memory _troveIdsToLiquidate;
         _troveIdsToLiquidate[0] = _troveId;
         troveManager.liquidate_troves(_troveIdsToLiquidate);
         vm.stopPrank();
@@ -327,7 +315,7 @@ contract LiquidateTests is Base {
 
         // Finally, liquidate the troves
         vm.startPrank(liquidator);
-        uint256[MAX_LIQUIDATION_BATCH_SIZE] memory _troveIdsToLiquidate;
+        uint256[MAX_ITERATIONS] memory _troveIdsToLiquidate;
         _troveIdsToLiquidate[0] = _troveId;
         _troveIdsToLiquidate[1] = _anotherTroveId;
         troveManager.liquidate_troves(_troveIdsToLiquidate);
@@ -507,7 +495,7 @@ contract LiquidateTests is Base {
 
         // Liquidate the first trove
         vm.startPrank(liquidator);
-        uint256[MAX_LIQUIDATION_BATCH_SIZE] memory _troveIdsToLiquidate;
+        uint256[MAX_ITERATIONS] memory _troveIdsToLiquidate;
         _troveIdsToLiquidate[0] = _troveId1;
         troveManager.liquidate_troves(_troveIdsToLiquidate);
         vm.stopPrank();
@@ -592,7 +580,7 @@ contract LiquidateTests is Base {
 
     function test_liquidateTroves_emptyList() public {
         // Make sure we always fail when no trove ids are passed
-        uint256[MAX_LIQUIDATION_BATCH_SIZE] memory _troveIdsToLiquidate;
+        uint256[MAX_ITERATIONS] memory _troveIdsToLiquidate;
         vm.expectRevert("!trove_ids");
         troveManager.liquidate_troves(_troveIdsToLiquidate);
     }
@@ -602,7 +590,7 @@ contract LiquidateTests is Base {
     ) public {
         _nonExistentTroveId = bound(_nonExistentTroveId, 1, type(uint256).max);
         // Make sure we always fail when a non-existent trove is passed
-        uint256[MAX_LIQUIDATION_BATCH_SIZE] memory _troveIdsToLiquidate;
+        uint256[MAX_ITERATIONS] memory _troveIdsToLiquidate;
         _troveIdsToLiquidate[0] = _nonExistentTroveId;
         vm.expectRevert("!active or zombie");
         troveManager.liquidate_troves(_troveIdsToLiquidate);
@@ -623,7 +611,7 @@ contract LiquidateTests is Base {
         uint256 _troveId = mintAndOpenTrove(userBorrower, _collateralNeeded, _amount, DEFAULT_ANNUAL_INTEREST_RATE);
 
         // Make sure we cannot liquidate a trove that is above MCR
-        uint256[MAX_LIQUIDATION_BATCH_SIZE] memory _troveIdsToLiquidate;
+        uint256[MAX_ITERATIONS] memory _troveIdsToLiquidate;
         _troveIdsToLiquidate[0] = _troveId;
         vm.expectRevert(">=MCR");
         troveManager.liquidate_troves(_troveIdsToLiquidate);

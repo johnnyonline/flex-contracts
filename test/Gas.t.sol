@@ -2,6 +2,8 @@
 pragma solidity 0.8.23;
 
 import "./Base.sol";
+import {IPriceOracleScaled} from "./interfaces/IPriceOracleScaled.sol";
+import {IPriceOracleNotScaled} from "./interfaces/IPriceOracleNotScaled.sol";
 
 contract GasTests is Base {
 
@@ -12,7 +14,6 @@ contract GasTests is Base {
         Base.setUp();
     }
 
-    // Test redeem gas - adjust numTroves to find safe _MAX_ITERATIONS
     function test_gas_redeem() public {
         uint256 _minDebt = troveManager.MIN_DEBT();
         uint256 _rate = DEFAULT_ANNUAL_INTEREST_RATE;
@@ -46,7 +47,6 @@ contract GasTests is Base {
         assertLt(_gasUsed, MAX_GAS, "Exceeded 5M gas limit");
     }
 
-    // Test open_trove gas - adjust numTroves to find safe limit
     function test_gas_openTrove() public {
         uint256 _minDebt = troveManager.MIN_DEBT();
         uint256 _rate = DEFAULT_ANNUAL_INTEREST_RATE;
@@ -87,6 +87,52 @@ contract GasTests is Base {
         emit log_named_uint("Cost in ETH (wei)", gasUsed * GAS_PRICE);
 
         assertLt(gasUsed, MAX_GAS, "Exceeded 5M gas limit");
+    }
+
+    function test_gas_liquidateTroves() public {
+        uint256 _minDebt = troveManager.MIN_DEBT();
+        uint256 _rate = DEFAULT_ANNUAL_INTEREST_RATE;
+        uint256 _numTroves = MAX_ITERATIONS; // Gas used: 5,819,660
+
+        uint256 _lenderDeposit = _minDebt * _numTroves;
+
+        // Fund lender
+        mintAndDepositIntoLender(userLender, _lenderDeposit);
+
+        // Create troves and store their IDs
+        uint256[MAX_ITERATIONS] memory _troveIds;
+        for (uint256 i = 0; i < _numTroves; i++) {
+            uint256 _collateralNeeded =
+                (_minDebt * DEFAULT_TARGET_COLLATERAL_RATIO / BORROW_TOKEN_PRECISION) * ORACLE_PRICE_SCALE / priceOracle.price();
+
+            address _user = address(uint160(i + 1000));
+            _troveIds[i] = mintAndOpenTrove(_user, _collateralNeeded, _minDebt, _rate);
+        }
+
+        // Drop price to make all troves liquidatable
+        uint256 _priceDropToBelowMCR = priceOracle.price() * 80 / 100; // 20% drop
+        uint256 _priceDropToBelowMCR18 = _priceDropToBelowMCR * 1e18 / ORACLE_PRICE_SCALE;
+        vm.mockCall(
+            address(priceOracle),
+            abi.encodeWithSelector(IPriceOracleScaled.price.selector),
+            abi.encode(_priceDropToBelowMCR)
+        );
+        vm.mockCall(
+            address(priceOracle),
+            abi.encodeWithSelector(IPriceOracleNotScaled.price.selector, false),
+            abi.encode(_priceDropToBelowMCR18)
+        );
+
+        // Liquidate all troves
+        uint256 _gasBefore = gasleft();
+        troveManager.liquidate_troves(_troveIds);
+        uint256 _gasUsed = _gasBefore - gasleft();
+
+        emit log_named_uint("Troves liquidated", _numTroves);
+        emit log_named_uint("Gas used", _gasUsed);
+        emit log_named_uint("Cost in ETH (wei)", _gasUsed * GAS_PRICE);
+
+        assertLt(_gasUsed, MAX_GAS + 1_000_000, "Exceeded 6M gas limit");
     }
 
 }
