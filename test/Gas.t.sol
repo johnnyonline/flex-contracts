@@ -2,8 +2,8 @@
 pragma solidity 0.8.23;
 
 import "./Base.sol";
-import {IPriceOracleScaled} from "./interfaces/IPriceOracleScaled.sol";
 import {IPriceOracleNotScaled} from "./interfaces/IPriceOracleNotScaled.sol";
+import {IPriceOracleScaled} from "./interfaces/IPriceOracleScaled.sol";
 
 contract GasTests is Base {
 
@@ -112,16 +112,8 @@ contract GasTests is Base {
         // Drop price to make all troves liquidatable
         uint256 _priceDropToBelowMCR = priceOracle.price() * 80 / 100; // 20% drop
         uint256 _priceDropToBelowMCR18 = _priceDropToBelowMCR * 1e18 / ORACLE_PRICE_SCALE;
-        vm.mockCall(
-            address(priceOracle),
-            abi.encodeWithSelector(IPriceOracleScaled.price.selector),
-            abi.encode(_priceDropToBelowMCR)
-        );
-        vm.mockCall(
-            address(priceOracle),
-            abi.encodeWithSelector(IPriceOracleNotScaled.price.selector, false),
-            abi.encode(_priceDropToBelowMCR18)
-        );
+        vm.mockCall(address(priceOracle), abi.encodeWithSelector(IPriceOracleScaled.price.selector), abi.encode(_priceDropToBelowMCR));
+        vm.mockCall(address(priceOracle), abi.encodeWithSelector(IPriceOracleNotScaled.price.selector, false), abi.encode(_priceDropToBelowMCR18));
 
         // Liquidate all troves
         uint256 _gasBefore = gasleft();

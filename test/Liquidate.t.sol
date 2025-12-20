@@ -2,8 +2,8 @@
 pragma solidity 0.8.23;
 
 import "./Base.sol";
-import {IPriceOracleScaled} from "./interfaces/IPriceOracleScaled.sol";
 import {IPriceOracleNotScaled} from "./interfaces/IPriceOracleNotScaled.sol";
+import {IPriceOracleScaled} from "./interfaces/IPriceOracleScaled.sol";
 
 contract LiquidateTests is Base {
 
