@@ -4,6 +4,7 @@ pragma solidity 0.8.23;
 import "./Base.sol";
 import {IPriceOracleNotScaled} from "./interfaces/IPriceOracleNotScaled.sol";
 import {IPriceOracleScaled} from "./interfaces/IPriceOracleScaled.sol";
+import {IAuction} from "../script/interfaces/IAuction.sol";
 
 contract GasTests is Base {
 
@@ -125,6 +126,50 @@ contract GasTests is Base {
         emit log_named_uint("Cost in ETH (wei)", _gasUsed * GAS_PRICE);
 
         assertLt(_gasUsed, MAX_GAS + 1_000_000, "Exceeded 6M gas limit");
+    }
+
+    // Test kick gas with many active auctions
+    function test_gas_kick() public {
+        uint256 _minDebt = troveManager.MIN_DEBT();
+        uint256 _numAuctions = 5;
+
+        // Create auctions: deposit -> borrow 100% -> redeem (forces troveManager.redeem)
+        uint256 _collateralNeeded;
+        for (uint256 i = 0; i < _numAuctions; i++) {
+            // Lender deposits
+            mintAndDepositIntoLender(userLender, _minDebt);
+
+            // Borrower takes 100% of liquidity
+            _collateralNeeded =
+                (_minDebt * DEFAULT_TARGET_COLLATERAL_RATIO / BORROW_TOKEN_PRECISION) * ORACLE_PRICE_SCALE / priceOracle.price();
+            address _borrower = address(uint160(i + 1000));
+            mintAndOpenTrove(_borrower, _collateralNeeded, _minDebt, DEFAULT_ANNUAL_INTEREST_RATE);
+
+            // Lender redeems - forces troveManager.redeem since no idle liquidity
+            vm.prank(userLender);
+            lender.redeem(_minDebt, userLender, userLender);
+        }
+
+        // Verify we have the expected number of auctions
+        assertTrue(dutchDesk.auctions(_numAuctions - 1) != address(0), "E0");
+
+        // Create one more trove for the final redemption
+        mintAndDepositIntoLender(userLender, _minDebt);
+        _collateralNeeded =
+            (_minDebt * DEFAULT_TARGET_COLLATERAL_RATIO / BORROW_TOKEN_PRECISION) * ORACLE_PRICE_SCALE / priceOracle.price();
+        mintAndOpenTrove(userBorrower, _collateralNeeded, _minDebt, DEFAULT_ANNUAL_INTEREST_RATE);
+
+        // Measure gas for the last redemption which iterates through all auctions
+        vm.prank(userLender);
+        uint256 _gasBefore = gasleft();
+        lender.redeem(_minDebt, userLender, userLender);
+        uint256 _gasUsed = _gasBefore - gasleft();
+
+        emit log_named_uint("Active auctions", _numAuctions);
+        emit log_named_uint("Gas used", _gasUsed);
+        emit log_named_uint("Cost in ETH (wei)", _gasUsed * GAS_PRICE);
+
+        assertLt(_gasUsed, MAX_GAS, "Exceeded 5M gas limit");
     }
 
 }

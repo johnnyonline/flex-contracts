@@ -18,6 +18,12 @@ from interfaces import IDutchDesk
 from interfaces import IPriceOracle
 from interfaces import ISortedTroves
 
+# @todo -- add docs to constructor
+# @todo -- emit event on specific trove is redeemed
+# @todo -- when LIQUIDATION_AUCTION is active (collateral/borrow tokens are missing from the system)
+# 1. lender.availableWithdrawLimit should be 0?
+# 2. borrowers should be careful to not get less debt than expected?
+
 
 # ============================================================================================
 # Events

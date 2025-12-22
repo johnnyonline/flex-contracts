@@ -1,0 +1,12 @@
+# @version 0.4.3
+
+
+@external
+def auctionTakeCallback(
+    auction_id: uint256,
+    taker: address,
+    amount_taken: uint256,
+    want_amount: uint256,
+    data: Bytes[10**5],
+):
+    ...

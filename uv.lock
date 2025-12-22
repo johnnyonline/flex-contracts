@@ -95,7 +95,7 @@ dependencies = [
 
 [package.metadata]
 requires-dist = [
-    { name = "mamushi", specifier = "==0.1.0" },
+    { name = "mamushi", specifier = "==0.0.8" },
     { name = "vyper", specifier = "==0.4.3" },
 ]
 
@@ -150,7 +150,7 @@ wheels = [
 
 [[package]]
 name = "mamushi"
-version = "0.1.0"
+version = "0.0.8"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "click" },
@@ -158,9 +158,9 @@ dependencies = [
     { name = "mypy-extensions" },
     { name = "pathspec" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/50/0c/ffc9868dd8e644044cb67be9f51f49c1c904ab17d079d6b5775b372c5224/mamushi-0.1.0.tar.gz", hash = "sha256:2762ccd85d53ab16806604b957fe8d205b43995343149fc5bd1dd58cf30ec65a", size = 47248, upload-time = "2025-12-10T13:57:11.421Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/a8/16/0ea7d5519315327095664345e2b1c6c1e8040ac18f3f8d21668c115004ee/mamushi-0.0.8.tar.gz", hash = "sha256:0cc000aeeecb42baca8b2b7a7c7d5950945168bbf797ce364a09c075c046a7e1", size = 46200, upload-time = "2025-08-25T01:32:07.25Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/27/57/d12e24abfcbd3de4773025278b68070d6243505e814b6cf7c5203fdbeb55/mamushi-0.1.0-py3-none-any.whl", hash = "sha256:6add1da3678ce36b39e28f098bf4a6cbb0d05f7de112f6766cd56958bec41083", size = 49606, upload-time = "2025-12-10T13:57:07.92Z" },
+    { url = "https://files.pythonhosted.org/packages/0a/88/7e9d7fd03afd48b3e3870538bfb78f5c5fb15b8caa7477bd842ee5eee9b9/mamushi-0.0.8-py3-none-any.whl", hash = "sha256:634a73a95f9a44753d0477189c37dac7028b83fb54b3bcaaa406daf8cca9aaee", size = 48474, upload-time = "2025-08-25T01:32:05.179Z" },
 ]
 
 [[package]]

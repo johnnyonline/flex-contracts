@@ -17,6 +17,8 @@ from interfaces import IPriceOracle
 from interfaces import IAuctionFactory
 # @todo -- auction step size? and buffers
 # @todo -- DUST_THRESHOLD?
+# @todo -- lender can redeem $1 many times and block all auctions
+# @todo -- add docs to constructor
 
 # ============================================================================================
 # Modules
@@ -49,7 +51,7 @@ COLLATERAL_TOKEN: public(immutable(IERC20))
 
 # Parameters
 DUST_THRESHOLD: public(immutable(uint256))
-MAX_AUCTIONS: public(constant(uint256)) = 20 # @todo -- test what number makes sense from gas perspective
+MAX_AUCTIONS: public(constant(uint256)) = 20 # @todo -- find real value
 MAX_GAS_PRICE_TO_TRIGGER: public(constant(uint256)) = 50 * 10 ** 9  # 50 gwei
 MINIMUM_PRICE_BUFFER_PERCENTAGE: public(constant(uint256)) = _WAD - 5 * 10 ** 16  # 5%
 STARTING_PRICE_BUFFER_PERCENTAGE: public(constant(uint256)) = _WAD + 15 * 10 ** 16  # 15%
@@ -165,6 +167,7 @@ def emergency_kick_trigger(is_redemption: bool = False) -> DynArray[IAuction, MA
 # ============================================================================================
 
 
+# @todo - emit event
 @external
 def emergency_kick(auctions: DynArray[IAuction, MAX_AUCTIONS]):
     """
@@ -194,6 +197,7 @@ def emergency_kick(auctions: DynArray[IAuction, MAX_AUCTIONS]):
 # ============================================================================================
 
 
+# @todo - emit event
 @external
 def set_keeper(new_keeper: address):
     """
@@ -242,6 +246,7 @@ def kick(amount: uint256, receiver: address = empty(address), is_redemption: boo
 # ============================================================================================
 
 
+# @todo -- emit event
 @internal
 def _kick(
     auction: IAuction,
