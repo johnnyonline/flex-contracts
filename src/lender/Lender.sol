@@ -73,8 +73,11 @@ contract Lender is BaseHooks {
 
     // @inheritdoc BaseStrategy
     function availableWithdrawLimit(address /*_owner*/) public pure override returns (uint256) {
-        // `type(uint256).max` may not be incorrect if there are no available auctions in `dutch_desk`.
-        // In that case, withdraws may fail if redeeming collateral is needed
+        // // Withdrawers are advised against withdrawing while there is an ongoing liquidation auction.
+        // // In that case, the collateral being auctioned is not available to be redeemed
+        // // while the bought borrow tokens haven't yet been returned to the lender
+        // @todo -- dont allow withdrawals during ongoing liquidation auctions (isActive OR kickable) (public setter to clear cache?) -- system is temporarily insolvent
+        // @todo -- implement emergencyWithdraw and dont enforce ^^ when shutdown
         return type(uint256).max;
     }
 

@@ -3,6 +3,7 @@ pragma solidity 0.8.23;
 
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/ERC20.sol";
 
+import {IAuction} from "./interfaces/IAuction.sol";
 import {IDutchDesk} from "./interfaces/IDutchDesk.sol";
 import {IPriceOracle} from "./interfaces/IPriceOracle.sol";
 import {ISortedTroves} from "./interfaces/ISortedTroves.sol";
@@ -30,6 +31,7 @@ contract Deploy is Script {
     bool public isTest;
     address public deployer;
 
+    IAuction public auction;
     IPriceOracle public priceOracle;
     IDutchDesk public dutchDesk;
     ISortedTroves public sortedTroves;
@@ -45,8 +47,6 @@ contract Deploy is Script {
     address public emergencyAdmin = address(69_420);
     address public performanceFeeRecipient = address(420_69_420);
     address public keeper = address(69_69);
-
-    address public auctionFactory;
 
     // IERC20 public borrowToken = IERC20(0xf939E0A03FB07F59A73314E73794Be0E57ac1b4E); // crvUSD
     IERC20 public borrowToken = IERC20(0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48); // USDC
@@ -67,9 +67,11 @@ contract Deploy is Script {
         vm.startBroadcast(_pk);
 
         uint256 _nonce = vm.getNonce(deployer);
-        address _lenderAddress = computeCreateAddress(deployer, _nonce + 4);
-        address _troveManagerAddress = computeCreateAddress(deployer, _nonce + 3);
+        address _lenderAddress = computeCreateAddress(deployer, _nonce + 5);
+        address _troveManagerAddress = computeCreateAddress(deployer, _nonce + 4);
+        address _dutchDeskAddress = computeCreateAddress(deployer, _nonce);
 
+        auction = IAuction(deployCode("auction", abi.encode(_dutchDeskAddress, address(borrowToken), address(collateralToken))));
         priceOracle = IPriceOracle(deployCode("tbtc_to_crvusd_oracle", abi.encode(address(borrowToken), address(collateralToken))));
         dutchDesk = IDutchDesk(
             deployCode(
@@ -79,13 +81,15 @@ contract Deploy is Script {
                     _lenderAddress,
                     _troveManagerAddress,
                     address(priceOracle),
-                    address(auctionFactory),
+                    address(auction),
                     address(borrowToken),
                     address(collateralToken),
                     dustThreshold
                 )
             )
         );
+        require(address(dutchDesk) == _dutchDeskAddress, "!dutchDeskAddress");
+
         sortedTroves = ISortedTroves(deployCode("sorted_troves", abi.encode(_troveManagerAddress)));
         troveManager = ITroveManager(
             deployCode(

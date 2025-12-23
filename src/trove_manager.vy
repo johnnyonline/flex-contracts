@@ -18,6 +18,9 @@ from interfaces import IDutchDesk
 from interfaces import IPriceOracle
 from interfaces import ISortedTroves
 
+# @todo -- add min_out on borrow/open_trove to prevent front-running on idle tokens
+# @todo -- after kicking a liquidation auction, save the auction id and use it to prevent withdrawals while the auction is active
+# @todo -- dont allow borrow/open_trove if there is an active liquidation auction (system is temporarily insolvent)
 # @todo -- add docs to constructor
 # @todo -- emit event on specific trove is redeemed
 # @todo -- when LIQUIDATION_AUCTION is active (collateral/borrow tokens are missing from the system)

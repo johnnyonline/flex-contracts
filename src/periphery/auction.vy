@@ -10,7 +10,7 @@
         This contract is a Vyper rewrite of the following Auction.sol contract by Yearn:
         https://github.com/yearn/tokenized-strategy-periphery/blob/master/src/Auctions/Auction.sol
 """
-
+# @todo -- make auction specific for flex, rename want/from to collateral/borrow
 from ethereum.ercs import IERC20
 from ethereum.ercs import IERC20Detailed
 
@@ -21,47 +21,17 @@ from interfaces import ITaker
 # ============================================================================================
 
 
-# event AuctionEnabled:
-#     from_token: indexed(address)
-#     to_token: indexed(address)
+event AuctionKicked:
+    auction_id: indexed(uint256)
+    amount_kicked: uint256
 
-# event AuctionDisabled:
-#     from_token: indexed(address)
-#     to_token: indexed(address)
-
-# event AuctionKicked:
-#     from_token: indexed(address)
-#     available: uint256
-
-# event UpdatedReceiver:
-#     receiver: indexed(address)
-
-# event UpdatedMinimumPrice:
-#     minimum_price: uint256
-
-# event UpdatedStartingPrice:
-#     starting_price: uint256
-
-# event UpdatedStepDecayRate:
-#     step_decay_rate: indexed(uint256)
-
-# event UpdatedStepDuration:
-#     step_duration: indexed(uint256)
-
-# event AuctionSettled:
-#     from_token: indexed(address)
-
-# event AuctionSwept:
-#     token: indexed(address)
-#     to: indexed(address)
-
-# event GovernanceTransferred:
-#     old_governance: indexed(address)
-#     new_governance: indexed(address)
-
-# event PendingGovernanceTransfer:
-#     old_governance: indexed(address)
-#     new_governance: indexed(address)
+event AuctionTake:
+    auction_id: indexed(uint256)
+    amount_taken: uint256
+    amount_left: uint256
+    amount_paid: uint256
+    taker: indexed(address)
+    receiver: indexed(address)
 
 
 # ============================================================================================
@@ -71,8 +41,8 @@ from interfaces import ITaker
 
 struct AuctionInfo:
     kicked_timestamp: uint256  # The timestamp the auction was kicked
-    initial_available_amount: uint256  # The initial available amount for the auction
-    current_available_amount: uint256  # The current available amount for the auction
+    initial_amount: uint256  # The initial amount for the auction
+    current_amount: uint256  # The current amount for the auction
     starting_price: uint256  # The amount to start the auction at, unscaled "lot size" in `want` token
     minimum_price: uint256  # The minimum price for the auction, scaled to 1e18
     receiver: address  # The address that will receive the auction proceeds
@@ -98,13 +68,6 @@ FROM_SCALER: public(immutable(uint256))
 STEP_DURATION: public(immutable(uint256))  # e.g., 60 for price change every minute
 STEP_DECAY_RATE: public(immutable(uint256))  # e.g., 50 for 0.5% decrease per step
 
-# Version
-VERSION: public(constant(String[10])) = "1.0.0"
-
-# CoW settlement contract address
-_COW_SETTLEMENT: constant(address) = 0x9008D19f58AAbD9eD0D60971565AA8510560ab41
-_VAULT_RELAYER: constant(address) = 0xC92E8bdf79f0507f65a392b0ab4667716BFE0110
-
 # Internal constants
 _AUCTION_LENGTH: constant(uint256) = 86400  # 1 day
 _MAX_CALLBACK_DATA_SIZE: constant(uint256) = 10**5
@@ -117,7 +80,7 @@ _RAY: constant(uint256) = 10 ** 27
 # ============================================================================================
 
 
-# Mapping of auction ID to auction info
+# Mapping of auction id to auction info
 _auctions: HashMap[uint256, AuctionInfo]
 
 
@@ -169,11 +132,11 @@ def __init__(papi: address, want_token: address, from_token: address):
 
 @external
 @view
-def get_available(auction_id: uint256) -> uint256:
+def available(auction_id: uint256) -> uint256:
     """
-    @notice Get the available amount that can be taken from an auction
+    @notice Get the amount that can be taken from an auction
     @param auction_id The identifier for the auction
-    @return The available amount that can be taken from an auction
+    @return The amount that can be taken from an auction
     """
     # Bring auction info into memory
     auction: AuctionInfo = self._auctions[auction_id]
@@ -182,8 +145,67 @@ def get_available(auction_id: uint256) -> uint256:
     if not self._is_active(auction):
         return 0
     
-    # Otherwise return current available amount
-    return auction.current_available_amount
+    # Otherwise return current amount
+    return auction.current_amount
+
+
+@external
+@view
+def kickable(auction_id: uint256) -> uint256:
+    """
+    @notice Get the amount that can be kicked from an auction
+    @param auction_id The identifier for the auction
+    @return The amount that can be kicked from the auction
+    """
+    # Bring auction info into memory
+    auction: AuctionInfo = self._auctions[auction_id]
+
+    # If auction is still active, nothing is kickable
+    if self._is_active(auction):
+        return 0
+
+    # Otherwise return current amount
+    return auction.current_amount
+
+
+@external
+@view
+def needed(
+    auction_id: uint256,
+    max_amount: uint256 = max_value(uint256),
+    at_timestamp: uint256 = block.timestamp,
+) -> uint256:
+    """
+    @notice Calculate the amount of want needed to buy `max_amount`
+    @param auction_id The identifier for the auction
+    @param max_amount The maximum amount to take
+    @param at_timestamp The timestamp to calculate at
+    @return The amount of want needed
+    """
+    # Bring auction info into memory
+    auction: AuctionInfo = self._auctions[auction_id]
+
+    # Determine amount to take
+    amount_to_take: uint256 = min(auction.current_amount, max_amount)
+
+    # Return the needed amount
+    return self._get_amount_needed(auction, amount_to_take, at_timestamp)
+
+
+@external
+@view
+def price(auction_id: uint256, at_timestamp: uint256 = block.timestamp) -> uint256:
+    """
+    @notice Gets the price of the auction at `at_timestamp`
+    @param auction_id The identifier for the auction
+    @param at_timestamp The specific timestamp for calculating the price
+    @return The price of the auction
+    """
+    # Bring auction info into memory
+    auction: AuctionInfo = self._auctions[auction_id]
+
+    # Return the price
+    return self._price(auction, at_timestamp)
 
 
 @external
@@ -201,69 +223,9 @@ def is_active(auction_id: uint256) -> bool:
     return self._is_active(auction)
 
 
-@external
-@view
-def get_kickable(auction_id: uint256) -> uint256:
-    """
-    @notice Get the amount that can be kicked from an auction
-    @param auction_id The identifier for the auction
-    @return The amount that can be kicked from the auction
-    """
-    # Bring auction info into memory
-    auction: AuctionInfo = self._auctions[auction_id]
-
-    # If auction is still active, nothing is kickable
-    if self._is_active(auction):
-        return 0
-    
-    # Otherwise return current available amount
-    return auction.current_available_amount
-
-
-@external
-@view
-def get_amount_needed(
-    auction_id: uint256,
-    max_amount: uint256 = max_value(uint256),
-    on_timestamp: uint256 = block.timestamp,
-) -> uint256:
-    """
-    @notice Calculate the amount of want needed to buy `max_amount`
-    @param auction_id The identifier for the auction
-    @param max_amount The maximum amount to take
-    @param on_timestamp The timestamp to calculate at
-    @return The amount of want needed
-    """
-    # Bring auction info into memory
-    auction: AuctionInfo = self._auctions[auction_id]
-
-    # Determine amount to take
-    amount_to_take: uint256 = min(auction.current_available_amount, max_amount)
-
-    return self._get_amount_needed(auction, amount_to_take, on_timestamp)
-
-
-# @external
-# @view
-# def price(_from: address) -> uint256:
-#     """
-#     @notice Gets the price of the auction at the current timestamp
-#     @param _from The address of the token to be auctioned
-#     @return The price of the auction
-#     """
-#     return self._price_external(_from, block.timestamp)
-
-
-# @external
-# @view
-# def priceAtTimestamp(_from: address, _timestamp: uint256) -> uint256:
-#     """
-#     @notice Gets the price of the auction at a specific timestamp
-#     @param _from The address of the token to be auctioned
-#     @param _timestamp The specific timestamp for calculating the price
-#     @return The price of the auction
-#     """
-#     return self._price_external(_from, _timestamp)
+# ============================================================================================
+# Storage read functions
+# ============================================================================================
 
 
 @external
@@ -285,7 +247,7 @@ def initial_available(auction_id: uint256) -> uint256:
     @param auction_id The identifier for the auction
     @return The initial available amount for the auction
     """
-    return self._auctions[auction_id].initial_available_amount
+    return self._auctions[auction_id].initial_amount
 
 
 @external
@@ -296,7 +258,7 @@ def current_available(auction_id: uint256) -> uint256:
     @param auction_id The identifier for the auction
     @return The current available amount for the auction
     """
-    return self._auctions[auction_id].current_available_amount
+    return self._auctions[auction_id].current_amount
 
 
 @external
@@ -375,20 +337,28 @@ def kick(
     assert not self._is_active(auction), "active"
 
     # Update storage
-    self._auctions[auction_id] = AuctionInfo({
-        kicked_timestamp: block.timestamp,
-        initial_available_amount: amount_to_kick,
-        current_available_amount: amount_to_kick,
-        starting_price: starting_price,
-        minimum_price: minimum_price,
-        receiver: receiver,
-    })
+    self._auctions[auction_id] = AuctionInfo(
+        kicked_timestamp=block.timestamp,
+        initial_amount=amount_to_kick,
+        current_amount=amount_to_kick,
+        starting_price=starting_price,
+        minimum_price=minimum_price,
+        receiver=receiver,
+    )
 
     # Pull in the tokens to be auctioned from Papi
     assert extcall FROM_TOKEN.transferFrom(PAPI, self, amount_to_kick, default_return_value=True)
 
-    # # Emit event
-    # log AuctionKicked(auction_id=auction_id, kicked=amount_to_kick)
+    # Emit event
+    log AuctionKicked(auction_id=auction_id, amount_kicked=amount_to_kick)
+
+# # @todo
+# @external
+# def re_kick(
+#     auction_id: uint256,
+#     starting_price: uint256,
+#     minimum_price: uint256,
+# ):
 
 
 # ============================================================================================
@@ -405,7 +375,6 @@ def take(
 ) -> uint256:
     """
     @notice Take the token being sold in a live auction
-    @dev Not emitting an event because a CoW take will not go through here
     @param auction_id The identifier for the auction
     @param max_amount The maximum amount to take
     @param receiver The address that will receive the token being sold
@@ -419,7 +388,7 @@ def take(
     assert self._is_active(auction), "!active"
 
     # Determine amount to take
-    amount_to_take: uint256 = min(auction.current_available_amount, max_amount)
+    amount_to_take: uint256 = min(auction.current_amount, max_amount)
 
     # Get the needed amount of want token
     amount_needed: uint256 = self._get_amount_needed(auction, amount_to_take, block.timestamp)
@@ -427,16 +396,14 @@ def take(
     # Make sure needed is non-zero
     assert amount_needed != 0, "!needed"
 
+    # Calculate how much will be left after this take
+    amount_left: uint256 = auction.current_amount - amount_to_take
+
     # If entire amount is taken, end the auction, otherwise update available amount
-    if amount_to_take == auction.current_available_amount:
-        # Update storage
+    if amount_to_take == auction.current_amount:
         self._auctions[auction_id].kicked_timestamp = 0
     else:
-        # Calculate how much will be left after this take
-        new_available_amount: uint256 = auction.current_available_amount - amount_to_take
-
-        # Update storage
-        self._auctions[auction_id].current_available_amount = new_available_amount
+        self._auctions[auction_id].current_amount = amount_left
 
     # Send token being sold to the take receiver
     assert extcall FROM_TOKEN.transfer(receiver, amount_to_take, default_return_value=True)
@@ -454,6 +421,17 @@ def take(
     # Pull the want token from the caller to the auction receiver
     assert extcall WANT_TOKEN.transferFrom(msg.sender, auction.receiver, amount_needed, default_return_value=True)
 
+    # Emit event
+    log AuctionTake(
+        auction_id=auction_id,
+        amount_taken=amount_to_take,
+        amount_left=amount_left,
+        amount_paid=amount_needed,
+        taker=msg.sender,
+        receiver=receiver,
+    )
+
+    # Return the amount taken
     return amount_to_take
 
 
@@ -470,13 +448,7 @@ def _is_active(auction: AuctionInfo) -> bool:
     @param auction The auction info
     @return Whether the auction is active
     """
-    return self._price(
-        auction.kicked_timestamp,
-        auction.initial_available_amount * FROM_SCALER,
-        block.timestamp,
-        auction.starting_price,
-        auction.minimum_price,
-    ) > 0
+    return self._price(auction, block.timestamp) > 0
 
 
 @internal
@@ -484,27 +456,21 @@ def _is_active(auction: AuctionInfo) -> bool:
 def _get_amount_needed(
     auction: AuctionInfo,
     amount_to_take: uint256,
-    on_timestamp: uint256,
+    at_timestamp: uint256,
 ) -> uint256:
     """
     @notice Calculate the amount of want needed to buy `amount`
     @param auction The auction info
     @param amount_to_take The amount to take
-    @param on_timestamp The timestamp to calculate at
+    @param at_timestamp The timestamp to calculate at
     @return The amount of want needed
     """
-    # Scale `amount_to_take` to WAD
+    # Scale amount to take to WAD
     scaled_amount_to_take: uint256 = amount_to_take * FROM_SCALER
 
     # Calculate needed amount without scaling back to want yet
     # Price is always scaled to WAD
-    amount_needed: uint256 = scaled_amount_to_take * self._price(
-        auction.kicked_timestamp,
-        auction.initial_available_amount * FROM_SCALER,
-        on_timestamp,
-        auction.starting_price,
-        auction.minimum_price,
-    ) // _WAD
+    amount_needed: uint256 = scaled_amount_to_take * self._price(auction, at_timestamp) // _WAD
 
     # Return `amount_needed` scaled back to want
     return amount_needed // WANT_SCALER
@@ -512,28 +478,25 @@ def _get_amount_needed(
 
 @internal
 @view
-def _price(
-    kicked_timestamp: uint256,
-    available_amount: uint256,
-    on_timestamp: uint256,
-    starting_price: uint256,
-    minimum_price: uint256,
-) -> uint256:
+def _price(auction: AuctionInfo, at_timestamp: uint256) -> uint256:
     """
     @notice Calculate the WAD scaled price based on auction parameters
-    @param kicked_timestamp The timestamp the auction was kicked
-    @param available_amount The initial available amount scaled to WAD
-    @param on_timestamp The specific timestamp for calculating the price
-    @param starting_price The auction's starting price
-    @param minimum_price The auction's minimum price
+    @param auction The auction info
+    @param at_timestamp The specific timestamp for calculating the price
     @return The calculated price scaled to WAD
     """
+    # Scale initial amount to WAD
+    initial_amount: uint256 = auction.initial_amount * FROM_SCALER
+
     # Return early if no available amount
-    if available_amount == 0:
+    if initial_amount == 0:
         return 0
-    
+
+    # Make sure `at_timestamp` is not before `kicked_timestamp`
+    assert at_timestamp >= auction.kicked_timestamp, "!timestamp"
+
     # Time passed since auction was kicked
-    seconds_elapsed: uint256 = on_timestamp - kicked_timestamp
+    seconds_elapsed: uint256 = at_timestamp - auction.kicked_timestamp
 
     # If auction duration has passed, price is `0`
     if seconds_elapsed > _AUCTION_LENGTH:
@@ -550,13 +513,13 @@ def _price(
     decay_multiplier: uint256 = self._rpow(ray_multiplier, steps)
 
     # Calculate initial price per token
-    initial_price: uint256 = self._wdiv(starting_price * _WAD, available_amount)
+    initial_price: uint256 = self._wdiv(auction.starting_price * _WAD, initial_amount)
 
     # Apply the decay to get the current price
     current_price: uint256 = self._rmul(initial_price, decay_multiplier)
 
     # Return price `0` if below the minimum price
-    if current_price < minimum_price:
+    if current_price < auction.minimum_price:
         return 0
 
     return current_price
@@ -610,8 +573,8 @@ def _rpow(x: uint256, n: uint256) -> uint256:
         if n == 0:
             break
         if n % 2 == 1:
-            result = (result * base + _RAY // 2) // _RAY
-        base = (base * base + _RAY // 2) // _RAY
+            result = self._rmul(result, base)
+        base = self._rmul(base, base)
         n = n // 2
 
     return result
