@@ -19,14 +19,9 @@ from interfaces import IPriceOracle
 from interfaces import ISortedTroves
 
 # @todo -- add min_out on borrow/open_trove to prevent front-running on idle tokens
-# @todo -- after kicking a liquidation auction, save the auction id and use it to prevent withdrawals while the auction is active
 # @todo -- dont allow borrow/open_trove if there is an active liquidation auction (system is temporarily insolvent)
-# @todo -- add docs to constructor
+# @todo -- add docs to constructor (and cleanup)
 # @todo -- emit event on specific trove is redeemed
-# @todo -- when LIQUIDATION_AUCTION is active (collateral/borrow tokens are missing from the system)
-# 1. lender.availableWithdrawLimit should be 0?
-# 2. borrowers should be careful to not get less debt than expected?
-
 
 # ============================================================================================
 # Events
@@ -160,7 +155,7 @@ _PRICE_ORACLE_PRECISION: constant(uint256) = 10 ** 36
 _WAD: constant(uint256) = 10 ** 18
 _MAX_ITERATIONS: constant(uint256) = 700
 _ONE_YEAR: constant(uint256) = 365 * 60 * 60 * 24
-_REDEMPTION_AUCTION: constant(bool) = True
+_LIQUIDATION_AUCTION: constant(bool) = True
 
 
 # ============================================================================================
@@ -219,6 +214,9 @@ def __init__(
     MIN_ANNUAL_INTEREST_RATE = _ONE_PCT // 2  # 0.5%
     MAX_ANNUAL_INTEREST_RATE = 250 * _ONE_PCT  # 250%
 
+    # Max approve the collateral token to the dutch desk
+    assert extcall COLLATERAL_TOKEN.approve(dutch_desk, max_value(uint256), default_return_value=True)
+
 
 # ============================================================================================
 # External view functions
@@ -229,7 +227,7 @@ def __init__(
 @view
 def get_upfront_fee(debt_amount: uint256, annual_interest_rate: uint256) -> uint256:
     """
-    @notice Calculate the upfront fee for borrowing a specified amount of debt at a given annual interest rate
+    @notice Get the upfront fee for borrowing a specified amount of debt at a given annual interest rate
     @dev `debt_amount` and `annual_interest_rate` are specified in the borrow token's decimals
     @dev The fee represents prepaid interest over `UPFRONT_INTEREST_PERIOD` using the system's average rate after the new debt
     @param debt_amount The amount of debt to be borrowed
@@ -243,7 +241,7 @@ def get_upfront_fee(debt_amount: uint256, annual_interest_rate: uint256) -> uint
 @view
 def get_trove_debt_after_interest(trove_id: uint256) -> uint256:
     """
-    @notice Calculate the Trove's debt after accruing interest
+    @notice Get the Trove's debt after accruing interest
     @param trove_id Unique identifier of the Trove
     @return trove_debt_after_interest The Trove's debt after accruing interest in borrow token precision
     """
@@ -413,7 +411,7 @@ def open_trove(
     assert debt_amount_with_fee > MIN_DEBT, "!MIN_DEBT"
 
     # Get the collateral price
-    collateral_price: uint256 = staticcall PRICE_ORACLE.price()
+    collateral_price: uint256 = staticcall PRICE_ORACLE.get_price()
 
     # Calculate the collateral ratio
     trove_collateral_ratio: uint256 = self._calculate_collateral_ratio(
@@ -542,7 +540,7 @@ def remove_collateral(trove_id: uint256, collateral_amount: uint256):
     trove_debt_after_interest: uint256 = self._get_trove_debt_after_interest(trove)
 
     # Get the collateral price
-    collateral_price: uint256 = staticcall PRICE_ORACLE.price()
+    collateral_price: uint256 = staticcall PRICE_ORACLE.get_price()
 
     # Calculate the new collateral amount and collateral ratio
     new_collateral: uint256 = trove.collateral - collateral_amount
@@ -611,7 +609,7 @@ def borrow(
     new_debt: uint256 = trove_debt_after_interest + debt_amount_with_fee
 
     # Get the collateral price
-    collateral_price: uint256 = staticcall PRICE_ORACLE.price()
+    collateral_price: uint256 = staticcall PRICE_ORACLE.get_price()
 
     # Calculate the collateral ratio
     collateral_ratio: uint256 = self._calculate_collateral_ratio(trove.collateral, new_debt, collateral_price)
@@ -761,7 +759,7 @@ def adjust_interest_rate(
         new_debt += upfront_fee
 
         # Get the collateral price
-        collateral_price: uint256 = staticcall PRICE_ORACLE.price()
+        collateral_price: uint256 = staticcall PRICE_ORACLE.get_price()
 
         # Calculate the collateral ratio
         collateral_ratio: uint256 = self._calculate_collateral_ratio(trove.collateral, new_debt, collateral_price)
@@ -954,7 +952,7 @@ def liquidate_troves(trove_ids: uint256[_MAX_ITERATIONS]):
     current_zombie_trove_id: uint256 = self.zombie_trove_id
 
     # Get the collateral price
-    collateral_price: uint256 = staticcall PRICE_ORACLE.price()
+    collateral_price: uint256 = staticcall PRICE_ORACLE.get_price()
 
     # Initialize variables to track total changes
     total_collateral_to_decrease: uint256 = 0
@@ -994,11 +992,8 @@ def liquidate_troves(trove_ids: uint256[_MAX_ITERATIONS]):
         total_weighted_debt_to_decrease, # weighted_debt_decrease
     )
 
-    # Transfer collateral tokens to the dutch desk for selling
-    assert extcall COLLATERAL_TOKEN.transfer(DUTCH_DESK.address, total_collateral_to_decrease, default_return_value=True)
-
     # Kick the auction. Proceeds will be sent to the lender
-    extcall DUTCH_DESK.kick(total_collateral_to_decrease)
+    extcall DUTCH_DESK.kick(total_collateral_to_decrease, LENDER, _LIQUIDATION_AUCTION)  # Pulls collateral tokens
 
 
 @internal
@@ -1095,7 +1090,7 @@ def _redeem(amount: uint256, receiver: address = msg.sender):
     self._sync_total_debt()
 
     # Get the collateral price
-    collateral_price: uint256 = staticcall PRICE_ORACLE.price()
+    collateral_price: uint256 = staticcall PRICE_ORACLE.get_price()
 
     # Initialize the `is_zombie_trove` flag
     is_zombie_trove: bool = False
@@ -1210,11 +1205,8 @@ def _redeem(amount: uint256, receiver: address = msg.sender):
     # Update the contract's recorded collateral balance
     self.collateral_balance -= total_collateral_decrease
 
-    # Transfer the collateral tokens to the dutch desk
-    assert extcall COLLATERAL_TOKEN.transfer(DUTCH_DESK.address, total_collateral_decrease, default_return_value=True)
-
     # Kick the auction. Proceeds will be sent to the `receiver`
-    extcall DUTCH_DESK.kick(total_collateral_decrease, receiver, _REDEMPTION_AUCTION)  # Does nothing on zero amount
+    extcall DUTCH_DESK.kick(total_collateral_decrease, receiver)  # Pulls collateral tokens and does nothing on zero amount
 
     # Emit event
     log Redeem(
@@ -1270,7 +1262,7 @@ def _get_upfront_fee(
     max_upfront_fee: uint256 = max_value(uint256)
 ) -> uint256:
     """
-    @notice Calculate the upfront fee for borrowing a specified amount of debt at a given annual interest rate
+    @notice Get the upfront fee for borrowing a specified amount of debt at a given annual interest rate
     @dev Make sure the calculated fee does not exceed `max_upfront_fee`
     @dev The fee represents prepaid interest over `UPFRONT_INTEREST_PERIOD` using the system's average rate after the new debt
     @param debt_amount The amount of debt to be borrowed
@@ -1300,7 +1292,7 @@ def _get_upfront_fee(
 @view
 def _get_trove_debt_after_interest(trove: Trove) -> uint256:
     """
-    @notice Calculate the Trove's debt after accruing interest
+    @notice Get the Trove's debt after accruing interest
     @param trove The Trove struct
     @return trove_debt_after_interest The Trove's debt after accruing interest
     """

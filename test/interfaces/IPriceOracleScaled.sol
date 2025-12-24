@@ -3,6 +3,6 @@ pragma solidity 0.8.23;
 
 interface IPriceOracleScaled {
 
-    function price() external view returns (uint256);
+    function get_price() external view returns (uint256);
 
 }

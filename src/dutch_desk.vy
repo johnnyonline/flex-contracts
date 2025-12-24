@@ -4,7 +4,7 @@
 @title Dutch Desk
 @license MIT
 @author Flex
-@notice Handles liquidations and redemptions through Yearn Dutch Auctions
+@notice Handles liquidations and redemptions through Dutch Auctions
 """
 
 from ethereum.ercs import IERC20
@@ -15,6 +15,16 @@ from periphery import ownable_2step as ownable
 from interfaces import IAuction
 from interfaces import IPriceOracle
 # @todo -- auction step size? and buffers
+
+# ============================================================================================
+# Events
+# ============================================================================================
+
+
+event SetKeeper:
+    old_keeper: address
+    new_keeper: address
+
 
 # ============================================================================================
 # Modules
@@ -47,10 +57,11 @@ COLLATERAL_TOKEN: public(immutable(IERC20))
 # Parameters
 MINIMUM_PRICE_BUFFER_PERCENTAGE: public(constant(uint256)) = _WAD - 5 * 10 ** 16  # 5%
 STARTING_PRICE_BUFFER_PERCENTAGE: public(constant(uint256)) = _WAD + 15 * 10 ** 16  # 15%
-EMERGENCY_STARTING_PRICE_BUFFER_PERCENTAGE: public(constant(uint256)) = _WAD + 100 * 10 ** 16  # 100% // @todo -- double check this value
+EMERGENCY_STARTING_PRICE_BUFFER_PERCENTAGE: public(constant(uint256)) = _WAD + 100 * 10 ** 16  # 100%
 
 # Internal constants
 _COLLATERAL_TOKEN_PRECISION: immutable(uint256)
+_MAX_TOKEN_DECIMALS: constant(uint256) = 18
 _WAD: constant(uint256) = 10 ** 18
 
 
@@ -84,13 +95,14 @@ def __init__(
     """
     @notice Initialize the contract
     @param owner Address of the initial owner
-    @param lender Address of the lender (receiver of liquidation auction proceeds)
-    @param trove_manager Address of the trove manager contract
-    @param price_oracle Address of the price oracle contract
-    @param auction Address of the auction contract
+    @param lender Address of the Lender contract
+    @param trove_manager Address of the Trove Manager contract
+    @param price_oracle Address of the Price Oracle contract
+    @param auction Address of the Auction contract
     @param borrow_token Address of the borrow token
     @param collateral_token Address of the collateral token
     """
+    # Initialize ownable
     ownable.__init__(owner)
 
     # Set immutable variables
@@ -100,53 +112,19 @@ def __init__(
     BORROW_TOKEN = IERC20(borrow_token)
     COLLATERAL_TOKEN = IERC20(collateral_token)
 
-    # Make sure collateral token decimals is not higher than WAD
-    _COLLATERAL_TOKEN_PRECISION = 10 ** convert(staticcall IERC20Detailed(collateral_token).decimals(), uint256)
-    assert _COLLATERAL_TOKEN_PRECISION <= _WAD, "!decimals"
+    # Borrow token cannot have more than 18 decimals
+    borrow_token_decimals: uint256 = convert(staticcall IERC20Detailed(borrow_token).decimals(), uint256)
+    assert borrow_token_decimals <= _MAX_TOKEN_DECIMALS, "!borrow_token_decimals"
 
-    # Max approve the collateral token to the auction contract and CoW vault relayer
+    # Collateral token cannot have more than 18 decimals
+    collateral_token_decimals: uint256 = convert(staticcall IERC20Detailed(collateral_token).decimals(), uint256)
+    assert collateral_token_decimals <= _MAX_TOKEN_DECIMALS, "!collateral_token_decimals"
+
+    # Set collateral token precision
+    _COLLATERAL_TOKEN_PRECISION = 10 ** collateral_token_decimals
+
+    # Max approve the collateral token to the Auction
     assert extcall COLLATERAL_TOKEN.approve(auction, max_value(uint256), default_return_value=True)
-    #  ERC20(_from).forceApprove(VAULT_RELAYER, type(uint256).max);
-
-
-# ============================================================================================
-# Keeper functions
-# ============================================================================================
-
-
-# @todo - emit event
-@external
-def emergency_kick(auction_id: uint256):
-    """
-    @notice Emergency kicks the provided auction
-    @dev Only callable by the keeper
-    @dev Uses a higher starting price buffer percentage to allow for takers to re-group
-    @dev Does not set the receiver nor transfer collateral as those are already ready in the auction
-    @param auctions List of auctions to emergency kick
-    """
-    # Make sure the caller is the keeper
-    assert msg.sender == self.keeper, "!keeper"
-
-    # Check if we really need to emergency kick
-    is_kickable: bool = staticcall auction.kickable(auction_id)
-
-    # @todo -- add sweep_and_settle
-
-    # Get the starting and minimum prices
-    starting_price: uint256 = 0
-    minimum_price: uint256 = 0
-    starting_price, minimum_price = self._get_prices(amount_to_kick, starting_price_buffer_pct)
-
-    # # @todo
-    # @external
-    # def re_kick(
-    #     auction_id: uint256,
-    #     starting_price: uint256,
-    #     minimum_price: uint256,
-    # ):
-
-    # Kick with higher starting price buffer
-    self._kick(auction_id, EMERGENCY_STARTING_PRICE_BUFFER_PERCENTAGE)
 
 
 # ============================================================================================
@@ -154,7 +132,6 @@ def emergency_kick(auction_id: uint256):
 # ============================================================================================
 
 
-# @todo - emit event
 @external
 def set_keeper(new_keeper: address):
     """
@@ -165,8 +142,45 @@ def set_keeper(new_keeper: address):
     # Make sure the caller is the current owner
     assert msg.sender == ownable.owner, "!owner"
 
+    # Cache the old keeper
+    old_keeper: address = self.keeper
+
     # Set the new keeper
     self.keeper = new_keeper
+
+    # Emit event
+    log SetKeeper(old_keeper=old_keeper, new_keeper=new_keeper)
+
+
+# ============================================================================================
+# Keeper functions
+# ============================================================================================
+
+
+@external
+def re_kick(auction_id: uint256):
+    """
+    @notice Re-kick an inactive auction with new starting and minimum prices
+    @dev Only callable by the keeper
+    @dev Will revert if the auction is not kickable
+    @dev An auction may need to be re-kicked if its price has fallen below its minimum price
+    @dev Uses a higher starting price buffer percentage to allow for takers to re-group
+    @dev Does not set the receiver nor transfer collateral as those are already ready in the auction
+    @param auction_id Identifier of the auction to re-kick
+    """
+    # Make sure the caller is the keeper
+    assert msg.sender == self.keeper, "!keeper"
+
+    # Get new starting and minimum prices
+    starting_price: uint256 = 0
+    minimum_price: uint256 = 0
+    starting_price, minimum_price = self._get_prices(
+        staticcall AUCTION.current_amount(auction_id),
+        EMERGENCY_STARTING_PRICE_BUFFER_PERCENTAGE,
+    )
+
+    # Re-kick with new prices
+    extcall AUCTION.re_kick(auction_id, starting_price, minimum_price)  # Reverts if there's nothing to re-kick
 
 
 # ============================================================================================
@@ -175,21 +189,33 @@ def set_keeper(new_keeper: address):
 
 
 @external
-def kick(amount_to_kick: uint256, receiver: address = empty(address)) -> uint256:
+def kick(
+    kick_amount: uint256,
+    receiver: address,
+    is_liquidation: bool = False,
+):
     """
     @notice Kicks an auction of collateral tokens for borrow tokens
     @dev Only callable by the Trove Manager contract
-    @dev Pulls the collateral tokens from the Trove Manager before kicking the auction
-    @param amount_to_kick Amount of collateral tokens to auction
+    @dev Caller must transfer the collateral tokens to this contract before calling
+    @param kick_amount Amount of collateral tokens to auction
     @param receiver Address to receive the auction proceeds in borrow tokens
-    @return The auction ID used to kick the auction
+    @param is_liquidation Whether this auction is for liquidated collateral
     """
     # Make sure caller is the trove manager
     assert msg.sender == TROVE_MANAGER, "!trove_manager"
 
     # Do nothing on zero amount
-    if amount_to_kick == 0:
+    if kick_amount == 0:
         return
+
+    # Get the starting and minimum prices
+    starting_price: uint256 = 0
+    minimum_price: uint256 = 0
+    starting_price, minimum_price = self._get_prices(
+        kick_amount,
+        STARTING_PRICE_BUFFER_PERCENTAGE,
+    )
 
     # Use the nonce as auction identifier
     auction_id: uint256 = self.nonce
@@ -197,48 +223,18 @@ def kick(amount_to_kick: uint256, receiver: address = empty(address)) -> uint256
     # Increment the nonce
     self.nonce = auction_id + 1
 
-    # Kick the auction
-    self._kick(
-        auction_id,
-        amount_to_kick,
-        STARTING_PRICE_BUFFER_PERCENTAGE,
-        receiver,
-    )
-
-    # Return the used auction ID
-    return auction_id
-
-
-# ============================================================================================
-# Internal mutative functions
-# ============================================================================================
-
-
-@internal
-def _kick(
-    auction_id: uint256,
-    amount_to_kick: uint256,
-    starting_price_buffer_pct: uint256,
-    receiver: address,
-):
-    """
-    @notice Kicks off an auction with starting and minimum prices
-    @dev Auction Proceeds are sent from the auction contract directly to the `receiver`
-    @param auction_id The identifier for the auction
-    @param amount_to_kick Amount of collateral tokens to auction
-    @param starting_price_buffer_pct Buffer percentage to apply to the collateral price for the starting price
-    @param receiver Address to receive the borrow tokens
-    """
-    # Get the starting and minimum prices
-    starting_price: uint256 = 0
-    minimum_price: uint256 = 0
-    starting_price, minimum_price = self._get_prices(amount_to_kick, starting_price_buffer_pct)
-
     # Pull the collateral tokens from the Trove Manager
-    assert extcall COLLATERAL_TOKEN.transferFrom(TROVE_MANAGER, self, amount_to_kick, default_return_value=True)
+    assert extcall COLLATERAL_TOKEN.transferFrom(TROVE_MANAGER, self, kick_amount, default_return_value=True)
 
     # Kick the auction
-    extcall auction.kick(auction_id, amount_to_kick, starting_price, minimum_price, receiver)  # Pulls collateral tokens
+    extcall AUCTION.kick(  # Pulls collateral tokens
+        auction_id,
+        kick_amount,
+        starting_price,
+        minimum_price,
+        receiver,
+        is_liquidation,
+    )
 
 
 # ============================================================================================
@@ -249,22 +245,22 @@ def _kick(
 @internal
 @view
 def _get_prices(
-    amount_to_kick: uint256,
+    kick_amount: uint256,
     starting_price_buffer_pct: uint256,
 ) -> (uint256, uint256):
     """
     @notice Gets the starting and minimum prices for an auction
-    @param amount_to_kick Amount of collateral tokens to auction
+    @param kick_amount Amount of collateral tokens to auction
     @param starting_price_buffer_pct Buffer percentage to apply to the collateral price for the starting price
     @return starting_price The calculated starting price
     @return minimum_price The calculated minimum price
     """
     # Get the collateral price
-    collateral_price: uint256 = staticcall PRICE_ORACLE.price(False)  # Price in 1e18 format
+    collateral_price: uint256 = staticcall PRICE_ORACLE.get_price(False)  # Price in 1e18 format
 
     # Calculate the starting price with buffer to the collateral price
     # Starting price is an unscaled "lot size"
-    starting_price: uint256 = amount_to_kick * collateral_price // _WAD * starting_price_buffer_pct // _WAD // _COLLATERAL_TOKEN_PRECISION
+    starting_price: uint256 = kick_amount * collateral_price // _WAD * starting_price_buffer_pct // _WAD // _COLLATERAL_TOKEN_PRECISION
 
     # Calculate the minimum price with buffer to the collateral price
     # Minimum price is per token and is scaled to 1e18

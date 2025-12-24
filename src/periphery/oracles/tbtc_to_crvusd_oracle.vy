@@ -55,9 +55,9 @@ def __init__(borrow_token: address, collateral_token: address):
 
 @external
 @view
-def price(scaled: bool = True) -> uint256:
+def get_price(scaled: bool = True) -> uint256:
     """
-    @notice Returns collateral price in borrow token terms
+    @notice Get the collateral price in terms of borrow tokens
     @param scaled If True, returns 10^(36 + borrow_decimals - collateral_decimals) format,
                   if False, returns 10^18 format
     @return Price scaled to the required format

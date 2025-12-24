@@ -1,57 +1,49 @@
 # @version 0.4.3
 
 
-@external
-@view
-def available(_from: address) -> uint256:
-    ...
+# ============================================================================================
+# External view functions
+# ============================================================================================
 
 
 @external
 @view
-def isActive(_from: address) -> bool:
+def is_ongoing_liquidation_auction() -> bool:
     ...
+
+
+# ============================================================================================
+# Storage read functions
+# ============================================================================================
 
 
 @external
 @view
-def kickable(_from: address) -> uint256:
+def current_amount(auction_id: uint256) -> uint256:
+    ...
+
+
+# ============================================================================================
+# Kick
+# ============================================================================================
+
+
+@external
+def kick(
+    auction_id: uint256,
+    kick_amount: uint256,
+    starting_price: uint256,
+    minimum_price: uint256,
+    receiver: address,
+    is_liquidation: bool,
+):
     ...
 
 
 @external
-def enable(_from: address):
-    ...
-
-
-@external
-def kick(_token: address) -> uint256:
-    ...
-
-@external
-def setGovernanceOnlyKick(_governanceOnlyKick: bool):
-    ...
-
-@external
-def setReceiver(_receiver: address):
-    ...
-
-
-@external
-def setMinimumPrice(_minimumPrice: uint256):
-    ...
-
-
-@external
-def setStartingPrice(_startingPrice: uint256):
-    ...
-
-
-@external
-def settle(_token: address):
-    ...
-
-
-@external
-def sweep(_token: address):
+def re_kick(
+    auction_id: uint256,
+    starting_price: uint256,
+    minimum_price: uint256,
+):
     ...

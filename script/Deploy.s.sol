@@ -69,7 +69,7 @@ contract Deploy is Script {
         uint256 _nonce = vm.getNonce(deployer);
         address _lenderAddress = computeCreateAddress(deployer, _nonce + 5);
         address _troveManagerAddress = computeCreateAddress(deployer, _nonce + 4);
-        address _dutchDeskAddress = computeCreateAddress(deployer, _nonce);
+        address _dutchDeskAddress = computeCreateAddress(deployer, _nonce + 2);
 
         auction = IAuction(deployCode("auction", abi.encode(_dutchDeskAddress, address(borrowToken), address(collateralToken))));
         priceOracle = IPriceOracle(deployCode("tbtc_to_crvusd_oracle", abi.encode(address(borrowToken), address(collateralToken))));

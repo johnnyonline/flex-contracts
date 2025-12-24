@@ -7,18 +7,19 @@ interface IDutchDesk {
     // Constants
     // ============================================================================================
 
+    // Contracts
     function TROVE_MANAGER() external view returns (address);
     function PRICE_ORACLE() external view returns (address);
-    function LIQUIDATION_AUCTION() external view returns (address);
-    function AUCTION_FACTORY() external view returns (address);
+    function AUCTION() external view returns (address);
+
+    // Tokens
     function BORROW_TOKEN() external view returns (address);
     function COLLATERAL_TOKEN() external view returns (address);
-    function DUST_THRESHOLD() external view returns (uint256);
+
+    // Parameters
+    function MINIMUM_PRICE_BUFFER_PERCENTAGE() external view returns (uint256);
     function STARTING_PRICE_BUFFER_PERCENTAGE() external view returns (uint256);
     function EMERGENCY_STARTING_PRICE_BUFFER_PERCENTAGE() external view returns (uint256);
-    function MINIMUM_PRICE_BUFFER_PERCENTAGE() external view returns (uint256);
-    function MAX_GAS_PRICE_TO_TRIGGER() external view returns (uint256);
-    function MAX_AUCTIONS() external view returns (uint256);
 
     // ============================================================================================
     // Storage
@@ -27,25 +28,7 @@ interface IDutchDesk {
     function owner() external view returns (address);
     function pending_owner() external view returns (address);
     function keeper() external view returns (address);
-    function auctions(
-        uint256 index
-    ) external view returns (address);
-
-    // ============================================================================================
-    // View functions
-    // ============================================================================================
-
-    function emergency_kick_trigger(
-        bool is_redemption
-    ) external view returns (address[] memory);
-
-    // ============================================================================================
-    // Keeper functions
-    // ============================================================================================
-
-    function emergency_kick(
-        address[] memory
-    ) external;
+    function nonce() external view returns (uint256);
 
     // ============================================================================================
     // Owner functions
@@ -60,13 +43,21 @@ interface IDutchDesk {
     ) external;
 
     // ============================================================================================
+    // Keeper functions
+    // ============================================================================================
+
+    function re_kick(
+        uint256 auction_id
+    ) external;
+
+    // ============================================================================================
     // Mutative functions
     // ============================================================================================
 
     function kick(
-        uint256 amount,
+        uint256 kick_amount,
         address receiver,
-        bool is_redemption
+        bool is_liquidation
     ) external;
 
 }

@@ -1,654 +1,297 @@
-// // SPDX-License-Identifier: MIT
-// pragma solidity 0.8.23;
-
-// import "./Base.sol";
-
-// contract DutchDeskTests is Base {
-
-//     IAuction public liquidationAuction;
-
-//     function setUp() public override {
-//         Base.setUp();
-
-//         vm.prank(management);
-//         dutchDesk.accept_ownership();
-
-//         liquidationAuction = IAuction(dutchDesk.LIQUIDATION_AUCTION());
-
-//         // Adjust `maxFuzzAmount` to collateral token decimals
-//         uint256 _maxFuzzAmount = 1_000_000 ether;
-//         if (COLLATERAL_TOKEN_PRECISION < 1e18) maxFuzzAmount = _maxFuzzAmount / (1e18 / COLLATERAL_TOKEN_PRECISION);
-//         else maxFuzzAmount = _maxFuzzAmount;
-//     }
-
-//     function test_setup() public {
-//         assertEq(dutchDesk.owner(), management, "E0");
-//         assertEq(dutchDesk.pending_owner(), address(0), "E1");
-//         assertEq(dutchDesk.TROVE_MANAGER(), address(troveManager), "E2");
-//         assertEq(dutchDesk.PRICE_ORACLE(), address(priceOracle), "E3");
-//         assertEq(dutchDesk.AUCTION_FACTORY(), auctionFactory, "E4");
-//         assertEq(dutchDesk.BORROW_TOKEN(), address(borrowToken), "E5");
-//         assertEq(dutchDesk.COLLATERAL_TOKEN(), address(collateralToken), "E6");
-//         assertEq(dutchDesk.DUST_THRESHOLD(), dustThreshold, "E7");
-//         assertEq(dutchDesk.STARTING_PRICE_BUFFER_PERCENTAGE(), 1e18 + 15e16, "E8"); // 115%
-//         assertEq(dutchDesk.EMERGENCY_STARTING_PRICE_BUFFER_PERCENTAGE(), 1e18 + 100e16, "E9"); // 200%
-//         assertEq(dutchDesk.MINIMUM_PRICE_BUFFER_PERCENTAGE(), 1e18 - 5e16, "E10"); // 95%
-//         assertEq(dutchDesk.MAX_GAS_PRICE_TO_TRIGGER(), 50e9, "E11"); // 50 gwei
-//         assertEq(dutchDesk.MAX_AUCTIONS(), 20, "E12");
-//         assertEq(dutchDesk.keeper(), keeper, "E13");
-//         assertNotEq(dutchDesk.LIQUIDATION_AUCTION(), address(0), "E14");
-//         assertEq(liquidationAuction.receiver(), address(lender), "E15");
-//         assertEq(liquidationAuction.want(), address(borrowToken), "E16");
-//         assertEq(liquidationAuction.getAllEnabledAuctions()[0], address(collateralToken), "E17");
-//         assertEq(dutchDesk.emergency_kick_trigger(false).length, 0, "E18");
-//         assertEq(dutchDesk.emergency_kick_trigger(true).length, 0, "E19");
-//         vm.expectRevert();
-//         dutchDesk.auctions(0);
-//     }
-
-//     function test_kick_liquidation(
-//         uint256 _amount
-//     ) public {
-//         _amount = bound(_amount, dutchDesk.DUST_THRESHOLD() + 1, maxFuzzAmount);
-
-//         airdrop(address(collateralToken), address(dutchDesk), _amount);
-
-//         vm.prank(address(troveManager));
-//         dutchDesk.kick(_amount, address(0), false);
-
-//         assertTrue(liquidationAuction.isActive(address(collateralToken)), "E0");
-//         assertEq(liquidationAuction.available(address(collateralToken)), _amount, "E1");
-
-//         uint256 _expectedStartingPrice =
-//             _amount * priceOracle.price(false) / WAD * dutchDesk.STARTING_PRICE_BUFFER_PERCENTAGE() / WAD / COLLATERAL_TOKEN_PRECISION;
-//         assertEq(liquidationAuction.startingPrice(), _expectedStartingPrice, "E2");
-
-//         uint256 _expectedMinimumPrice = priceOracle.price(false) * dutchDesk.MINIMUM_PRICE_BUFFER_PERCENTAGE() / WAD;
-//         assertEq(liquidationAuction.minimumPrice(), _expectedMinimumPrice, "E3");
-
-//         assertEq(liquidationAuction.receiver(), address(lender), "E4");
-//     }
-
-//     function test_kick_liquidation_zeroAmount() public {
-//         vm.prank(address(troveManager));
-//         dutchDesk.kick(0, address(0), false);
-
-//         assertFalse(liquidationAuction.isActive(address(collateralToken)), "E0");
-//     }
-
-//     function test_kick_liquidation_activeAuction(
-//         uint256 _amount
-//     ) public {
-//         _amount = bound(_amount, dutchDesk.DUST_THRESHOLD() + 1, maxFuzzAmount / 2);
-
-//         airdrop(address(collateralToken), address(dutchDesk), _amount);
-//         vm.prank(address(troveManager));
-//         dutchDesk.kick(_amount, address(0), false);
-
-//         assertTrue(liquidationAuction.isActive(address(collateralToken)), "E0");
-//         assertEq(liquidationAuction.available(address(collateralToken)), _amount, "E1");
-
-//         uint256 _startingPriceBefore = liquidationAuction.startingPrice();
-
-//         airdrop(address(collateralToken), address(dutchDesk), _amount);
-//         vm.prank(address(troveManager));
-//         dutchDesk.kick(_amount, address(0), false);
-
-//         assertTrue(liquidationAuction.isActive(address(collateralToken)), "E2");
-//         assertEq(liquidationAuction.available(address(collateralToken)), _amount * 2, "E3");
-//         assertApproxEqAbs(liquidationAuction.startingPrice(), _startingPriceBefore * 2, 1, "E4");
-//     }
-
-//     function test_take_liquidation_goesToLender(
-//         uint256 _amount
-//     ) public {
-//         _amount = bound(_amount, dutchDesk.DUST_THRESHOLD() + 1, maxFuzzAmount);
-
-//         airdrop(address(collateralToken), address(dutchDesk), _amount);
-
-//         vm.prank(address(troveManager));
-//         dutchDesk.kick(_amount, address(0), false);
-
-//         uint256 _amountNeeded = liquidationAuction.getAmountNeeded(address(collateralToken));
-//         airdrop(address(borrowToken), liquidator, _amountNeeded);
-
-//         vm.startPrank(liquidator);
-//         borrowToken.approve(address(liquidationAuction), _amountNeeded);
-//         liquidationAuction.take(address(collateralToken));
-//         vm.stopPrank();
-
-//         assertEq(liquidationAuction.available(address(collateralToken)), 0, "E0");
-//         assertEq(borrowToken.balanceOf(address(lender)), _amountNeeded, "E1");
-//     }
-
-//     function test_kick_redemption(
-//         uint256 _amount
-//     ) public {
-//         _amount = bound(_amount, dutchDesk.DUST_THRESHOLD() + 1, maxFuzzAmount);
-
-//         airdrop(address(collateralToken), address(dutchDesk), _amount);
-
-//         vm.prank(address(troveManager));
-//         dutchDesk.kick(_amount, userLender, true);
-
-//         address _auction = dutchDesk.auctions(0);
-//         assertTrue(_auction != address(0), "E0");
-//         assertTrue(IAuction(_auction).isActive(address(collateralToken)), "E1");
-//         assertEq(IAuction(_auction).available(address(collateralToken)), _amount, "E2");
-
-//         uint256 _expectedStartingPrice =
-//             _amount * priceOracle.price(false) / WAD * dutchDesk.STARTING_PRICE_BUFFER_PERCENTAGE() / WAD / COLLATERAL_TOKEN_PRECISION;
-//         assertEq(IAuction(_auction).startingPrice(), _expectedStartingPrice, "E3");
-
-//         uint256 _expectedMinimumPrice = priceOracle.price(false) * dutchDesk.MINIMUM_PRICE_BUFFER_PERCENTAGE() / WAD;
-//         assertEq(IAuction(_auction).minimumPrice(), _expectedMinimumPrice, "E4");
-
-//         assertEq(IAuction(_auction).receiver(), userLender, "E5");
-//     }
-
-//     function test_kick_redemption_multipleAuctions_reusesWhenAvailable() public {
-//         uint256 _amount = dutchDesk.DUST_THRESHOLD() + 1;
-
-//         airdrop(address(collateralToken), address(dutchDesk), _amount);
-//         vm.prank(address(troveManager));
-//         dutchDesk.kick(_amount, userLender, true);
-
-//         address _auction0 = dutchDesk.auctions(0);
-//         assertTrue(IAuction(_auction0).isActive(address(collateralToken)), "E0");
-//         assertEq(collateralToken.balanceOf(address(dutchDesk)), 0, "E1");
-
-//         airdrop(address(collateralToken), address(dutchDesk), _amount);
-//         vm.prank(address(troveManager));
-//         dutchDesk.kick(_amount, userLender, true);
-
-//         address _auction1 = dutchDesk.auctions(1);
-//         assertTrue(IAuction(_auction1).isActive(address(collateralToken)), "E2");
-//         assertNotEq(_auction0, _auction1, "E3");
-//         assertEq(collateralToken.balanceOf(address(dutchDesk)), 0, "E4");
-
-//         uint256 _lenderBalanceBefore = borrowToken.balanceOf(userLender);
-//         uint256 _amountNeeded = IAuction(_auction0).getAmountNeeded(address(collateralToken));
-//         airdrop(address(borrowToken), liquidator, _amountNeeded);
-//         vm.startPrank(liquidator);
-//         borrowToken.approve(_auction0, _amountNeeded);
-//         IAuction(_auction0).take(address(collateralToken));
-//         vm.stopPrank();
-
-//         assertEq(borrowToken.balanceOf(userLender), _lenderBalanceBefore + _amountNeeded, "E5");
-//         assertEq(IAuction(_auction0).available(address(collateralToken)), 0, "E6");
-//         assertFalse(IAuction(_auction0).isActive(address(collateralToken)), "E7");
-
-//         airdrop(address(collateralToken), address(dutchDesk), _amount);
-//         vm.prank(address(troveManager));
-//         dutchDesk.kick(_amount, userLender, true);
-
-//         assertEq(collateralToken.balanceOf(address(dutchDesk)), 0, "E8");
-
-//         vm.expectRevert();
-//         dutchDesk.auctions(2);
-
-//         assertTrue(IAuction(_auction0).isActive(address(collateralToken)), "E9");
-//     }
-
-//     function test_kick_redemption_exceedMaxAuctions() public {
-//         uint256 _maxAuctions = dutchDesk.MAX_AUCTIONS();
-//         uint256 _amount = dutchDesk.DUST_THRESHOLD() + 1;
-
-//         for (uint256 i = 0; i < _maxAuctions; i++) {
-//             airdrop(address(collateralToken), address(dutchDesk), _amount);
-//             vm.prank(address(troveManager));
-//             dutchDesk.kick(_amount, userLender, true);
-
-//             address _auction = dutchDesk.auctions(i);
-//             assertTrue(IAuction(_auction).isActive(address(collateralToken)), "E0");
-//         }
-
-//         airdrop(address(collateralToken), address(dutchDesk), _amount);
-//         vm.expectRevert("max_auctions");
-//         vm.prank(address(troveManager));
-//         dutchDesk.kick(_amount, userLender, true);
-
-//         // Settle one auction and verify we can kick again
-//         address _auctionToSettle = dutchDesk.auctions(0);
-//         uint256 _amountNeeded = IAuction(_auctionToSettle).getAmountNeeded(address(collateralToken));
-//         airdrop(address(borrowToken), liquidator, _amountNeeded);
-//         vm.startPrank(liquidator);
-//         borrowToken.approve(_auctionToSettle, _amountNeeded);
-//         IAuction(_auctionToSettle).take(address(collateralToken), _amount, liquidator);
-//         vm.stopPrank();
-
-//         // Now we should be able to kick again
-//         vm.prank(address(troveManager));
-//         dutchDesk.kick(_amount, userLender, true);
-//         assertTrue(IAuction(_auctionToSettle).isActive(address(collateralToken)), "E1");
-//     }
-
-//     function test_kick_redemption_doesNotReuseAuctionWithPriceTooLow() public {
-//         uint256 _amount = dutchDesk.DUST_THRESHOLD() + 1;
-
-//         airdrop(address(collateralToken), address(dutchDesk), _amount);
-//         vm.prank(address(troveManager));
-//         dutchDesk.kick(_amount, userLender, true);
-
-//         address _auction0 = dutchDesk.auctions(0);
-//         assertTrue(IAuction(_auction0).isActive(address(collateralToken)), "E0");
-
-//         skip(4 hours);
-
-//         assertFalse(IAuction(_auction0).isActive(address(collateralToken)), "E1");
-//         assertEq(IAuction(_auction0).kickable(address(collateralToken)), _amount, "E2");
-
-//         airdrop(address(collateralToken), address(dutchDesk), _amount);
-//         vm.prank(address(troveManager));
-//         dutchDesk.kick(_amount, userLender, true);
-
-//         address _auction1 = dutchDesk.auctions(1);
-//         assertTrue(IAuction(_auction1).isActive(address(collateralToken)), "E3");
-//         assertNotEq(_auction0, _auction1, "E4");
-//     }
-
-//     function test_kick_redemption_createsNewAuctionWithActiveDust() public {
-//         uint256 _dustAmount = dutchDesk.DUST_THRESHOLD();
-//         uint256 _amount = dutchDesk.DUST_THRESHOLD() + COLLATERAL_TOKEN_PRECISION;
-
-//         airdrop(address(collateralToken), address(dutchDesk), _amount);
-//         vm.prank(address(troveManager));
-//         dutchDesk.kick(_amount, userLender, true);
-
-//         address _auction0 = dutchDesk.auctions(0);
-
-//         uint256 _amountToTake = _amount - _dustAmount;
-//         uint256 _amountNeeded = IAuction(_auction0).getAmountNeeded(address(collateralToken), _amountToTake);
-//         airdrop(address(borrowToken), liquidator, _amountNeeded);
-//         vm.startPrank(liquidator);
-//         borrowToken.approve(_auction0, _amountNeeded);
-//         IAuction(_auction0).take(address(collateralToken), _amountToTake, liquidator);
-//         vm.stopPrank();
-
-//         assertTrue(IAuction(_auction0).isActive(address(collateralToken)), "E0");
-//         assertLe(IAuction(_auction0).available(address(collateralToken)), dutchDesk.DUST_THRESHOLD(), "E1");
-
-//         airdrop(address(collateralToken), address(dutchDesk), _amount);
-//         vm.prank(address(troveManager));
-//         dutchDesk.kick(_amount, userLender, true);
-
-//         // Even with dust remaining, a new auction should be created since the first is still active
-//         address _auction1 = dutchDesk.auctions(1);
-//         assertNotEq(_auction0, _auction1, "E2");
-//         assertTrue(IAuction(_auction1).isActive(address(collateralToken)), "E3");
-//     }
-
-//     function test_kick_redemption_reusesAuctionWithKickableDust() public {
-//         uint256 _dustAmount = dutchDesk.DUST_THRESHOLD();
-//         uint256 _amount = dutchDesk.DUST_THRESHOLD() + 1;
-
-//         airdrop(address(collateralToken), address(dutchDesk), _amount);
-//         vm.prank(address(troveManager));
-//         dutchDesk.kick(_amount, userLender, true);
-
-//         address _auction0 = dutchDesk.auctions(0);
-
-//         uint256 _amountNeeded = IAuction(_auction0).getAmountNeeded(address(collateralToken));
-//         airdrop(address(borrowToken), liquidator, _amountNeeded);
-//         vm.startPrank(liquidator);
-//         borrowToken.approve(_auction0, _amountNeeded);
-//         IAuction(_auction0).take(address(collateralToken));
-//         vm.stopPrank();
-
-//         assertFalse(IAuction(_auction0).isActive(address(collateralToken)), "E0");
-
-//         airdrop(address(collateralToken), _auction0, _dustAmount);
-
-//         assertLe(IAuction(_auction0).kickable(address(collateralToken)), dutchDesk.DUST_THRESHOLD(), "E1");
-
-//         airdrop(address(collateralToken), address(dutchDesk), _amount);
-//         vm.prank(address(troveManager));
-//         dutchDesk.kick(_amount, userLender, true);
-
-//         vm.expectRevert();
-//         dutchDesk.auctions(1);
-
-//         assertTrue(IAuction(_auction0).isActive(address(collateralToken)), "E2");
-//     }
-
-//     function test_emergencyKickTrigger_liquidation_priceTooLow(
-//         uint256 _amount
-//     ) public {
-//         _amount = bound(_amount, dutchDesk.DUST_THRESHOLD() + 1, maxFuzzAmount);
-
-//         airdrop(address(collateralToken), address(dutchDesk), _amount);
-//         vm.prank(address(troveManager));
-//         dutchDesk.kick(_amount, address(0), false);
-
-//         address[] memory _auctionsBefore = dutchDesk.emergency_kick_trigger(false);
-//         assertEq(_auctionsBefore.length, 0, "E0");
-
-//         skip(4 hours);
-
-//         assertFalse(liquidationAuction.isActive(address(collateralToken)), "E1");
-//         assertEq(liquidationAuction.kickable(address(collateralToken)), _amount, "E2");
-
-//         address[] memory _auctionsAfter = dutchDesk.emergency_kick_trigger(false);
-//         assertEq(_auctionsAfter.length, 1, "E3");
-//         assertEq(_auctionsAfter[0], address(liquidationAuction), "E4");
-//     }
-
-//     function test_emergencyKickTrigger_redemption_priceTooLow(
-//         uint256 _amount
-//     ) public {
-//         _amount = bound(_amount, dutchDesk.DUST_THRESHOLD() + 1, maxFuzzAmount);
-
-//         airdrop(address(collateralToken), address(dutchDesk), _amount);
-//         vm.prank(address(troveManager));
-//         dutchDesk.kick(_amount, userLender, true);
-
-//         address _auction0 = dutchDesk.auctions(0);
-
-//         address[] memory _auctionsBefore = dutchDesk.emergency_kick_trigger(true);
-//         assertEq(_auctionsBefore.length, 0, "E0");
-
-//         skip(4 hours);
-
-//         assertFalse(IAuction(_auction0).isActive(address(collateralToken)), "E1");
-//         assertEq(IAuction(_auction0).kickable(address(collateralToken)), _amount, "E2");
-
-//         address[] memory _auctionsAfter = dutchDesk.emergency_kick_trigger(true);
-//         assertEq(_auctionsAfter.length, 1, "E3");
-//         assertEq(_auctionsAfter[0], _auction0, "E4");
-//     }
-
-//     function test_emergencyKickTrigger_basefeeTooHigh(
-//         uint256 _amount
-//     ) public {
-//         _amount = bound(_amount, dutchDesk.DUST_THRESHOLD() + 1, maxFuzzAmount);
-
-//         airdrop(address(collateralToken), address(dutchDesk), _amount);
-//         vm.prank(address(troveManager));
-//         dutchDesk.kick(_amount, address(0), false);
-
-//         skip(4 hours);
-
-//         assertGt(liquidationAuction.kickable(address(collateralToken)), dutchDesk.DUST_THRESHOLD(), "E0");
-
-//         address[] memory _auctionsBefore = dutchDesk.emergency_kick_trigger(false);
-//         assertEq(_auctionsBefore.length, 1, "E1");
-
-//         vm.fee(dutchDesk.MAX_GAS_PRICE_TO_TRIGGER() + 1);
-
-//         address[] memory _auctionsAfter = dutchDesk.emergency_kick_trigger(false);
-//         assertEq(_auctionsAfter.length, 0, "E2");
-//     }
-
-//     function test_emergencyKickTrigger_multipleRedemptionAuctions() public {
-//         uint256 _amount = dutchDesk.DUST_THRESHOLD() + 1;
-
-//         for (uint256 i = 0; i < 3; i++) {
-//             airdrop(address(collateralToken), address(dutchDesk), _amount);
-//             vm.prank(address(troveManager));
-//             dutchDesk.kick(_amount, userLender, true);
-//         }
-
-//         skip(4 hours);
-
-//         address[] memory _auctions = dutchDesk.emergency_kick_trigger(true);
-//         assertEq(_auctions.length, 3, "E0");
-//         assertEq(_auctions[0], dutchDesk.auctions(0), "E1");
-//         assertEq(_auctions[1], dutchDesk.auctions(1), "E2");
-//         assertEq(_auctions[2], dutchDesk.auctions(2), "E3");
-//     }
-
-//     function test_emergencyKickTrigger_ignoresDustAuctions(
-//         uint256 _dustAmount
-//     ) public {
-//         _dustAmount = bound(_dustAmount, 1, dutchDesk.DUST_THRESHOLD());
-
-//         uint256 _amount = dutchDesk.DUST_THRESHOLD() + 1;
-//         airdrop(address(collateralToken), address(dutchDesk), _amount);
-//         vm.prank(address(troveManager));
-//         dutchDesk.kick(_amount, userLender, true);
-
-//         address _auction0 = dutchDesk.auctions(0);
-
-//         uint256 _amountNeeded = IAuction(_auction0).getAmountNeeded(address(collateralToken));
-//         airdrop(address(borrowToken), liquidator, _amountNeeded);
-//         vm.startPrank(liquidator);
-//         borrowToken.approve(_auction0, _amountNeeded);
-//         IAuction(_auction0).take(address(collateralToken));
-//         vm.stopPrank();
-
-//         assertFalse(IAuction(_auction0).isActive(address(collateralToken)), "E0");
-
-//         airdrop(address(collateralToken), _auction0, _dustAmount);
-//         vm.prank(address(dutchDesk));
-//         IAuction(_auction0).kick(address(collateralToken));
-
-//         assertLe(IAuction(_auction0).kickable(address(collateralToken)), dutchDesk.DUST_THRESHOLD(), "E1");
-
-//         address[] memory _auctions = dutchDesk.emergency_kick_trigger(true);
-//         assertEq(_auctions.length, 0, "E2");
-//     }
-
-//     function test_emergencyKick_liquidation(
-//         uint256 _amount
-//     ) public {
-//         _amount = bound(_amount, dutchDesk.DUST_THRESHOLD() + 1, maxFuzzAmount);
-
-//         airdrop(address(collateralToken), address(dutchDesk), _amount);
-//         vm.prank(address(troveManager));
-//         dutchDesk.kick(_amount, address(0), false);
-
-//         skip(4 hours);
-
-//         address[] memory _auctionsToKick = dutchDesk.emergency_kick_trigger(false);
-//         assertEq(_auctionsToKick.length, 1, "E0");
-
-//         vm.prank(keeper);
-//         dutchDesk.emergency_kick(_auctionsToKick);
-
-//         assertTrue(liquidationAuction.isActive(address(collateralToken)), "E1");
-
-//         uint256 _expectedStartingPrice =
-//             _amount * priceOracle.price(false) / WAD * dutchDesk.EMERGENCY_STARTING_PRICE_BUFFER_PERCENTAGE() / WAD / COLLATERAL_TOKEN_PRECISION;
-//         assertEq(liquidationAuction.startingPrice(), _expectedStartingPrice, "E2");
-
-//         uint256 _expectedMinimumPrice = priceOracle.price(false) * dutchDesk.MINIMUM_PRICE_BUFFER_PERCENTAGE() / WAD;
-//         assertEq(liquidationAuction.minimumPrice(), _expectedMinimumPrice, "E3");
-//     }
-
-//     function test_emergencyKick_redemption(
-//         uint256 _amount
-//     ) public {
-//         _amount = bound(_amount, dutchDesk.DUST_THRESHOLD() + 1, maxFuzzAmount);
-
-//         airdrop(address(collateralToken), address(dutchDesk), _amount);
-//         vm.prank(address(troveManager));
-//         dutchDesk.kick(_amount, userLender, true);
-
-//         address _auction0 = dutchDesk.auctions(0);
-
-//         skip(4 hours);
-
-//         address[] memory _auctionsToKick = dutchDesk.emergency_kick_trigger(true);
-//         assertEq(_auctionsToKick.length, 1, "E0");
-
-//         vm.prank(keeper);
-//         dutchDesk.emergency_kick(_auctionsToKick);
-
-//         assertTrue(IAuction(_auction0).isActive(address(collateralToken)), "E1");
-
-//         uint256 _expectedStartingPrice =
-//             _amount * priceOracle.price(false) / WAD * dutchDesk.EMERGENCY_STARTING_PRICE_BUFFER_PERCENTAGE() / WAD / COLLATERAL_TOKEN_PRECISION;
-//         assertEq(IAuction(_auction0).startingPrice(), _expectedStartingPrice, "E2");
-
-//         uint256 _expectedMinimumPrice = priceOracle.price(false) * dutchDesk.MINIMUM_PRICE_BUFFER_PERCENTAGE() / WAD;
-//         assertEq(IAuction(_auction0).minimumPrice(), _expectedMinimumPrice, "E3");
-//     }
-
-//     function test_emergencyKick_multipleRedemptionAuctions() public {
-//         uint256 _amount = dutchDesk.DUST_THRESHOLD() + 1;
-
-//         for (uint256 i = 0; i < 3; i++) {
-//             airdrop(address(collateralToken), address(dutchDesk), _amount);
-//             vm.prank(address(troveManager));
-//             dutchDesk.kick(_amount, userLender, true);
-//         }
-
-//         skip(4 hours);
-
-//         address[] memory _auctionsToKick = dutchDesk.emergency_kick_trigger(true);
-//         assertEq(_auctionsToKick.length, 3, "E0");
-
-//         vm.prank(keeper);
-//         dutchDesk.emergency_kick(_auctionsToKick);
-
-//         for (uint256 i = 0; i < 3; i++) {
-//             address _auction = dutchDesk.auctions(i);
-//             assertTrue(IAuction(_auction).isActive(address(collateralToken)), "E1");
-//         }
-//     }
-
-//     function test_emergencyKick_invalidCaller(
-//         address _invalidCaller
-//     ) public {
-//         vm.assume(_invalidCaller != keeper);
-
-//         address[] memory _emptyArray = new address[](0);
-
-//         vm.expectRevert("!keeper");
-//         vm.prank(_invalidCaller);
-//         dutchDesk.emergency_kick(_emptyArray);
-//     }
-
-//     function test_emergencyKick_notKickable(
-//         uint256 _amount
-//     ) public {
-//         _amount = bound(_amount, dutchDesk.DUST_THRESHOLD() + 1, maxFuzzAmount);
-
-//         airdrop(address(collateralToken), address(dutchDesk), _amount);
-//         vm.prank(address(troveManager));
-//         dutchDesk.kick(_amount, userLender, true);
-
-//         address _auction0 = dutchDesk.auctions(0);
-
-//         // Auction is active but not kickable (no time has passed, price hasn't dropped)
-//         assertTrue(IAuction(_auction0).isActive(address(collateralToken)), "E0");
-//         assertEq(IAuction(_auction0).kickable(address(collateralToken)), 0, "E1");
-
-//         // Try to emergency kick an auction that isn't kickable
-//         address[] memory _auctionsToKick = new address[](1);
-//         _auctionsToKick[0] = _auction0;
-
-//         vm.expectRevert("!kickable");
-//         vm.prank(keeper);
-//         dutchDesk.emergency_kick(_auctionsToKick);
-//     }
-
-//     function test_kick_invalidCaller(
-//         address _invalidCaller
-//     ) public {
-//         vm.assume(_invalidCaller != address(troveManager) && _invalidCaller != address(dutchDesk));
-
-//         vm.expectRevert("!trove_manager");
-//         vm.prank(_invalidCaller);
-//         dutchDesk.kick(0, userLender, false);
-//     }
-
-//     function test_auctionKick_onlyDutchDesk(
-//         address _invalidCaller,
-//         uint256 _amount
-//     ) public {
-//         vm.assume(_invalidCaller != address(dutchDesk));
-//         _amount = bound(_amount, dutchDesk.DUST_THRESHOLD() + 1, maxFuzzAmount);
-
-//         // 1. Test LIQUIDATION_AUCTION can only be kicked by dutchDesk
-//         IAuction _liquidationAuction = IAuction(dutchDesk.LIQUIDATION_AUCTION());
-//         airdrop(address(collateralToken), address(_liquidationAuction), _amount);
-//         vm.expectRevert("!governance");
-//         vm.prank(_invalidCaller);
-//         _liquidationAuction.kick(address(collateralToken));
-
-//         // 2. Test redemption auction can only be kicked by dutchDesk
-//         // First create a redemption auction
-//         airdrop(address(collateralToken), address(dutchDesk), _amount);
-//         vm.prank(address(troveManager));
-//         dutchDesk.kick(_amount, userLender, true);
-
-//         address _redemptionAuction = dutchDesk.auctions(0);
-//         assertTrue(_redemptionAuction != address(0), "E1");
-
-//         // Take the redemption auction so we can try to kick it again
-//         uint256 _amountNeeded = IAuction(_redemptionAuction).getAmountNeeded(address(collateralToken));
-//         airdrop(address(borrowToken), liquidator, _amountNeeded);
-//         vm.startPrank(liquidator);
-//         borrowToken.approve(_redemptionAuction, _amountNeeded);
-//         IAuction(_redemptionAuction).take(address(collateralToken), _amount, liquidator);
-//         vm.stopPrank();
-
-//         // Try to kick redemption auction directly - should fail
-//         vm.expectRevert("!governance");
-//         vm.prank(_invalidCaller);
-//         IAuction(_redemptionAuction).kick(address(collateralToken));
-//     }
-
-//     function test_setKeeper(
-//         address _newKeeper
-//     ) public {
-//         vm.prank(management);
-//         dutchDesk.set_keeper(_newKeeper);
-
-//         assertEq(dutchDesk.keeper(), _newKeeper, "E0");
-//     }
-
-//     function test_setKeeper_invalidCaller(
-//         address _notOwner,
-//         address _newKeeper
-//     ) public {
-//         vm.assume(_notOwner != management);
-
-//         vm.expectRevert("!owner");
-//         vm.prank(_notOwner);
-//         dutchDesk.set_keeper(_newKeeper);
-//     }
-
-//     function test_transferOwnership(
-//         address _newOwner
-//     ) public {
-//         vm.prank(management);
-//         dutchDesk.transfer_ownership(_newOwner);
-
-//         assertEq(dutchDesk.owner(), management, "E0");
-//         assertEq(dutchDesk.pending_owner(), _newOwner, "E1");
-
-//         vm.prank(_newOwner);
-//         dutchDesk.accept_ownership();
-
-//         assertEq(dutchDesk.owner(), _newOwner, "E2");
-//         assertEq(dutchDesk.pending_owner(), address(0), "E3");
-//     }
-
-//     function test_transferOwnership_invalidCaller(
-//         address _newOwner,
-//         address _invalidCaller
-//     ) public {
-//         vm.assume(_invalidCaller != management);
-
-//         vm.expectRevert("!owner");
-//         vm.prank(_invalidCaller);
-//         dutchDesk.transfer_ownership(_newOwner);
-//     }
-
-//     function test_acceptOwnership_invalidCaller(
-//         address _newOwner,
-//         address _invalidCaller
-//     ) public {
-//         vm.assume(_invalidCaller != _newOwner);
-
-//         vm.prank(management);
-//         dutchDesk.transfer_ownership(_newOwner);
-
-//         vm.expectRevert("!pending_owner");
-//         vm.prank(_invalidCaller);
-//         dutchDesk.accept_ownership();
-//     }
-
-// }
+// SPDX-License-Identifier: MIT
+pragma solidity 0.8.23;
+
+import "./Base.sol";
+
+contract DutchDeskTests is Base {
+
+    function setUp() public override {
+        Base.setUp();
+
+        vm.prank(management);
+        dutchDesk.accept_ownership();
+
+        // Adjust `maxFuzzAmount` to collateral token decimals
+        uint256 _maxFuzzAmount = 1_000_000 ether;
+        if (COLLATERAL_TOKEN_PRECISION < 1e18) maxFuzzAmount = _maxFuzzAmount / (1e18 / COLLATERAL_TOKEN_PRECISION);
+        else maxFuzzAmount = _maxFuzzAmount;
+
+        // Adjust `minFuzzAmount` to collateral token decimals
+        uint256 _minFuzzAmount = 0.001 ether;
+        if (COLLATERAL_TOKEN_PRECISION < 1e18) minFuzzAmount = _minFuzzAmount / (1e18 / COLLATERAL_TOKEN_PRECISION);
+        else minFuzzAmount = _minFuzzAmount;
+    }
+
+    function test_setup() public {
+        assertEq(dutchDesk.owner(), management, "E0");
+        assertEq(dutchDesk.pending_owner(), address(0), "E1");
+        assertEq(dutchDesk.TROVE_MANAGER(), address(troveManager), "E2");
+        assertEq(dutchDesk.PRICE_ORACLE(), address(priceOracle), "E3");
+        assertEq(dutchDesk.AUCTION(), address(auction), "E4");
+        assertEq(dutchDesk.BORROW_TOKEN(), address(borrowToken), "E5");
+        assertEq(dutchDesk.COLLATERAL_TOKEN(), address(collateralToken), "E6");
+        assertEq(dutchDesk.STARTING_PRICE_BUFFER_PERCENTAGE(), 1e18 + 15e16, "E7"); // 115%
+        assertEq(dutchDesk.EMERGENCY_STARTING_PRICE_BUFFER_PERCENTAGE(), 1e18 + 100e16, "E8"); // 200%
+        assertEq(dutchDesk.MINIMUM_PRICE_BUFFER_PERCENTAGE(), 1e18 - 5e16, "E9"); // 95%
+        assertEq(dutchDesk.keeper(), keeper, "E10");
+        assertEq(dutchDesk.nonce(), 0, "E11");
+    }
+
+    function test_kick_liquidation(
+        uint256 _amount,
+        address _receiver
+    ) public {
+        _amount = bound(_amount, minFuzzAmount, maxFuzzAmount);
+        vm.assume(_receiver != address(0));
+
+        // Collateral is transferred from troveManager via kick
+        airdrop(address(collateralToken), address(troveManager), _amount);
+
+        uint256 _nonceBefore = dutchDesk.nonce();
+
+        vm.prank(address(troveManager));
+        dutchDesk.kick(_amount, _receiver, true);
+
+        uint256 _auctionId = _nonceBefore; // nonce is auction ID, incremented after kick
+
+        assertTrue(auction.is_active(_auctionId), "E0");
+        assertEq(auction.get_available_amount(_auctionId), _amount, "E1");
+
+        uint256 _expectedStartingPrice =
+            _amount * priceOracle.get_price(false) / WAD * dutchDesk.STARTING_PRICE_BUFFER_PERCENTAGE() / WAD / COLLATERAL_TOKEN_PRECISION;
+        assertEq(auction.starting_price(_auctionId), _expectedStartingPrice, "E2");
+
+        uint256 _expectedMinimumPrice = priceOracle.get_price(false) * dutchDesk.MINIMUM_PRICE_BUFFER_PERCENTAGE() / WAD;
+        assertEq(auction.minimum_price(_auctionId), _expectedMinimumPrice, "E3");
+
+        assertEq(auction.receiver(_auctionId), _receiver, "E4");
+        assertTrue(auction.is_liquidation(_auctionId), "E5");
+        assertEq(dutchDesk.nonce(), _nonceBefore + 1, "E6");
+        assertTrue(auction.is_ongoing_liquidation_auction(), "E7");
+        assertEq(auction.liquidation_auctions(), 1, "E8");
+    }
+
+    function test_kick_redemption(
+        uint256 _amount,
+        address _receiver
+    ) public {
+        _amount = bound(_amount, minFuzzAmount, maxFuzzAmount);
+        vm.assume(_receiver != address(0));
+
+        // Collateral is transferred from troveManager via kick
+        airdrop(address(collateralToken), address(troveManager), _amount);
+
+        uint256 _nonceBefore = dutchDesk.nonce();
+
+        vm.prank(address(troveManager));
+        dutchDesk.kick(_amount, _receiver, false);
+
+        uint256 _auctionId = _nonceBefore; // nonce is auction ID, incremented after kick
+
+        assertTrue(auction.is_active(_auctionId), "E0");
+        assertEq(auction.get_available_amount(_auctionId), _amount, "E1");
+
+        uint256 _expectedStartingPrice =
+            _amount * priceOracle.get_price(false) / WAD * dutchDesk.STARTING_PRICE_BUFFER_PERCENTAGE() / WAD / COLLATERAL_TOKEN_PRECISION;
+        assertEq(auction.starting_price(_auctionId), _expectedStartingPrice, "E2");
+
+        uint256 _expectedMinimumPrice = priceOracle.get_price(false) * dutchDesk.MINIMUM_PRICE_BUFFER_PERCENTAGE() / WAD;
+        assertEq(auction.minimum_price(_auctionId), _expectedMinimumPrice, "E3");
+
+        assertEq(auction.receiver(_auctionId), _receiver, "E4");
+        assertFalse(auction.is_liquidation(_auctionId), "E5");
+        assertEq(dutchDesk.nonce(), _nonceBefore + 1, "E6");
+        assertFalse(auction.is_ongoing_liquidation_auction(), "E7");
+        assertEq(auction.liquidation_auctions(), 0, "E8");
+    }
+
+    function test_kick_zeroAmount(
+        address _receiver,
+        bool _isLiquidation
+    ) public {
+        uint256 _nonceBefore = dutchDesk.nonce();
+
+        vm.prank(address(troveManager));
+        dutchDesk.kick(0, _receiver, _isLiquidation);
+
+        // Nothing should happen - nonce unchanged, no active auction
+        assertEq(dutchDesk.nonce(), _nonceBefore, "E0");
+        assertFalse(auction.is_active(_nonceBefore), "E1");
+    }
+
+    function test_kick_multipleAuctions(
+        uint256 _amount1,
+        uint256 _amount2,
+        address _receiver1,
+        address _receiver2
+    ) public {
+        _amount1 = bound(_amount1, minFuzzAmount, maxFuzzAmount / 2);
+        _amount2 = bound(_amount2, minFuzzAmount, maxFuzzAmount / 2);
+        vm.assume(_receiver1 != address(0));
+        vm.assume(_receiver2 != address(0));
+
+        // First kick
+        airdrop(address(collateralToken), address(troveManager), _amount1);
+        vm.prank(address(troveManager));
+        dutchDesk.kick(_amount1, _receiver1, true);
+
+        assertTrue(auction.is_active(0), "E0");
+        assertEq(auction.get_available_amount(0), _amount1, "E1");
+        assertEq(dutchDesk.nonce(), 1, "E2");
+
+        // Second kick creates a new auction with nonce 1
+        airdrop(address(collateralToken), address(troveManager), _amount2);
+        vm.prank(address(troveManager));
+        dutchDesk.kick(_amount2, _receiver2, true);
+
+        assertTrue(auction.is_active(1), "E3");
+        assertEq(auction.get_available_amount(1), _amount2, "E4");
+        assertEq(dutchDesk.nonce(), 2, "E5");
+
+        // First auction is still active
+        assertTrue(auction.is_active(0), "E6");
+        assertEq(auction.liquidation_auctions(), 2, "E7");
+    }
+
+    function test_reKick(
+        uint256 _amount,
+        address _receiver
+    ) public {
+        _amount = bound(_amount, minFuzzAmount, maxFuzzAmount);
+        vm.assume(_receiver != address(0));
+
+        // Kick an auction
+        airdrop(address(collateralToken), address(troveManager), _amount);
+        vm.prank(address(troveManager));
+        dutchDesk.kick(_amount, _receiver, true);
+
+        uint256 _auctionId = 0;
+        assertTrue(auction.is_active(_auctionId), "E0");
+
+        // Skip time until auction becomes inactive (price drops below minimum)
+        skip(4 hours);
+
+        assertFalse(auction.is_active(_auctionId), "E1");
+        assertEq(auction.get_kickable_amount(_auctionId), _amount, "E2");
+
+        // Re-kick the auction
+        vm.prank(keeper);
+        dutchDesk.re_kick(_auctionId);
+
+        assertTrue(auction.is_active(_auctionId), "E3");
+        assertEq(auction.get_available_amount(_auctionId), _amount, "E4");
+
+        // Starting price should use EMERGENCY buffer
+        uint256 _expectedStartingPrice =
+            _amount * priceOracle.get_price(false) / WAD * dutchDesk.EMERGENCY_STARTING_PRICE_BUFFER_PERCENTAGE() / WAD / COLLATERAL_TOKEN_PRECISION;
+        assertEq(auction.starting_price(_auctionId), _expectedStartingPrice, "E5");
+
+        uint256 _expectedMinimumPrice = priceOracle.get_price(false) * dutchDesk.MINIMUM_PRICE_BUFFER_PERCENTAGE() / WAD;
+        assertEq(auction.minimum_price(_auctionId), _expectedMinimumPrice, "E6");
+    }
+
+    function test_reKick_invalidCaller(
+        uint256 _amount,
+        address _receiver,
+        address _invalidCaller
+    ) public {
+        _amount = bound(_amount, minFuzzAmount, maxFuzzAmount);
+        vm.assume(_receiver != address(0));
+        vm.assume(_invalidCaller != keeper);
+
+        // Kick an auction
+        airdrop(address(collateralToken), address(troveManager), _amount);
+        vm.prank(address(troveManager));
+        dutchDesk.kick(_amount, _receiver, true);
+
+        // Skip time until auction becomes inactive
+        skip(4 hours);
+
+        // Try to re-kick with invalid caller
+        vm.expectRevert("!keeper");
+        vm.prank(_invalidCaller);
+        dutchDesk.re_kick(0);
+    }
+
+    function test_reKick_auctionStillActive(
+        uint256 _amount,
+        address _receiver
+    ) public {
+        _amount = bound(_amount, minFuzzAmount, maxFuzzAmount);
+        vm.assume(_receiver != address(0));
+
+        // Kick an auction
+        airdrop(address(collateralToken), address(troveManager), _amount);
+        vm.prank(address(troveManager));
+        dutchDesk.kick(_amount, _receiver, true);
+
+        assertTrue(auction.is_active(0), "E0");
+
+        // Try to re-kick while auction is still active
+        vm.expectRevert("active");
+        vm.prank(keeper);
+        dutchDesk.re_kick(0);
+    }
+
+    function test_setKeeper(
+        address _newKeeper
+    ) public {
+        vm.prank(management);
+        dutchDesk.set_keeper(_newKeeper);
+
+        assertEq(dutchDesk.keeper(), _newKeeper, "E0");
+    }
+
+    function test_setKeeper_invalidCaller(
+        address _notOwner,
+        address _newKeeper
+    ) public {
+        vm.assume(_notOwner != management);
+
+        vm.expectRevert("!owner");
+        vm.prank(_notOwner);
+        dutchDesk.set_keeper(_newKeeper);
+    }
+
+    function test_transferOwnership(
+        address _newOwner
+    ) public {
+        vm.prank(management);
+        dutchDesk.transfer_ownership(_newOwner);
+
+        assertEq(dutchDesk.owner(), management, "E0");
+        assertEq(dutchDesk.pending_owner(), _newOwner, "E1");
+
+        vm.prank(_newOwner);
+        dutchDesk.accept_ownership();
+
+        assertEq(dutchDesk.owner(), _newOwner, "E2");
+        assertEq(dutchDesk.pending_owner(), address(0), "E3");
+    }
+
+    function test_transferOwnership_invalidCaller(
+        address _newOwner,
+        address _invalidCaller
+    ) public {
+        vm.assume(_invalidCaller != management);
+
+        vm.expectRevert("!owner");
+        vm.prank(_invalidCaller);
+        dutchDesk.transfer_ownership(_newOwner);
+    }
+
+    function test_acceptOwnership_invalidCaller(
+        address _newOwner,
+        address _invalidCaller
+    ) public {
+        vm.assume(_invalidCaller != _newOwner);
+
+        vm.prank(management);
+        dutchDesk.transfer_ownership(_newOwner);
+
+        vm.expectRevert("!pending_owner");
+        vm.prank(_invalidCaller);
+        dutchDesk.accept_ownership();
+    }
+
+}
