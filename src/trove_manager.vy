@@ -18,6 +18,7 @@ from interfaces import IDutchDesk
 from interfaces import IPriceOracle
 from interfaces import ISortedTroves
 
+# @todo -- borrower can only redeem other borrowers that pay less than him
 # @todo -- add min_out on borrow/open_trove to prevent front-running on idle tokens
 # @todo -- dont allow borrow/open_trove if there is an active liquidation auction (system is temporarily insolvent)
 # @todo -- add docs to constructor (and cleanup)

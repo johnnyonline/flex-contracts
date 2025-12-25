@@ -25,24 +25,51 @@ interface IAuction {
     // External view functions
     // ============================================================================================
 
-    function get_available_amount(uint256 auction_id) external view returns (uint256);
-    function get_kickable_amount(uint256 auction_id) external view returns (uint256);
-    function get_needed_amount(uint256 auction_id, uint256 max_amount, uint256 at_timestamp) external view returns (uint256);
-    function get_price(uint256 auction_id, uint256 at_timestamp) external view returns (uint256);
-    function is_active(uint256 auction_id) external view returns (bool);
+    function get_available_amount(
+        uint256 auction_id
+    ) external view returns (uint256);
+    function get_kickable_amount(
+        uint256 auction_id
+    ) external view returns (uint256);
+    function get_needed_amount(
+        uint256 auction_id,
+        uint256 max_amount,
+        uint256 at_timestamp
+    ) external view returns (uint256);
+    function get_price(
+        uint256 auction_id,
+        uint256 at_timestamp
+    ) external view returns (uint256);
+    function is_active(
+        uint256 auction_id
+    ) external view returns (bool);
     function is_ongoing_liquidation_auction() external view returns (bool);
 
     // ============================================================================================
     // Storage read functions
     // ============================================================================================
 
-    function kick_timestamp(uint256 auction_id) external view returns (uint256);
-    function initial_amount(uint256 auction_id) external view returns (uint256);
-    function current_amount(uint256 auction_id) external view returns (uint256);
-    function starting_price(uint256 auction_id) external view returns (uint256);
-    function minimum_price(uint256 auction_id) external view returns (uint256);
-    function receiver(uint256 auction_id) external view returns (address);
-    function is_liquidation(uint256 auction_id) external view returns (bool);
+    function kick_timestamp(
+        uint256 auction_id
+    ) external view returns (uint256);
+    function initial_amount(
+        uint256 auction_id
+    ) external view returns (uint256);
+    function current_amount(
+        uint256 auction_id
+    ) external view returns (uint256);
+    function starting_price(
+        uint256 auction_id
+    ) external view returns (uint256);
+    function minimum_price(
+        uint256 auction_id
+    ) external view returns (uint256);
+    function receiver(
+        uint256 auction_id
+    ) external view returns (address);
+    function is_liquidation(
+        uint256 auction_id
+    ) external view returns (bool);
 
     // ============================================================================================
     // Kick

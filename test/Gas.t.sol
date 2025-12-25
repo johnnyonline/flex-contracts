@@ -1,10 +1,10 @@
 // SPDX-License-Identifier: MIT
 pragma solidity 0.8.23;
 
+import {IAuction} from "../script/interfaces/IAuction.sol";
 import "./Base.sol";
 import {IPriceOracleNotScaled} from "./interfaces/IPriceOracleNotScaled.sol";
 import {IPriceOracleScaled} from "./interfaces/IPriceOracleScaled.sol";
-import {IAuction} from "../script/interfaces/IAuction.sol";
 
 contract GasTests is Base {
 
@@ -112,7 +112,7 @@ contract GasTests is Base {
 
         // Drop price to make all troves liquidatable
         uint256 _priceDropToBelowMCR = priceOracle.get_price() * 80 / 100; // 20% drop
-        uint256 _priceDropToBelowMCR18 = _priceDropToBelowMCR * 1e18 / ORACLE_PRICE_SCALE;
+        uint256 _priceDropToBelowMCR18 = priceOracle.get_price(false) * 80 / 100; // 20% drop
         vm.mockCall(address(priceOracle), abi.encodeWithSelector(IPriceOracleScaled.get_price.selector), abi.encode(_priceDropToBelowMCR));
         vm.mockCall(address(priceOracle), abi.encodeWithSelector(IPriceOracleNotScaled.get_price.selector, false), abi.encode(_priceDropToBelowMCR18));
 

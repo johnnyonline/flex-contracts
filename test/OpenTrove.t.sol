@@ -144,7 +144,8 @@ contract OpenTroveTests is Base {
         mintAndDepositIntoLender(userLender, _amount);
 
         // Calculate how much collateral is needed for the borrow amount
-        uint256 _collateralNeeded = (_amount * DEFAULT_TARGET_COLLATERAL_RATIO / BORROW_TOKEN_PRECISION) * ORACLE_PRICE_SCALE / priceOracle.get_price();
+        uint256 _collateralNeeded =
+            (_amount * DEFAULT_TARGET_COLLATERAL_RATIO / BORROW_TOKEN_PRECISION) * ORACLE_PRICE_SCALE / priceOracle.get_price();
 
         // Borrow all available liquidity from another borrower
         uint256 _troveIdAnotherBorrower = mintAndOpenTrove(anotherUserBorrower, _collateralNeeded, _amount, DEFAULT_ANNUAL_INTEREST_RATE);
@@ -291,7 +292,8 @@ contract OpenTroveTests is Base {
         uint256 _expectedDebt = _amount - _secondAmount + troveManager.get_upfront_fee(_firstAmount, DEFAULT_ANNUAL_INTEREST_RATE);
 
         // Calculate expected collateral after redemption (only need to redeem the difference between the two amounts)
-        uint256 _expectedCollateralAfterRedemption = _collateralNeeded - ((_secondAmount - _firstAmount) * ORACLE_PRICE_SCALE / priceOracle.get_price());
+        uint256 _expectedCollateralAfterRedemption =
+            _collateralNeeded - ((_secondAmount - _firstAmount) * ORACLE_PRICE_SCALE / priceOracle.get_price());
 
         // Check an auction was created
         // uint256 _auctionId = 0;
@@ -411,7 +413,8 @@ contract OpenTroveTests is Base {
         assertEq(borrowToken.balanceOf(address(lender)), 0, "E0");
 
         // Calculate how much collateral is needed for the borrow amount
-        uint256 _secondCollateralNeeded = (_secondAmount * _targetCollateralRatio / BORROW_TOKEN_PRECISION) * ORACLE_PRICE_SCALE / priceOracle.get_price();
+        uint256 _secondCollateralNeeded =
+            (_secondAmount * _targetCollateralRatio / BORROW_TOKEN_PRECISION) * ORACLE_PRICE_SCALE / priceOracle.get_price();
 
         // Cache the expected time because it will be skipped during the auction
         uint256 _expectedTime = block.timestamp;
@@ -678,7 +681,8 @@ contract OpenTroveTests is Base {
         mintAndDepositIntoLender(userLender, _amount);
 
         // Calculate how much collateral is needed for the borrow amount
-        uint256 _collateralNeeded = (_amount * DEFAULT_TARGET_COLLATERAL_RATIO / BORROW_TOKEN_PRECISION) * ORACLE_PRICE_SCALE / priceOracle.get_price();
+        uint256 _collateralNeeded =
+            (_amount * DEFAULT_TARGET_COLLATERAL_RATIO / BORROW_TOKEN_PRECISION) * ORACLE_PRICE_SCALE / priceOracle.get_price();
 
         // Borrow all available liquidity from first victim
         uint256 _troveIdVictim1 = mintAndOpenTrove(anotherUserBorrower, _collateralNeeded, _amount, DEFAULT_ANNUAL_INTEREST_RATE);

@@ -32,7 +32,8 @@ contract LiquidateTests is Base {
         mintAndDepositIntoLender(userLender, _amount);
 
         // Calculate how much collateral is needed for the borrow amount
-        uint256 _collateralNeeded = (_amount * DEFAULT_TARGET_COLLATERAL_RATIO / BORROW_TOKEN_PRECISION) * ORACLE_PRICE_SCALE / priceOracle.get_price();
+        uint256 _collateralNeeded =
+            (_amount * DEFAULT_TARGET_COLLATERAL_RATIO / BORROW_TOKEN_PRECISION) * ORACLE_PRICE_SCALE / priceOracle.get_price();
 
         // Calculate expected debt (borrow amount + upfront fee)
         uint256 _expectedDebt = _amount + troveManager.get_upfront_fee(_amount, DEFAULT_ANNUAL_INTEREST_RATE);
@@ -513,11 +514,7 @@ contract LiquidateTests is Base {
             _collateralNeeded * _priceDropToBelowMCR18 / 1e18 * dutchDesk.STARTING_PRICE_BUFFER_PERCENTAGE() / 1e18 / COLLATERAL_TOKEN_PRECISION,
             "E12"
         );
-        assertEq(
-            auction.minimum_price(0),
-            _priceDropToBelowMCR18 * dutchDesk.MINIMUM_PRICE_BUFFER_PERCENTAGE() / WAD,
-            "E13"
-        );
+        assertEq(auction.minimum_price(0), _priceDropToBelowMCR18 * dutchDesk.MINIMUM_PRICE_BUFFER_PERCENTAGE() / WAD, "E13");
 
         // Check first trove is liquidated
         _trove1 = troveManager.troves(_troveId1);
@@ -600,7 +597,8 @@ contract LiquidateTests is Base {
         mintAndDepositIntoLender(userLender, _amount);
 
         // Calculate how much collateral is needed for the borrow amount
-        uint256 _collateralNeeded = (_amount * DEFAULT_TARGET_COLLATERAL_RATIO / BORROW_TOKEN_PRECISION) * ORACLE_PRICE_SCALE / priceOracle.get_price();
+        uint256 _collateralNeeded =
+            (_amount * DEFAULT_TARGET_COLLATERAL_RATIO / BORROW_TOKEN_PRECISION) * ORACLE_PRICE_SCALE / priceOracle.get_price();
 
         // Open a trove
         uint256 _troveId = mintAndOpenTrove(userBorrower, _collateralNeeded, _amount, DEFAULT_ANNUAL_INTEREST_RATE);
