@@ -14,6 +14,7 @@ interface IAuction {
     function FROM_SCALER() external view returns (uint256);
     function STEP_DURATION() external view returns (uint256);
     function STEP_DECAY_RATE() external view returns (uint256);
+    function AUCTION_LENGTH() external view returns (uint256);
 
     // ============================================================================================
     // Storage
