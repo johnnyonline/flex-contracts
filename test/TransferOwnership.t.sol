@@ -71,40 +71,4 @@ contract TransferOwnershipTests is Base {
         assertEq(_trove.pending_owner, address(0), "E1");
     }
 
-    function test_forceTransferOwnership(
-        uint256 _amount,
-        address _newOwner
-    ) public {
-        _amount = bound(_amount, troveManager.MIN_DEBT(), maxFuzzAmount);
-
-        // Lend some from lender
-        mintAndDepositIntoLender(userLender, _amount);
-
-        // Calculate how much collateral is needed for the borrow amount
-        uint256 _collateralNeeded =
-            (_amount * DEFAULT_TARGET_COLLATERAL_RATIO / BORROW_TOKEN_PRECISION) * ORACLE_PRICE_SCALE / priceOracle.get_price();
-
-        // Open a trove
-        uint256 _troveId = mintAndOpenTrove(userBorrower, _collateralNeeded, _amount, DEFAULT_ANNUAL_INTEREST_RATE);
-
-        // Check trove info
-        ITroveManager.Trove memory _trove = troveManager.troves(_troveId);
-        assertEq(_trove.owner, userBorrower, "E0");
-        assertEq(_trove.pending_owner, address(0), "E1");
-
-        // Attempt to force transfer ownership from a non-owner
-        vm.prank(userLender);
-        vm.expectRevert("!owner");
-        troveManager.force_transfer_ownership(_troveId, userLender);
-
-        // Transfer ownership
-        vm.prank(userBorrower);
-        troveManager.force_transfer_ownership(_troveId, _newOwner);
-
-        // Check trove info again
-        _trove = troveManager.troves(_troveId);
-        assertEq(_trove.owner, _newOwner, "E2");
-        assertEq(_trove.pending_owner, address(0), "E3");
-    }
-
 }

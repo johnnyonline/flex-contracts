@@ -21,8 +21,6 @@ from interfaces import ISortedTroves
 # @todo -- borrower can only redeem other borrowers that pay less than him
 # @todo -- add min_out on borrow/open_trove to prevent front-running on idle tokens
 # @todo -- dont allow borrow/open_trove if there is an active liquidation auction (system is temporarily insolvent)
-# @todo -- add docs to constructor (and cleanup)
-# @todo -- emit event on specific trove is redeemed
 
 # ============================================================================================
 # Events
@@ -41,7 +39,7 @@ event OwnershipTransferred:
 
 event OpenTrove:
     trove_id: indexed(uint256)
-    owner: indexed(address)
+    trove_owner: indexed(address)
     collateral_amount: uint256
     debt_amount: uint256
     upfront_fee: uint256
@@ -49,46 +47,54 @@ event OpenTrove:
 
 event AddCollateral:
     trove_id: indexed(uint256)
-    owner: indexed(address)
+    trove_owner: indexed(address)
     collateral_amount: uint256
 
 event RemoveCollateral:
     trove_id: indexed(uint256)
-    owner: indexed(address)
+    trove_owner: indexed(address)
     collateral_amount: uint256
 
 event Borrow:
     trove_id: indexed(uint256)
-    owner: indexed(address)
+    trove_owner: indexed(address)
     debt_amount: uint256
     upfront_fee: uint256
 
 event Repay:
     trove_id: indexed(uint256)
-    owner: indexed(address)
+    trove_owner: indexed(address)
     debt_amount: uint256
 
 event AdjustInterestRate:
     trove_id: indexed(uint256)
-    owner: indexed(address)
+    trove_owner: indexed(address)
     new_annual_interest_rate: uint256
     upfront_fee: uint256
 
 event CloseTrove:
     trove_id: indexed(uint256)
-    owner: indexed(address)
+    trove_owner: indexed(address)
     collateral_amount: uint256
     debt_amount: uint256
 
 event CloseZombieTrove:
     trove_id: indexed(uint256)
-    owner: indexed(address)
+    trove_owner: indexed(address)
     collateral_amount: uint256
     debt_amount: uint256
 
 event LiquidateTrove:
     trove_id: indexed(uint256)
+    trove_owner: indexed(address)
     liquidator: indexed(address)
+    collateral_amount: uint256
+    debt_amount: uint256
+
+event RedeemTrove:
+    trove_id: indexed(uint256)
+    trove_owner: indexed(address)
+    redeemer: indexed(address)
     collateral_amount: uint256
     debt_amount: uint256
 
@@ -199,6 +205,17 @@ def __init__(
     collateral_token: address,
     minimum_collateral_ratio: uint256
 ):
+    """
+    @notice Initialize the contract
+    @param lender Address of the Lender contract
+    @param dutch_desk Address of the Dutch Desk contract
+    @param price_oracle Address of the Price Oracle contract
+    @param sorted_troves Address of the Sorted Troves contract
+    @param borrow_token Address of the borrow token
+    @param collateral_token Address of the collateral token
+    @param minimum_collateral_ratio Minimum collateral ratio for Troves
+    """
+    # Set immutable addresses
     LENDER = lender
     DUTCH_DESK = IDutchDesk(dutch_desk)
     PRICE_ORACLE = IPriceOracle(price_oracle)
@@ -206,9 +223,11 @@ def __init__(
     BORROW_TOKEN = IERC20(borrow_token)
     COLLATERAL_TOKEN = IERC20(collateral_token)
 
+    # Borrow token precision cannot be more than WAD
     _BORROW_TOKEN_PRECISION = 10 ** convert(staticcall IERC20Detailed(borrow_token).decimals(), uint256)
     assert _BORROW_TOKEN_PRECISION <= _WAD, "!borrow_token"
 
+    # Set immutable market parameters
     _ONE_PCT = _BORROW_TOKEN_PRECISION // 100
     MIN_DEBT = 500 * _BORROW_TOKEN_PRECISION
     MINIMUM_COLLATERAL_RATIO = minimum_collateral_ratio * _ONE_PCT
@@ -329,35 +348,6 @@ def accept_ownership(trove_id: uint256):
     )
 
 
-@external
-def force_transfer_ownership(trove_id: uint256, new_owner: address):
-    """
-    @notice Force transfer ownership of a Trove to a new owner
-    @dev Only callable by the current `owner`
-    @dev Does not require acceptance by the new owner
-    @param trove_id Unique identifier of the Trove
-    @param new_owner The address of the new owner
-    """
-    # Cache Trove info
-    trove: Trove = self.troves[trove_id]
-
-    # Make sure the caller is the owner of the Trove
-    assert trove.owner == msg.sender, "!owner"
-
-    # Set the new owner
-    trove.owner = new_owner
-
-    # Save changes to storage
-    self.troves[trove_id] = trove
-
-    # Emit event
-    log OwnershipTransferred(
-        trove_id=trove_id,
-        old_owner=msg.sender,
-        new_owner=new_owner
-    )
-
-
 # ============================================================================================
 # Open trove
 # ============================================================================================
@@ -462,7 +452,7 @@ def open_trove(
     # Emit event
     log OpenTrove(
         trove_id=trove_id,
-        owner=msg.sender,
+        trove_owner=msg.sender,
         collateral_amount=collateral_amount,
         debt_amount=debt_amount,
         upfront_fee=upfront_fee,
@@ -509,7 +499,7 @@ def add_collateral(trove_id: uint256, collateral_amount: uint256):
     # Emit event
     log AddCollateral(
         trove_id=trove_id,
-        owner=msg.sender,
+        trove_owner=msg.sender,
         collateral_amount=collateral_amount
     )
 
@@ -564,7 +554,7 @@ def remove_collateral(trove_id: uint256, collateral_amount: uint256):
     # Emit event
     log RemoveCollateral(
         trove_id=trove_id,
-        owner=msg.sender,
+        trove_owner=msg.sender,
         collateral_amount=collateral_amount
     )
 
@@ -642,7 +632,7 @@ def borrow(
     # Emit event
     log Borrow(
         trove_id=trove_id,
-        owner=msg.sender,
+        trove_owner=msg.sender,
         debt_amount=new_debt,
         upfront_fee=upfront_fee
     )
@@ -704,7 +694,7 @@ def repay(trove_id: uint256, debt_amount: uint256):
     # Emit event
     log Repay(
         trove_id=trove_id,
-        owner=msg.sender,
+        trove_owner=msg.sender,
         debt_amount=debt_to_repay
     )
 
@@ -802,7 +792,7 @@ def adjust_interest_rate(
     # Emit event
     log AdjustInterestRate(
         trove_id=trove_id,
-        owner=msg.sender,
+        trove_owner=msg.sender,
         new_annual_interest_rate=new_annual_interest_rate,
         upfront_fee=upfront_fee
     )
@@ -865,7 +855,7 @@ def close_trove(trove_id: uint256):
     # Emit event
     log CloseTrove(
         trove_id=trove_id,
-        owner=msg.sender,
+        trove_owner=msg.sender,
         collateral_amount=old_trove.collateral,
         debt_amount=trove_debt_after_interest
     )
@@ -928,7 +918,7 @@ def close_zombie_trove(trove_id: uint256):
     # Emit event
     log CloseZombieTrove(
         trove_id=trove_id,
-        owner=msg.sender,
+        trove_owner=msg.sender,
         collateral_amount=old_trove.collateral,
         debt_amount=trove_debt_after_interest
     )
@@ -1047,6 +1037,7 @@ def _liquidate_single_trove(trove_id: uint256, current_zombie_trove_id: uint256,
     # Emit event
     log LiquidateTrove(
         trove_id=trove_id,
+        trove_owner=old_trove.owner,
         liquidator=msg.sender,
         collateral_amount=old_trove.collateral,
         debt_amount=trove_debt_after_interest,
@@ -1179,6 +1170,15 @@ def _redeem(amount: uint256, receiver: address = msg.sender):
 
             # Update the remaining debt to free
             remaining_debt_to_free -= debt_to_free
+
+            # Emit event
+            log RedeemTrove(
+                trove_id=trove_to_redeem,
+                trove_owner=trove.owner,
+                redeemer=msg.sender,
+                collateral_amount=collateral_to_redeem,
+                debt_amount=debt_to_free,
+            )
 
             # Break if we freed all the debt we wanted
             if remaining_debt_to_free == 0:

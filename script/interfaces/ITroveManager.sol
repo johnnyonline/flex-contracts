@@ -99,10 +99,6 @@ interface ITroveManager {
     function accept_ownership(
         uint256 trove_id
     ) external;
-    function force_transfer_ownership(
-        uint256 trove_id,
-        address new_owner
-    ) external;
 
     // ============================================================================================
     // Open trove

@@ -132,7 +132,7 @@ def __init__(papi: address, want_token: address, from_token: address):
     # Default to 50bps every 60 seconds
     STEP_DURATION = 60
     STEP_DECAY_RATE = 50
-    AUCTION_LENGTH = 86400  # 1 day
+    AUCTION_LENGTH = 1 * 24 * 60 * 60  # 1 day
 
 
 # ============================================================================================
@@ -442,7 +442,7 @@ def re_kick(
 
 
 # ============================================================================================
-# External mutative functions
+# Take
 # ============================================================================================
 
 
