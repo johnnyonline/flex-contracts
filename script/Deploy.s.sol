@@ -93,6 +93,7 @@ contract Deploy is Script {
                 "trove_manager",
                 abi.encode(
                     _lenderAddress,
+                    address(auction),
                     address(dutchDesk),
                     address(priceOracle),
                     address(sortedTroves),
@@ -133,7 +134,7 @@ contract Deploy is Script {
     function deployLender(
         bool _isTest
     ) public returns (ILender _lender) {
-        _lender = ILender(address(new Lender(address(borrowToken), address(troveManager), "Lender Strategy")));
+        _lender = ILender(address(new Lender(address(borrowToken), address(auction), address(troveManager), "Lender Strategy")));
         if (_isTest) {
             _lender.setPerformanceFeeRecipient(performanceFeeRecipient);
             _lender.setKeeper(keeper);

@@ -14,13 +14,14 @@ from ethereum.ercs import IERC20Detailed
 
 from snekmate.utils import math
 
+from interfaces import IAuction
 from interfaces import IDutchDesk
 from interfaces import IPriceOracle
 from interfaces import ISortedTroves
 
+# @todo -- permissionless re-kick?
 # @todo -- borrower can only redeem other borrowers that pay less than him
 # @todo -- add min_out on borrow/open_trove to prevent front-running on idle tokens
-# @todo -- dont allow borrow/open_trove if there is an active liquidation auction (system is temporarily insolvent)
 
 # ============================================================================================
 # Events
@@ -139,6 +140,7 @@ struct Trove:
 
 # Contracts
 LENDER: public(immutable(address))
+AUCTION: public(immutable(IAuction))
 DUTCH_DESK: public(immutable(IDutchDesk))
 PRICE_ORACLE: public(immutable(IPriceOracle))
 SORTED_TROVES: public(immutable(ISortedTroves))
@@ -198,6 +200,7 @@ troves: public(HashMap[uint256, Trove])
 @deploy
 def __init__(
     lender: address,
+    auction: address,
     dutch_desk: address,
     price_oracle: address,
     sorted_troves: address,
@@ -208,6 +211,7 @@ def __init__(
     """
     @notice Initialize the contract
     @param lender Address of the Lender contract
+    @param auction Address of the Auction contract
     @param dutch_desk Address of the Dutch Desk contract
     @param price_oracle Address of the Price Oracle contract
     @param sorted_troves Address of the Sorted Troves contract
@@ -217,6 +221,7 @@ def __init__(
     """
     # Set immutable addresses
     LENDER = lender
+    AUCTION = IAuction(auction)
     DUTCH_DESK = IDutchDesk(dutch_desk)
     PRICE_ORACLE = IPriceOracle(price_oracle)
     SORTED_TROVES = ISortedTroves(sorted_troves)
@@ -1075,9 +1080,17 @@ def redeem(amount: uint256, receiver: address):
 def _redeem(amount: uint256, receiver: address = msg.sender):
     """
     @notice Internal implementation of `redeem`
+    @dev Redemptions are blocked during ongoing liquidation auctions.
+         During liquidation, the system is temporarily insolvent - collateral has been seized
+         but not yet sold, so borrow tokens haven't returned to the Lender contract.
+         Allowing redemptions in this state could leave the protocol unable to fulfill them
+         and the redeemer would be at risk of losing funds
     @param amount Target amount of borrow tokens to free in borrow token precision
     @param receiver Address to transfer the auction proceeds to
     """
+    # Make sure there is no ongoing liquidation auction
+    assert not staticcall AUCTION.is_ongoing_liquidation_auction(), "liquidation"
+
     # Accrue interest on the total debt
     self._sync_total_debt()
 

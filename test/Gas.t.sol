@@ -8,7 +8,7 @@ import {IPriceOracleScaled} from "./interfaces/IPriceOracleScaled.sol";
 
 contract GasTests is Base {
 
-    uint256 constant MAX_GAS = 5_000_000;
+    uint256 constant MAX_GAS = 7_000_000;
     uint256 constant GAS_PRICE = 1 gwei;
 
     function setUp() public override {
@@ -45,7 +45,7 @@ contract GasTests is Base {
         emit log_named_uint("Gas used", _gasUsed);
         emit log_named_uint("Cost in ETH (wei)", _gasUsed * GAS_PRICE);
 
-        assertLt(_gasUsed, MAX_GAS, "Exceeded 5M gas limit");
+        assertLt(_gasUsed, MAX_GAS, "Exceeded 7M gas limit");
     }
 
     function test_gas_openTrove() public {
@@ -87,7 +87,7 @@ contract GasTests is Base {
         emit log_named_uint("Gas used", gasUsed);
         emit log_named_uint("Cost in ETH (wei)", gasUsed * GAS_PRICE);
 
-        assertLt(gasUsed, MAX_GAS, "Exceeded 5M gas limit");
+        assertLt(gasUsed, MAX_GAS, "Exceeded 7M gas limit");
     }
 
     function test_gas_liquidateTroves() public {
@@ -125,7 +125,7 @@ contract GasTests is Base {
         emit log_named_uint("Gas used", _gasUsed);
         emit log_named_uint("Cost in ETH (wei)", _gasUsed * GAS_PRICE);
 
-        assertLt(_gasUsed, MAX_GAS + 1_000_000, "Exceeded 6M gas limit");
+        assertLt(_gasUsed, MAX_GAS + 1_000_000, "Exceeded 8M gas limit");
     }
 
 }

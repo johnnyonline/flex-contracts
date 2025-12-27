@@ -1,6 +1,9 @@
 // SPDX-License-Identifier: MIT
 pragma solidity 0.8.23;
 
+import {IPriceOracleNotScaled} from "./interfaces/IPriceOracleNotScaled.sol";
+import {IPriceOracleScaled} from "./interfaces/IPriceOracleScaled.sol";
+
 import "./Base.sol";
 
 contract LendTests is Base {
@@ -22,6 +25,14 @@ contract LendTests is Base {
             uint256 _decimalsDiff = 1e18 / BORROW_TOKEN_PRECISION;
             maxFuzzAmount = maxFuzzAmount / _decimalsDiff;
         }
+    }
+
+    function test_setup() public {
+        assertEq(address(lender.AUCTION()), address(auction), "E0");
+        assertEq(address(lender.TROVE_MANAGER()), address(troveManager), "E1");
+        assertEq(lender.depositLimit(), type(uint256).max, "E2");
+        assertEq(lender.availableWithdrawLimit(userLender), type(uint256).max, "E3");
+        assertEq(lender.availableDepositLimit(userLender), type(uint256).max, "E4");
     }
 
     // 1. lend
@@ -430,6 +441,165 @@ contract LendTests is Base {
         vm.prank(_wrongCaller);
         vm.expectRevert("!management");
         lender.setDepositLimit(_depositLimit);
+    }
+
+    function test_availableWithdrawLimit_duringLiquidation(
+        uint256 _amount,
+        uint256 _idleLiquidity
+    ) public {
+        _amount = bound(_amount, troveManager.MIN_DEBT(), maxFuzzAmount);
+        _idleLiquidity = bound(_idleLiquidity, minFuzzAmount, maxFuzzAmount);
+
+        // Lend some from lender
+        mintAndDepositIntoLender(userLender, _amount);
+
+        // Lend from another user so we have some idle liquidity after borrow
+        address _anotherUserLender = address(0xBEEF);
+
+        // Lend some from lender
+        mintAndDepositIntoLender(_anotherUserLender, _idleLiquidity);
+
+        // Calculate how much collateral is needed for the borrow amount
+        uint256 _collateralNeeded =
+            (_amount * DEFAULT_TARGET_COLLATERAL_RATIO / BORROW_TOKEN_PRECISION) * ORACLE_PRICE_SCALE / priceOracle.get_price();
+
+        // Open a trove
+        uint256 _troveId = mintAndOpenTrove(userBorrower, _collateralNeeded, _amount, DEFAULT_ANNUAL_INTEREST_RATE);
+
+        // Get trove info
+        ITroveManager.Trove memory _trove = troveManager.troves(_troveId);
+
+        // No ongoing liquidation yet
+        assertEq(lender.availableWithdrawLimit(userLender), type(uint256).max, "E0");
+        assertFalse(auction.is_ongoing_liquidation_auction(), "E1");
+
+        // Calculate price drop to put trove below MCR (1% below)
+        uint256 _priceDropToBelowMCR;
+        if (BORROW_TOKEN_PRECISION < COLLATERAL_TOKEN_PRECISION) {
+            _priceDropToBelowMCR =
+                troveManager.MINIMUM_COLLATERAL_RATIO() * _trove.debt * ORACLE_PRICE_SCALE * 99 / (100 * _trove.collateral * BORROW_TOKEN_PRECISION);
+        } else {
+            _priceDropToBelowMCR =
+                troveManager.MINIMUM_COLLATERAL_RATIO() * _trove.debt / (100 * _trove.collateral) * ORACLE_PRICE_SCALE / BORROW_TOKEN_PRECISION * 99;
+        }
+        uint256 _priceDropToBelowMCR18 = _priceDropToBelowMCR * COLLATERAL_TOKEN_PRECISION * WAD / (ORACLE_PRICE_SCALE * BORROW_TOKEN_PRECISION);
+
+        // Mock the oracle price
+        vm.mockCall(address(priceOracle), abi.encodeWithSelector(IPriceOracleScaled.get_price.selector), abi.encode(_priceDropToBelowMCR));
+        vm.mockCall(address(priceOracle), abi.encodeWithSelector(IPriceOracleNotScaled.get_price.selector, false), abi.encode(_priceDropToBelowMCR18));
+
+        // Liquidate the trove
+        uint256[MAX_ITERATIONS] memory _troveIdsToLiquidate;
+        _troveIdsToLiquidate[0] = _troveId;
+        troveManager.liquidate_troves(_troveIdsToLiquidate);
+
+        // Liquidation auction is now ongoing
+        assertTrue(auction.is_ongoing_liquidation_auction(), "E2");
+
+        // Available withdraw limit should be only idle assets during liquidation
+        assertEq(lender.availableWithdrawLimit(userLender), _idleLiquidity, "E3");
+
+        // Take the liquidation auction
+        takeAuction(0);
+
+        // After auction is complete, no more ongoing liquidation
+        assertFalse(auction.is_ongoing_liquidation_auction(), "E4");
+
+        // Available withdraw limit should be max again
+        assertEq(lender.availableWithdrawLimit(userLender), type(uint256).max, "E5");
+    }
+
+    function test_shutdownCanWithdraw(
+        uint256 _amount
+    ) public {
+        _amount = bound(_amount, troveManager.MIN_DEBT(), maxFuzzAmount);
+
+        // Lend some from lender
+        mintAndDepositIntoLender(userLender, _amount);
+
+        assertEq(lender.totalAssets(), _amount, "E0");
+
+        // Calculate how much collateral is needed for the borrow amount
+        uint256 _collateralNeeded =
+            (_amount * DEFAULT_TARGET_COLLATERAL_RATIO / BORROW_TOKEN_PRECISION) * ORACLE_PRICE_SCALE / priceOracle.get_price();
+
+        // Open a trove
+        mintAndOpenTrove(userBorrower, _collateralNeeded, _amount, DEFAULT_ANNUAL_INTEREST_RATE);
+
+        // Skip some time
+        skip(1 days);
+
+        // Shutdown the strategy
+        vm.prank(emergencyAdmin);
+        lender.shutdownStrategy();
+
+        // Available withdraw limit should still be max when shutdown
+        assertEq(lender.availableWithdrawLimit(userLender), type(uint256).max, "E1");
+
+        // Make sure we can still withdraw the full amount
+        uint256 _balanceBefore = borrowToken.balanceOf(userLender);
+
+        // Withdraw all funds
+        vm.prank(userLender);
+        lender.redeem(_amount, userLender, userLender);
+
+        // Take the auction
+        takeAuction(0);
+
+        // No report, no profit, loss bc `takeAuction` pricing is not perfect
+        assertApproxEqRel(borrowToken.balanceOf(userLender), _balanceBefore + _amount, 5e15, "E31"); // 0.5%
+    }
+
+    function test_shutdownCanWithdraw_duringLiquidation(
+        uint256 _amount
+    ) public {
+        _amount = bound(_amount, troveManager.MIN_DEBT(), maxFuzzAmount);
+
+        // Lend some from lender
+        mintAndDepositIntoLender(userLender, _amount);
+
+        // Calculate how much collateral is needed for the borrow amount
+        uint256 _collateralNeeded =
+            (_amount * DEFAULT_TARGET_COLLATERAL_RATIO / BORROW_TOKEN_PRECISION) * ORACLE_PRICE_SCALE / priceOracle.get_price();
+
+        // Open a trove
+        uint256 _troveId = mintAndOpenTrove(userBorrower, _collateralNeeded, _amount, DEFAULT_ANNUAL_INTEREST_RATE);
+
+        // Get trove info
+        ITroveManager.Trove memory _trove = troveManager.troves(_troveId);
+
+        // Calculate price drop to put trove below MCR (1% below)
+        uint256 _priceDropToBelowMCR;
+        if (BORROW_TOKEN_PRECISION < COLLATERAL_TOKEN_PRECISION) {
+            _priceDropToBelowMCR =
+                troveManager.MINIMUM_COLLATERAL_RATIO() * _trove.debt * ORACLE_PRICE_SCALE * 99 / (100 * _trove.collateral * BORROW_TOKEN_PRECISION);
+        } else {
+            _priceDropToBelowMCR =
+                troveManager.MINIMUM_COLLATERAL_RATIO() * _trove.debt / (100 * _trove.collateral) * ORACLE_PRICE_SCALE / BORROW_TOKEN_PRECISION * 99;
+        }
+        uint256 _priceDropToBelowMCR18 = _priceDropToBelowMCR * COLLATERAL_TOKEN_PRECISION * WAD / (ORACLE_PRICE_SCALE * BORROW_TOKEN_PRECISION);
+
+        // Mock the oracle price
+        vm.mockCall(address(priceOracle), abi.encodeWithSelector(IPriceOracleScaled.get_price.selector), abi.encode(_priceDropToBelowMCR));
+        vm.mockCall(address(priceOracle), abi.encodeWithSelector(IPriceOracleNotScaled.get_price.selector, false), abi.encode(_priceDropToBelowMCR18));
+
+        // Liquidate the trove
+        uint256[MAX_ITERATIONS] memory _troveIdsToLiquidate;
+        _troveIdsToLiquidate[0] = _troveId;
+        troveManager.liquidate_troves(_troveIdsToLiquidate);
+
+        // Liquidation auction is now ongoing
+        assertTrue(auction.is_ongoing_liquidation_auction(), "E0");
+
+        // Available withdraw limit should be 0 during liquidation
+        assertEq(lender.availableWithdrawLimit(userLender), 0, "E1");
+
+        // Shutdown the strategy
+        vm.prank(emergencyAdmin);
+        lender.shutdownStrategy();
+
+        // When shutdown, available withdraw limit should be max even during liquidation
+        assertEq(lender.availableWithdrawLimit(userLender), type(uint256).max, "E2");
     }
 
 }
