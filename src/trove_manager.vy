@@ -20,8 +20,8 @@ from interfaces import IPriceOracle
 from interfaces import ISortedTroves
 
 # @todo -- permissionless re-kick?
-# @todo -- borrower can only redeem other borrowers that pay less than him
 # @todo -- add min_out on borrow/open_trove to prevent front-running on idle tokens
+# @todo -- a borrower can frontrun another borrower by increasing their rate such that the second borrower cant redeem them and he ends up losing funds (min_redeemed?)
 
 # ============================================================================================
 # Events
@@ -452,7 +452,7 @@ def open_trove(
     assert extcall COLLATERAL_TOKEN.transferFrom(msg.sender, self, collateral_amount, default_return_value=True)
 
     # Deliver borrow tokens to the caller, redeem if liquidity is insufficient
-    self._transfer_borrow_tokens(debt_amount)
+    self._transfer_borrow_tokens(debt_amount, annual_interest_rate)
 
     # Emit event
     log OpenTrove(
@@ -632,7 +632,7 @@ def borrow(
     )
 
     # Deliver borrow tokens to the caller, redeem if liquidity is insufficient
-    self._transfer_borrow_tokens(debt_amount)
+    self._transfer_borrow_tokens(debt_amount, trove.annual_interest_rate)
 
     # Emit event
     log Borrow(
@@ -1059,7 +1059,7 @@ def _liquidate_single_trove(trove_id: uint256, current_zombie_trove_id: uint256,
 # Redeem
 # ============================================================================================
 
-
+# @todo -- call `amount` `debt_amount` for consistency with other functions
 @external
 def redeem(amount: uint256, receiver: address):
     """
@@ -1073,11 +1073,11 @@ def redeem(amount: uint256, receiver: address):
     assert msg.sender == LENDER, "!lender"
 
     # Attempt to redeem the specified `amount` and transfer the resulting borrow tokens to the `receiver`
-    self._redeem(amount, receiver)
+    self._redeem(amount, max_value(uint256), receiver)
 
-
+# @todo -- call `amount` `debt_amount` for consistency with other functions
 @internal
-def _redeem(amount: uint256, receiver: address = msg.sender):
+def _redeem(amount: uint256, redeemer_annual_interest_rate: uint256, receiver: address = msg.sender):
     """
     @notice Internal implementation of `redeem`
     @dev Redemptions are blocked during ongoing liquidation auctions.
@@ -1085,11 +1085,15 @@ def _redeem(amount: uint256, receiver: address = msg.sender):
          but not yet sold, so borrow tokens haven't returned to the Lender contract.
          Allowing redemptions in this state could leave the protocol unable to fulfill them
          and the redeemer would be at risk of losing funds
+    @dev Borrowers can only redeem other borrowers if they're paying a higher interest rate.
+         Zombie troves are exempt since they're already below min debt and should be cleared.
+         The Lender (for withdrawals) can redeem anyone
     @param amount Target amount of borrow tokens to free in borrow token precision
+    @param redeemer_annual_interest_rate Annual interest rate paid by the redeemer
     @param receiver Address to transfer the auction proceeds to
     """
     # Make sure there is no ongoing liquidation auction
-    assert not staticcall AUCTION.is_ongoing_liquidation_auction(), "liquidation"
+    assert not staticcall AUCTION.is_ongoing_liquidation_auction(), "ongoing_liquidation" # @todo -- remove this if we add min_redeem to open_trove/borrow
 
     # Accrue interest on the total debt
     self._sync_total_debt()
@@ -1120,8 +1124,12 @@ def _redeem(amount: uint256, receiver: address = msg.sender):
 
     # Loop through as many Troves as we're allowed or until we redeem all the debt we need
     for _: uint256 in range(_MAX_ITERATIONS):
-        # Cache Trove info
+        # Cache the Trove to redeem info
         trove: Trove = self.troves[trove_to_redeem]
+
+        # Stop if we reached a Trove that doesn't qualify for redemption
+        if not is_zombie_trove and redeemer_annual_interest_rate <= trove.annual_interest_rate:
+            break
 
         # Cache the ID of the next Trove to redeem, i.e., the previous Trove in the sorted list
         next_trove_to_redeem: uint256 = staticcall SORTED_TROVES.prev(trove_to_redeem)
@@ -1220,7 +1228,7 @@ def _redeem(amount: uint256, receiver: address = msg.sender):
     self.collateral_balance -= total_collateral_decrease
 
     # Kick the auction. Proceeds will be sent to the `receiver`
-    extcall DUTCH_DESK.kick(total_collateral_decrease, receiver)  # Pulls collateral tokens and does nothing on zero amount
+    extcall DUTCH_DESK.kick(total_collateral_decrease, receiver)  # Pulls collateral tokens
 
     # Emit event
     log Redeem(
@@ -1363,8 +1371,6 @@ def _sync_total_debt() -> uint256:
         self.total_weighted_debt * (block.timestamp - self.last_debt_update_time),
         _ONE_YEAR * _BORROW_TOKEN_PRECISION
     )
-    # ----
-
 
     # Calculate the new total debt after interest
     new_total_debt: uint256 = self.total_debt + pending_agg_interest
@@ -1379,10 +1385,11 @@ def _sync_total_debt() -> uint256:
 
 
 @internal
-def _transfer_borrow_tokens(amount: uint256):
+def _transfer_borrow_tokens(amount: uint256, annual_interest_rate: uint256):
     """
     @notice Transfer borrow tokens to the caller, redeeming borrower's collateral if necessary
     @param amount Amount of borrow tokens to transfer in borrow token precision
+    @param annual_interest_rate Annual interest rate paid by the borrower
     """
     # Check how much borrow token liquidity the lender has
     available_liquidity: uint256 = staticcall BORROW_TOKEN.balanceOf(LENDER)
@@ -1394,7 +1401,7 @@ def _transfer_borrow_tokens(amount: uint256):
             assert extcall BORROW_TOKEN.transferFrom(LENDER, msg.sender, available_liquidity, default_return_value=True)
 
         # Redeem the difference
-        self._redeem(amount - available_liquidity)
+        self._redeem(amount - available_liquidity, annual_interest_rate)
     else:
         # Transfer the full amount
         assert extcall BORROW_TOKEN.transferFrom(LENDER, msg.sender, amount, default_return_value=True)

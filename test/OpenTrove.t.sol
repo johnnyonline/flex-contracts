@@ -164,13 +164,13 @@ contract OpenTroveTests is Base {
         uint256 _secondAmount = _amount + troveManager.get_upfront_fee(_amount, DEFAULT_ANNUAL_INTEREST_RATE);
         uint256 _secondCollateralNeeded =
             (_secondAmount * DEFAULT_TARGET_COLLATERAL_RATIO / BORROW_TOKEN_PRECISION) * ORACLE_PRICE_SCALE / priceOracle.get_price();
-        uint256 _secondExpectedDebt = _secondAmount + troveManager.get_upfront_fee(_secondAmount, DEFAULT_ANNUAL_INTEREST_RATE);
+        uint256 _secondExpectedDebt = _secondAmount + troveManager.get_upfront_fee(_secondAmount, DEFAULT_ANNUAL_INTEREST_RATE * 2);
 
         // Cache the expected time because it will be skipped during the auction
         uint256 _expectedTime = block.timestamp;
 
         // Open a trove and redeem from the other borrower
-        uint256 _troveId = mintAndOpenTrove(userBorrower, _secondCollateralNeeded, _secondAmount, DEFAULT_ANNUAL_INTEREST_RATE);
+        uint256 _troveId = mintAndOpenTrove(userBorrower, _secondCollateralNeeded, _secondAmount, DEFAULT_ANNUAL_INTEREST_RATE * 2);
 
         // Check an auction was created
         uint256 _auctionId = 0;
@@ -212,7 +212,7 @@ contract OpenTroveTests is Base {
         _trove = troveManager.troves(_troveId);
         assertEq(_trove.debt, _secondExpectedDebt, "E15");
         assertEq(_trove.collateral, _secondCollateralNeeded, "E16");
-        assertEq(_trove.annual_interest_rate, DEFAULT_ANNUAL_INTEREST_RATE, "E17");
+        assertEq(_trove.annual_interest_rate, DEFAULT_ANNUAL_INTEREST_RATE * 2, "E17");
         assertEq(_trove.last_debt_update_time, _expectedTime, "E18");
         assertEq(_trove.last_interest_rate_adj_time, _expectedTime, "E19");
         assertEq(_trove.owner, userBorrower, "E20");
@@ -242,7 +242,7 @@ contract OpenTroveTests is Base {
 
         // Check global info
         assertEq(troveManager.total_debt(), _secondExpectedDebt, "E35");
-        assertEq(troveManager.total_weighted_debt(), _secondExpectedDebt * DEFAULT_ANNUAL_INTEREST_RATE, "E36");
+        assertEq(troveManager.total_weighted_debt(), _secondExpectedDebt * DEFAULT_ANNUAL_INTEREST_RATE * 2, "E36");
         assertEq(troveManager.collateral_balance(), _secondCollateralNeeded + _expectedCollateralAfterRedemption, "E37");
         assertEq(troveManager.zombie_trove_id(), 0, "E38");
 
@@ -283,16 +283,16 @@ contract OpenTroveTests is Base {
         _secondAmount += troveManager.get_upfront_fee(_secondAmount, DEFAULT_ANNUAL_INTEREST_RATE);
         uint256 _secondCollateralNeeded =
             (_secondAmount * DEFAULT_TARGET_COLLATERAL_RATIO / BORROW_TOKEN_PRECISION) * ORACLE_PRICE_SCALE / priceOracle.get_price();
-        uint256 _secondExpectedDebt = _secondAmount + troveManager.get_upfront_fee(_secondAmount, DEFAULT_ANNUAL_INTEREST_RATE);
+        uint256 _secondExpectedDebt = _secondAmount + troveManager.get_upfront_fee(_secondAmount, DEFAULT_ANNUAL_INTEREST_RATE * 2);
 
         // Cache the expected time because it will be skipped during the auction
         uint256 _expectedTime = block.timestamp;
 
-        // Open a trove and redeem from the other borrower
-        uint256 _troveId = mintAndOpenTrove(userBorrower, _secondCollateralNeeded, _secondAmount, DEFAULT_ANNUAL_INTEREST_RATE);
-
         // Calculate expected debt (borrow amount + upfront fee - redeemed debt)
         uint256 _expectedDebt = _amount - _secondAmount + troveManager.get_upfront_fee(_firstAmount, DEFAULT_ANNUAL_INTEREST_RATE);
+
+        // Open a trove and redeem from the other borrower
+        uint256 _troveId = mintAndOpenTrove(userBorrower, _secondCollateralNeeded, _secondAmount, DEFAULT_ANNUAL_INTEREST_RATE * 2);
 
         // Calculate expected collateral after redemption (only need to redeem the difference between the two amounts)
         uint256 _expectedCollateralAfterRedemption =
@@ -341,7 +341,7 @@ contract OpenTroveTests is Base {
         _trove = troveManager.troves(_troveId);
         assertEq(_trove.debt, _secondExpectedDebt, "E16");
         assertEq(_trove.collateral, _secondCollateralNeeded, "E17");
-        assertEq(_trove.annual_interest_rate, DEFAULT_ANNUAL_INTEREST_RATE, "E18");
+        assertEq(_trove.annual_interest_rate, DEFAULT_ANNUAL_INTEREST_RATE * 2, "E18");
         assertEq(_trove.last_debt_update_time, _expectedTime, "E19");
         assertEq(_trove.last_interest_rate_adj_time, _expectedTime, "E20");
         assertEq(_trove.owner, userBorrower, "E21");
@@ -356,8 +356,8 @@ contract OpenTroveTests is Base {
         // Check sorted troves
         assertFalse(sortedTroves.empty(), "E24");
         assertEq(sortedTroves.size(), 2, "E25");
-        assertEq(sortedTroves.first(), _troveIdAnotherBorrower, "E26");
-        assertEq(sortedTroves.last(), _troveId, "E27");
+        assertEq(sortedTroves.first(), _troveId, "E26");
+        assertEq(sortedTroves.last(), _troveIdAnotherBorrower, "E27");
         assertTrue(sortedTroves.contains(_troveId), "E28");
         assertTrue(sortedTroves.contains(_troveIdAnotherBorrower), "E29");
 
@@ -373,7 +373,7 @@ contract OpenTroveTests is Base {
         assertEq(troveManager.total_debt(), _expectedDebt + _secondExpectedDebt, "E36");
         assertEq(
             troveManager.total_weighted_debt(),
-            _expectedDebt * DEFAULT_ANNUAL_INTEREST_RATE + _secondExpectedDebt * DEFAULT_ANNUAL_INTEREST_RATE,
+            _expectedDebt * DEFAULT_ANNUAL_INTEREST_RATE + _secondExpectedDebt * DEFAULT_ANNUAL_INTEREST_RATE * 2,
             "E37"
         );
         assertEq(troveManager.collateral_balance(), _secondCollateralNeeded + _expectedCollateralAfterRedemption, "E38");
@@ -422,11 +422,14 @@ contract OpenTroveTests is Base {
         // Cache the expected time because it will be skipped during the auction
         uint256 _expectedTime = block.timestamp;
 
-        // Open a trove that tries to redeem from the other borrower and revert because it would leave them below min debt (but above 0)
-        uint256 _troveId = mintAndOpenTrove(userBorrower, _secondCollateralNeeded, _secondAmount, DEFAULT_ANNUAL_INTEREST_RATE);
-
         // Calculate expected debt (borrow amount + upfront fee - redeemed debt)
         uint256 _expectedDebt = _amount - _secondAmount + troveManager.get_upfront_fee(_amount, DEFAULT_ANNUAL_INTEREST_RATE);
+
+        // Calculate expected debt for the second borrower
+        uint256 _secondExpectedDebt = _secondAmount + troveManager.get_upfront_fee(_secondAmount, DEFAULT_ANNUAL_INTEREST_RATE * 2);
+
+        // Open a trove that tries to redeem from the other borrower and revert because it would leave them below min debt (but above 0)
+        uint256 _troveId = mintAndOpenTrove(userBorrower, _secondCollateralNeeded, _secondAmount, DEFAULT_ANNUAL_INTEREST_RATE * 2);
 
         // Calculate expected collateral after redemption (only need to redeem the difference between the two amounts)
         uint256 _expectedCollateralAfterRedemption = _collateralNeeded - (_secondAmount * ORACLE_PRICE_SCALE / priceOracle.get_price());
@@ -456,9 +459,6 @@ contract OpenTroveTests is Base {
         assertEq(auction.get_available_amount(0), 0, "E5");
         assertFalse(auction.is_active(0), "E6");
 
-        // Calculate expected debt for the second borrower
-        uint256 _secondExpectedDebt = _secondAmount + troveManager.get_upfront_fee(_secondAmount, DEFAULT_ANNUAL_INTEREST_RATE);
-
         // Make sure there's no liquidity left in the lender
         assertEq(borrowToken.balanceOf(address(lender)), 0, "E7");
 
@@ -477,7 +477,7 @@ contract OpenTroveTests is Base {
         _trove = troveManager.troves(_troveId);
         assertEq(_trove.debt, _secondExpectedDebt, "E16");
         assertEq(_trove.collateral, _secondCollateralNeeded, "E17");
-        assertEq(_trove.annual_interest_rate, DEFAULT_ANNUAL_INTEREST_RATE, "E18");
+        assertEq(_trove.annual_interest_rate, DEFAULT_ANNUAL_INTEREST_RATE * 2, "E18");
         assertEq(_trove.last_debt_update_time, _expectedTime, "E19");
         assertEq(_trove.last_interest_rate_adj_time, _expectedTime, "E20");
         assertEq(_trove.owner, userBorrower, "E21");
@@ -509,7 +509,7 @@ contract OpenTroveTests is Base {
         assertEq(troveManager.total_debt(), _expectedDebt + _secondExpectedDebt, "E36");
         assertEq(
             troveManager.total_weighted_debt(),
-            _expectedDebt * DEFAULT_ANNUAL_INTEREST_RATE + _secondExpectedDebt * DEFAULT_ANNUAL_INTEREST_RATE,
+            _expectedDebt * DEFAULT_ANNUAL_INTEREST_RATE + _secondExpectedDebt * DEFAULT_ANNUAL_INTEREST_RATE * 2,
             "E37"
         );
         assertEq(troveManager.collateral_balance(), _secondCollateralNeeded + _expectedCollateralAfterRedemption, "E38");
@@ -701,7 +701,7 @@ contract OpenTroveTests is Base {
         uint256 _firstCollateralNeeded =
             (_firstAmount * DEFAULT_TARGET_COLLATERAL_RATIO / BORROW_TOKEN_PRECISION) * ORACLE_PRICE_SCALE / priceOracle.get_price();
 
-        uint256 _troveId1 = mintAndOpenTrove(userBorrower, _firstCollateralNeeded, _firstAmount, DEFAULT_ANNUAL_INTEREST_RATE);
+        uint256 _troveId1 = mintAndOpenTrove(userBorrower, _firstCollateralNeeded, _firstAmount, DEFAULT_ANNUAL_INTEREST_RATE * 2);
 
         // First auction should be created
         uint256 _auctionId0 = 0;
@@ -715,12 +715,12 @@ contract OpenTroveTests is Base {
         address _thirdBorrower = address(999);
 
         // Second redeemer opens trove and redeems first redeemer
-        uint256 _firstExpectedDebt = _firstAmount + troveManager.get_upfront_fee(_firstAmount, DEFAULT_ANNUAL_INTEREST_RATE);
+        uint256 _firstExpectedDebt = _firstAmount + troveManager.get_upfront_fee(_firstAmount, DEFAULT_ANNUAL_INTEREST_RATE * 2);
         uint256 _secondAmount = _firstExpectedDebt;
         uint256 _secondCollateralNeeded =
             _secondAmount * DEFAULT_TARGET_COLLATERAL_RATIO / BORROW_TOKEN_PRECISION * ORACLE_PRICE_SCALE / priceOracle.get_price();
 
-        uint256 _troveId2 = mintAndOpenTrove(_thirdBorrower, _secondCollateralNeeded, _secondAmount, DEFAULT_ANNUAL_INTEREST_RATE);
+        uint256 _troveId2 = mintAndOpenTrove(_thirdBorrower, _secondCollateralNeeded, _secondAmount, DEFAULT_ANNUAL_INTEREST_RATE * 3);
 
         // Second auction should be created (different from first) since first is still active
         uint256 _auctionId1 = 1;
@@ -811,7 +811,7 @@ contract OpenTroveTests is Base {
         // Try to open a new trove - should revert because it needs to redeem and there's an ongoing liquidation
         vm.startPrank(userBorrower);
         collateralToken.approve(address(troveManager), _newCollateralNeeded);
-        vm.expectRevert("liquidation");
+        vm.expectRevert("ongoing_liquidation");
         troveManager.open_trove(
             block.timestamp, // owner_index
             _newCollateralNeeded, // collateral_amount
@@ -822,6 +822,152 @@ contract OpenTroveTests is Base {
             type(uint256).max // max_upfront_fee
         );
         vm.stopPrank();
+    }
+
+    // 1. lend
+    // 2. 1st borrower borrows all liquidity at low rate
+    // 3. 2nd borrower tries to open trove at even lower rate -> can't redeem, gets nothing
+    function test_openTrove_cannotRedeemHigherRateBorrower(
+        uint256 _amount
+    ) public {
+        _amount = bound(_amount, troveManager.MIN_DEBT(), maxFuzzAmount);
+
+        // Lend some from lender
+        mintAndDepositIntoLender(userLender, _amount);
+
+        // Calculate how much collateral is needed for the borrow amount
+        uint256 _collateralNeeded =
+            (_amount * DEFAULT_TARGET_COLLATERAL_RATIO / BORROW_TOKEN_PRECISION) * ORACLE_PRICE_SCALE / priceOracle.get_price();
+
+        // 1st borrower opens a trove at a higher rate (takes all liquidity)
+        uint256 _higherRate = DEFAULT_ANNUAL_INTEREST_RATE * 2;
+        mintAndOpenTrove(anotherUserBorrower, _collateralNeeded, _amount, _higherRate);
+
+        // Make sure there's no liquidity left in the lender
+        assertEq(borrowToken.balanceOf(address(lender)), 0, "E0");
+
+        // 2nd borrower tries to open trove at lower rate - can't redeem the higher rate borrower
+        uint256 _lowerRate = DEFAULT_ANNUAL_INTEREST_RATE;
+        deal(address(collateralToken), userBorrower, _collateralNeeded);
+
+        vm.startPrank(userBorrower);
+        collateralToken.approve(address(troveManager), _collateralNeeded);
+        troveManager.open_trove(
+            block.timestamp, // owner_index
+            _collateralNeeded, // collateral_amount
+            _amount, // debt_amount
+            0, // upper_hint
+            0, // lower_hint
+            _lowerRate, // annual_interest_rate - lower than 1st borrower
+            type(uint256).max // max_upfront_fee
+        );
+        vm.stopPrank();
+
+        // 2nd borrower should have received nothing (no liquidity, can't redeem)
+        assertEq(borrowToken.balanceOf(userBorrower), 0, "E1");
+
+        // 1st borrower's trove should still be active (not redeemed)
+        assertEq(sortedTroves.size(), 2, "E2");
+    }
+
+    // 1. lend
+    // 2. 1st borrower borrows all liquidity at low rate
+    // 3. 2nd borrower opens trove at higher rate -> can redeem the 1st borrower
+    function test_openTrove_canRedeemLowerRateBorrower(
+        uint256 _amount
+    ) public {
+        _amount = bound(_amount, troveManager.MIN_DEBT(), maxFuzzAmount);
+
+        // Lend some from lender
+        mintAndDepositIntoLender(userLender, _amount);
+
+        // Calculate how much collateral is needed for the borrow amount
+        uint256 _collateralNeeded =
+            (_amount * DEFAULT_TARGET_COLLATERAL_RATIO / BORROW_TOKEN_PRECISION) * ORACLE_PRICE_SCALE / priceOracle.get_price();
+
+        // 1st borrower opens a trove at a lower rate (takes all liquidity)
+        uint256 _lowerRate = DEFAULT_ANNUAL_INTEREST_RATE;
+        uint256 _troveIdVictim = mintAndOpenTrove(anotherUserBorrower, _collateralNeeded, _amount, _lowerRate);
+
+        // Make sure there's no liquidity left in the lender
+        assertEq(borrowToken.balanceOf(address(lender)), 0, "E0");
+
+        // Calculate expected debt of victim
+        uint256 _victimDebt = _amount + troveManager.get_upfront_fee(_amount, _lowerRate);
+
+        // 2nd borrower opens trove at higher rate - can redeem the lower rate borrower
+        uint256 _higherRate = DEFAULT_ANNUAL_INTEREST_RATE * 2;
+        uint256 _secondAmount = _victimDebt; // borrow enough to fully redeem victim
+        uint256 _secondCollateralNeeded =
+            (_secondAmount * DEFAULT_TARGET_COLLATERAL_RATIO / BORROW_TOKEN_PRECISION) * ORACLE_PRICE_SCALE / priceOracle.get_price();
+
+        mintAndOpenTrove(userBorrower, _secondCollateralNeeded, _secondAmount, _higherRate);
+
+        // An auction should have been created (redemption occurred)
+        assertTrue(auction.is_active(0), "E1");
+
+        // Take the auction
+        takeAuction(0);
+
+        // 1st borrower's trove should now be a zombie (fully redeemed)
+        ITroveManager.Trove memory _trove = troveManager.troves(_troveIdVictim);
+        assertEq(uint256(_trove.status), uint256(ITroveManager.Status.zombie), "E2");
+
+        // 2nd borrower should have received tokens (after auction)
+        assertGt(borrowToken.balanceOf(userBorrower), 0, "E3");
+    }
+
+    // Zombie troves can be redeemed by anyone regardless of interest rate
+    function test_openTrove_canRedeemZombieTroveAtAnyRate(
+        uint256 _amount
+    ) public {
+        _amount = bound(_amount, troveManager.MIN_DEBT(), maxFuzzAmount);
+
+        // Lend some from lender
+        mintAndDepositIntoLender(userLender, _amount);
+
+        // Calculate how much collateral is needed for the borrow amount
+        uint256 _collateralNeeded =
+            (_amount * DEFAULT_TARGET_COLLATERAL_RATIO / BORROW_TOKEN_PRECISION) * ORACLE_PRICE_SCALE / priceOracle.get_price();
+
+        // 1st borrower opens a trove at a high rate (takes all liquidity)
+        uint256 _highRate = troveManager.MIN_ANNUAL_INTEREST_RATE() * 2;
+        uint256 _troveIdVictim = mintAndOpenTrove(anotherUserBorrower, _collateralNeeded, _amount, _highRate);
+
+        // Make sure there's no liquidity left in the lender
+        assertEq(borrowToken.balanceOf(address(lender)), 0, "E0");
+
+        // Make the victim a zombie via Lender withdrawal (Lender can redeem anyone regardless of rate)
+        // Pull enough liquidity to make trove a zombie (but above 0 debt)
+        uint256 _amountToPull = _amount - 100 * BORROW_TOKEN_PRECISION;
+
+        vm.prank(userLender);
+        lender.redeem(_amountToPull, userLender, userLender);
+
+        // Take the auction created by redemption
+        takeAuction(0);
+
+        // Victim should now be a zombie with remaining debt
+        ITroveManager.Trove memory _trove = troveManager.troves(_troveIdVictim);
+        assertEq(uint256(_trove.status), uint256(ITroveManager.Status.zombie), "E1");
+        assertGt(_trove.debt, 0, "E2"); // still has some debt
+
+        // Now a borrower at min rate CAN redeem the zombie (even though zombie had higher rate)
+        // This proves zombies can be redeemed by anyone regardless of interest rate
+        uint256 _minRate = troveManager.MIN_ANNUAL_INTEREST_RATE();
+        address _newBorrower = address(999);
+        uint256 _newAmount = _trove.debt + troveManager.MIN_DEBT(); // enough to clear zombie + have min debt
+        uint256 _newCollateralNeeded =
+            (_newAmount * DEFAULT_TARGET_COLLATERAL_RATIO / BORROW_TOKEN_PRECISION) * ORACLE_PRICE_SCALE / priceOracle.get_price();
+
+        mintAndOpenTrove(_newBorrower, _newCollateralNeeded, _newAmount, _minRate);
+
+        // Take the auction (zombie redemption)
+        takeAuction(1);
+
+        // Zombie should now have 0 debt (fully redeemed by low-rate borrower)
+        _trove = troveManager.troves(_troveIdVictim);
+        assertEq(_trove.debt, 0, "E3");
     }
 
 }
