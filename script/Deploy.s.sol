@@ -73,10 +73,7 @@ contract Deploy is Script {
         priceOracle = IPriceOracle(deployCode("tbtc_to_crvusd_oracle", abi.encode(address(borrowToken), address(collateralToken))));
         dutchDesk = IDutchDesk(
             deployCode(
-                "dutch_desk",
-                abi.encode(
-                    _lenderAddress, _troveManagerAddress, address(priceOracle), address(auction), address(borrowToken), address(collateralToken)
-                )
+                "dutch_desk", abi.encode(_troveManagerAddress, address(priceOracle), address(auction), address(borrowToken), address(collateralToken))
             )
         );
         require(address(dutchDesk) == _dutchDeskAddress, "!dutchDeskAddress");

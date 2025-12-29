@@ -44,10 +44,10 @@ event AuctionTake:
 
 
 struct AuctionInfo:
-    kick_timestamp: uint256  # The timestamp the auction was kicked in
-    initial_amount: uint256  # The initial amount of from token available
-    current_amount: uint256  # The current amount of from token available
-    starting_price: uint256  # The amount to start the auction at, unscaled "lot size" in `want` token
+    kick_timestamp: uint256  # The timestamp the auction was kicked
+    initial_amount: uint256  # The initial amount of sell token available
+    current_amount: uint256  # The current amount of sell token available
+    starting_price: uint256  # The amount to start the auction at, unscaled "lot size" in buy token
     minimum_price: uint256  # The minimum price per token for the auction, scaled to WAD
     receiver: address  # The address that will receive the auction proceeds
     is_liquidation: bool  # Whether this auction is selling liquidated collateral
@@ -58,16 +58,16 @@ struct AuctionInfo:
 # ============================================================================================
 
 
-# Only address that can kick auctions
+# Only address that can kick auctions (the Dutch Desk contract)
 PAPI: public(immutable(address))
 
 # Info of the token being bought
-WANT_TOKEN: public(immutable(IERC20))
-WANT_TOKEN_SCALER: public(immutable(uint256))
+BUY_TOKEN: public(immutable(IERC20))
+BUY_TOKEN_SCALER: public(immutable(uint256))
 
 # Info of the token being sold
-FROM_TOKEN: public(immutable(IERC20))
-FROM_TOKEN_SCALER: public(immutable(uint256))
+SELL_TOKEN: public(immutable(IERC20))
+SELL_TOKEN_SCALER: public(immutable(uint256))
 
 # Auction parameters
 STEP_DURATION: public(immutable(uint256))  # e.g., 60 for price change every minute
@@ -99,34 +99,34 @@ _auctions: HashMap[uint256, AuctionInfo]
 
 
 @deploy
-def __init__(papi: address, want_token: address, from_token: address):
+def __init__(papi: address, buy_token: address, sell_token: address):
     """
     @notice Initialize the contract
     @param papi Address that is allowed to kick auctions
-    @param want_token Address of the token being bought
-    @param from_token Address of the token being sold
+    @param buy_token Address of the token being bought
+    @param sell_token Address of the token being sold
     """
-    # Make sure want token is non-zero address
-    assert want_token != empty(address), "!want_token"
+    # Make sure buy token is non-zero address
+    assert buy_token != empty(address), "!buy_token"
 
-    # Want token cannot have more than 18 decimals
-    want_token_decimals: uint256 = convert(staticcall IERC20Detailed(want_token).decimals(), uint256)
-    assert want_token_decimals <= _MAX_TOKEN_DECIMALS, "!want_token_decimals"
+    # Buy token cannot have more than 18 decimals
+    buy_token_decimals: uint256 = convert(staticcall IERC20Detailed(buy_token).decimals(), uint256)
+    assert buy_token_decimals <= _MAX_TOKEN_DECIMALS, "!buy_token_decimals"
 
-    # From token cannot have more than 18 decimals
-    from_token_decimals: uint256 = convert(staticcall IERC20Detailed(from_token).decimals(), uint256)
-    assert from_token_decimals <= _MAX_TOKEN_DECIMALS, "!from_token_decimals"
+    # Sell token cannot have more than 18 decimals
+    sell_token_decimals: uint256 = convert(staticcall IERC20Detailed(sell_token).decimals(), uint256)
+    assert sell_token_decimals <= _MAX_TOKEN_DECIMALS, "!sell_token_decimals"
 
     # Set papi address
     PAPI = papi
 
-    # Set want token info
-    WANT_TOKEN = IERC20(want_token)
-    WANT_TOKEN_SCALER = _WAD // 10 ** want_token_decimals
+    # Set buy token info
+    BUY_TOKEN = IERC20(buy_token)
+    BUY_TOKEN_SCALER = _WAD // 10 ** buy_token_decimals
 
-    # Set from token info
-    FROM_TOKEN = IERC20(from_token)
-    FROM_TOKEN_SCALER = _WAD // 10 ** from_token_decimals
+    # Set sell token info
+    SELL_TOKEN = IERC20(sell_token)
+    SELL_TOKEN_SCALER = _WAD // 10 ** sell_token_decimals
 
     # Set auction parameters
     # Default to 50bps every 60 seconds
@@ -186,12 +186,12 @@ def get_needed_amount(
     at_timestamp: uint256 = block.timestamp,
 ) -> uint256:
     """
-    @notice Get the amount of want token needed to buy `max_take_amount` of from token
+    @notice Get the amount of buy token needed to buy `max_take_amount` of sell token
     @dev Uses the minimum of `max_take_amount` and the current available amount
     @param auction_id The identifier for the auction
     @param max_take_amount The maximum amount to take
     @param at_timestamp The timestamp to calculate at. Defaults to current block timestamp
-    @return The amount of want token needed
+    @return The amount of buy token needed
     """
     # Bring auction info into memory
     auction: AuctionInfo = self._auctions[auction_id]
@@ -255,9 +255,9 @@ def is_ongoing_liquidation_auction() -> bool:
 @view
 def kick_timestamp(auction_id: uint256) -> uint256:
     """
-    @notice Get the timestamp the auction was kicked in
+    @notice Get the timestamp the auction was kicked
     @param auction_id The identifier for the auction
-    @return The timestamp the auction was kicked in
+    @return The timestamp the auction was kicked
     """
     return self._auctions[auction_id].kick_timestamp
 
@@ -266,9 +266,9 @@ def kick_timestamp(auction_id: uint256) -> uint256:
 @view
 def initial_amount(auction_id: uint256) -> uint256:
     """
-    @notice Get the initial amount of from token available
+    @notice Get the initial amount of sell token available
     @param auction_id The identifier for the auction
-    @return The initial amount of from token available
+    @return The initial amount of sell token available
     """
     return self._auctions[auction_id].initial_amount
 
@@ -277,9 +277,9 @@ def initial_amount(auction_id: uint256) -> uint256:
 @view
 def current_amount(auction_id: uint256) -> uint256:
     """
-    @notice Get the current amount of from token available
+    @notice Get the current amount of sell token available
     @param auction_id The identifier for the auction
-    @return The current amount of from token available
+    @return The current amount of sell token available
     """
     return self._auctions[auction_id].current_amount
 
@@ -289,7 +289,7 @@ def current_amount(auction_id: uint256) -> uint256:
 def starting_price(auction_id: uint256) -> uint256:
     """
     @notice Get the starting price for the auction
-    @dev The starting price is an unscaled "lot size" in `want` token
+    @dev The starting price is an unscaled "lot size" in buy token
     @param auction_id The identifier for the auction
     @return The starting price for the auction
     """
@@ -347,9 +347,10 @@ def kick(
     """
     @notice Kick off an auction
     @dev Only callable by Papi
+    @dev Caller must approve this contract to transfer sell tokens on its behalf before calling
     @param auction_id The identifier for the auction
-    @param kick_amount The amount of from token to kick the auction with
-    @param starting_price The starting price for the auction, unscaled "lot size" in `want` token
+    @param kick_amount The amount of sell token to kick the auction with
+    @param starting_price The starting price for the auction, unscaled "lot size" in buy token
     @param minimum_price The minimum price for the auction, scaled to WAD
     @param receiver The address that will receive the auction proceeds
     @param is_liquidation Whether this auction is selling liquidated collateral
@@ -391,7 +392,7 @@ def kick(
     )
 
     # Pull the tokens from Papi
-    assert extcall FROM_TOKEN.transferFrom(PAPI, self, kick_amount, default_return_value=True)
+    assert extcall SELL_TOKEN.transferFrom(PAPI, self, kick_amount, default_return_value=True)
 
     # Emit event
     log AuctionKick(auction_id=auction_id, kick_amount=kick_amount)
@@ -408,7 +409,7 @@ def re_kick(
     @dev Only callable by Papi
     @dev An auction may need to be re-kicked if its price has fallen below its minimum price
     @param auction_id The identifier for the auction
-    @param starting_price The new starting price for the auction, unscaled "lot size" in `want` token
+    @param starting_price The new starting price for the auction, unscaled "lot size" in buy token
     @param minimum_price The new minimum price for the auction, scaled to WAD
     """
     # Make sure caller is Papi
@@ -457,9 +458,10 @@ def take(
     @notice Take the token being sold in a live auction
     @dev Empty `data` will skip the callback
     @dev Uses the minimum of `max_take_amount` and the current available amount
+    @dev Caller must approve this contract to transfer buy tokens on its behalf before calling
     @param auction_id The identifier for the auction
     @param max_take_amount The maximum amount to take. Defaults to max uint256
-    @param receiver The address that will receive the token being bought. Defaults to msg.sender
+    @param receiver The address that will receive the token being sold. Defaults to msg.sender
     @param data The data to pass to the taker callback. Defaults to empty
     @return The amount taken
     """
@@ -472,7 +474,7 @@ def take(
     # Determine amount to take
     take_amount: uint256 = min(auction.current_amount, max_take_amount)
 
-    # Get the needed amount of want token to pay
+    # Get the needed amount of buy token to pay
     needed_amount: uint256 = self._get_amount_needed(auction, take_amount)
 
     # Make sure needed amount is not zero
@@ -497,7 +499,7 @@ def take(
     self._auctions[auction_id] = auction
 
     # Send the token being sold to the take receiver
-    assert extcall FROM_TOKEN.transfer(receiver, take_amount, default_return_value=True)
+    assert extcall SELL_TOKEN.transfer(receiver, take_amount, default_return_value=True)
 
     # If the caller provided data, perform the callback
     if len(data) != 0:
@@ -509,8 +511,8 @@ def take(
             data,
         )
 
-    # Pull the want token from the caller to the auction receiver
-    assert extcall WANT_TOKEN.transferFrom(msg.sender, auction.receiver, needed_amount, default_return_value=True)
+    # Pull the buy token from the caller to the auction receiver
+    assert extcall BUY_TOKEN.transferFrom(msg.sender, auction.receiver, needed_amount, default_return_value=True)
 
     # Emit event
     log AuctionTake(
@@ -539,21 +541,21 @@ def _get_amount_needed(
     at_timestamp: uint256 = block.timestamp,
 ) -> uint256:
     """
-    @notice Get the amount of want token needed to buy `take_amount` of from token
+    @notice Get the amount of buy token needed to buy `take_amount` of sell token
     @param auction The auction info
-    @param take_amount The amount of from token to take
+    @param take_amount The amount of sell token to take
     @param at_timestamp The timestamp to calculate at. Defaults to current block timestamp
-    @return The amount of want token needed
+    @return The amount of buy token needed
     """
     # Scale amount to take to WAD
-    scaled_take_amount: uint256 = take_amount * FROM_TOKEN_SCALER
+    scaled_take_amount: uint256 = take_amount * SELL_TOKEN_SCALER
 
-    # Calculate needed amount without scaling back to want yet
+    # Calculate needed amount without scaling back to buy yet
     # Price is always scaled to WAD
     needed_amount: uint256 = scaled_take_amount * self._get_price(auction, at_timestamp) // _WAD
 
-    # Return needed amount scaled back to want
-    return needed_amount // WANT_TOKEN_SCALER
+    # Return needed amount scaled back to buy
+    return needed_amount // BUY_TOKEN_SCALER
 
 
 @internal
@@ -566,7 +568,7 @@ def _get_price(auction: AuctionInfo, at_timestamp: uint256 = block.timestamp) ->
     @return The calculated price scaled to WAD
     """
     # Scale initial amount to WAD
-    initial_amount: uint256 = auction.initial_amount * FROM_TOKEN_SCALER
+    initial_amount: uint256 = auction.initial_amount * SELL_TOKEN_SCALER
 
     # Return early if no available amount
     if initial_amount == 0:

@@ -21,8 +21,8 @@ contract AuctionTests is Base {
 
     function test_setup() public {
         assertEq(auction.PAPI(), address(dutchDesk), "E0");
-        assertEq(auction.WANT_TOKEN(), address(borrowToken), "E1");
-        assertEq(auction.FROM_TOKEN(), address(collateralToken), "E2");
+        assertEq(auction.BUY_TOKEN(), address(borrowToken), "E1");
+        assertEq(auction.SELL_TOKEN(), address(collateralToken), "E2");
         assertEq(auction.STEP_DURATION(), 60, "E3");
         assertEq(auction.STEP_DECAY_RATE(), 50, "E4");
         assertEq(auction.AUCTION_LENGTH(), 1 days, "E4");

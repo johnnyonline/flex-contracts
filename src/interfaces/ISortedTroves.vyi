@@ -32,19 +32,19 @@ def last() -> uint256:
 
 @external
 @view
-def next(id: uint256) -> uint256:
+def next(trove_id: uint256) -> uint256:
     ...
 
 
 @external
 @view
-def prev(id: uint256) -> uint256:
+def prev(trove_id: uint256) -> uint256:
     ...
 
 
 @external
 @view
-def contains(id: uint256) -> bool:
+def contains(trove_id: uint256) -> bool:
     ...
 
 
@@ -66,15 +66,15 @@ def find_insert_position(annual_interest_rate: uint256, prev_id: uint256, next_i
 
 
 @external
-def insert(id: uint256, annual_interest_rate: uint256, prev_id: uint256, next_id: uint256):
+def insert(trove_id: uint256, annual_interest_rate: uint256, prev_id: uint256, next_id: uint256):
     ...
 
 
 @external
-def remove(id: uint256):
+def remove(trove_id: uint256):
     ...
 
 
 @external
-def re_insert(id: uint256, new_annual_interest_rate: uint256, prev_id: uint256, next_id: uint256):
+def re_insert(trove_id: uint256, new_annual_interest_rate: uint256, prev_id: uint256, next_id: uint256):
     ...

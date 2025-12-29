@@ -12,7 +12,6 @@ from ethereum.ercs import IERC20Detailed
 
 from interfaces import IAuction
 from interfaces import IPriceOracle
-# @todo -- auction step size? and buffers
 
 
 # ============================================================================================
@@ -56,7 +55,6 @@ nonce: public(uint256)
 
 @deploy
 def __init__(
-    lender: address,
     trove_manager: address,
     price_oracle: address,
     auction: address,
@@ -65,7 +63,6 @@ def __init__(
 ):
     """
     @notice Initialize the contract
-    @param lender Address of the Lender contract
     @param trove_manager Address of the Trove Manager contract
     @param price_oracle Address of the Price Oracle contract
     @param auction Address of the Auction contract
@@ -108,12 +105,12 @@ def kick(
     """
     @notice Kicks an auction of collateral tokens for borrow tokens
     @dev Only callable by the Trove Manager contract
-    @dev Caller must transfer the collateral tokens to this contract before calling
+    @dev Caller must approve this contract to transfer collateral tokens on its behalf before calling
     @param kick_amount Amount of collateral tokens to auction
     @param receiver Address to receive the auction proceeds in borrow tokens
     @param is_liquidation Whether this auction is for liquidated collateral
     """
-    # Make sure caller is the trove manager
+    # Make sure caller is the Trove Manager contract
     assert msg.sender == TROVE_MANAGER, "!trove_manager"
 
     # Do nothing on zero amount
@@ -154,7 +151,7 @@ def re_kick(auction_id: uint256):
     @notice Re-kick an inactive auction with new starting and minimum prices
     @dev Will revert if the auction is not kickable
     @dev An auction may need to be re-kicked if its price has fallen below its minimum price
-    @dev Uses a higher starting price buffer percentage to allow for takers to re-group
+    @dev Uses a higher starting price buffer percentage to allow for takers to regroup
     @dev Does not set the receiver nor transfer collateral as those are already ready in the auction
     @param auction_id Identifier of the auction to re-kick
     """

@@ -6,7 +6,7 @@
 @author Flex
 @notice Core contract that manages all Troves. Handles opening, closing, liquidating, and updating borrower positions,
         accrues interest, maintains aggregate debt accounting, and coordinates redemptions with the Lender,
-        sorted_troves and dutch_desk contracts
+        Sorted Troves and Dutch Desk contracts
 """
 
 from ethereum.ercs import IERC20
@@ -18,7 +18,6 @@ from interfaces import IDutchDesk
 from interfaces import IPriceOracle
 from interfaces import ISortedTroves
 
-# @todo -- cleanup comments/docs
 
 # ============================================================================================
 # Events
@@ -146,7 +145,7 @@ BORROW_TOKEN: public(immutable(IERC20))
 COLLATERAL_TOKEN: public(immutable(IERC20))
 
 # Parameters
-MIN_DEBT: public(immutable(uint256))  # in borrow token decimals
+MIN_DEBT: public(immutable(uint256))  # in borrow token precision
 MINIMUM_COLLATERAL_RATIO: public(immutable(uint256))  # e.g., `110 * _ONE_PCT` for 110%
 MIN_ANNUAL_INTEREST_RATE: public(immutable(uint256)) # e.g., `0.5 * _ONE_PCT` for 0.5%
 MAX_ANNUAL_INTEREST_RATE: public(immutable(uint256)) # e.g., `250 * _ONE_PCT` for 250%
@@ -246,11 +245,10 @@ def __init__(
 def get_upfront_fee(debt_amount: uint256, annual_interest_rate: uint256) -> uint256:
     """
     @notice Get the upfront fee for borrowing a specified amount of debt at a given annual interest rate
-    @dev `debt_amount` and `annual_interest_rate` are specified in the borrow token's decimals
     @dev The fee represents prepaid interest over `UPFRONT_INTEREST_PERIOD` using the system's average rate after the new debt
     @param debt_amount The amount of debt to be borrowed
     @param annual_interest_rate The annual interest rate for the debt
-    @return upfront_fee The calculated upfront fee in borrow token precision
+    @return upfront_fee The calculated upfront fee
     """
     return self._get_upfront_fee(debt_amount, annual_interest_rate)
 
@@ -261,7 +259,7 @@ def get_trove_debt_after_interest(trove_id: uint256) -> uint256:
     """
     @notice Get the Trove's debt after accruing interest
     @param trove_id Unique identifier of the Trove
-    @return trove_debt_after_interest The Trove's debt after accruing interest in borrow token precision
+    @return trove_debt_after_interest The Trove's debt after accruing interest
     """
     return self._get_trove_debt_after_interest(self.troves[trove_id])
 
@@ -275,7 +273,7 @@ def get_trove_debt_after_interest(trove_id: uint256) -> uint256:
 def sync_total_debt() -> uint256:
     """
     @notice Accrue interest on the total debt and return the updated figure
-    @return The updated total debt after accruing interest
+    @return new_total_debt The updated total debt after accruing interest
     """
     return self._sync_total_debt()
 
@@ -366,25 +364,26 @@ def open_trove(
     """
     @notice Open a new Trove with specified collateral, debt, and interest rate
     @dev Caller will become the owner of the Trove
+    @dev Caller must approve this contract to transfer collateral tokens on its behalf before calling
     @dev Trove debt increases by `debt_amount` plus the upfront fee. Tokens from idle liquidity arrive
          atomically; any shortfall is redeemed from other troves and airdropped on auction settlement.
          Total delivered can be less than requested if lender liquidity or redeemable collateral are insufficient
     @param owner_index Unique index to allow multiple Troves per caller
-    @param collateral_amount Amount of collateral tokens to deposit in collateral token precision
-    @param debt_amount Amount of debt to issue before the upfront fee in borrow token precision
+    @param collateral_amount Amount of collateral tokens to deposit
+    @param debt_amount Amount of debt to issue before the upfront fee
     @param prev_id ID of previous Trove for the insert position
     @param next_id ID of next Trove for the insert position
-    @param annual_interest_rate Fixed annual interest rate to pay on the debt in borrow token precision
-    @param max_upfront_fee Maximum upfront fee the caller is willing to pay in borrow token precision
+    @param annual_interest_rate Fixed annual interest rate to pay on the debt
+    @param max_upfront_fee Maximum upfront fee the caller is willing to pay
     @param min_debt_out Minimum amount of debt tokens to be received atomically from idle liquidity
-    @param min_collateral_out Minimum amount of collateral tokens to be redeemed in collateral token precision
+    @param min_collateral_out Minimum amount of collateral tokens to be redeemed
     @return trove_id Unique identifier for the new Trove
     """
     # Make sure collateral and debt amounts are non-zero
     assert collateral_amount > 0, "!collateral_amount"
     assert debt_amount > 0, "!debt_amount"
 
-    # Make sure the annual interest rate is within bounds    
+    # Make sure the annual interest rate is within bounds
     assert annual_interest_rate >= MIN_ANNUAL_INTEREST_RATE, "!MIN_ANNUAL_INTEREST_RATE"
     assert annual_interest_rate <= MAX_ANNUAL_INTEREST_RATE, "!MAX_ANNUAL_INTEREST_RATE"
 
@@ -474,8 +473,9 @@ def add_collateral(trove_id: uint256, collateral_amount: uint256):
     """
     @notice Add collateral to an existing Trove
     @dev Only callable by the Trove owner
+    @dev Caller must approve this contract to transfer collateral tokens on its behalf before calling
     @param trove_id Unique identifier of the Trove
-    @param collateral_amount Amount of collateral tokens to add in collateral token precision
+    @param collateral_amount Amount of collateral tokens to add
     """
     # Make sure collateral amount is non-zero
     assert collateral_amount > 0, "!collateral_amount"
@@ -512,7 +512,7 @@ def remove_collateral(trove_id: uint256, collateral_amount: uint256):
     @notice Remove collateral from an existing Trove
     @dev Only callable by the Trove owner
     @param trove_id Unique identifier of the Trove
-    @param collateral_amount Amount of collateral tokens to remove in collateral token precision
+    @param collateral_amount Amount of collateral tokens to remove
     """
     # Make sure collateral amount is non-zero
     assert collateral_amount > 0, "!collateral_amount"
@@ -576,10 +576,10 @@ def borrow(
          atomically; any shortfall is redeemed from other troves and airdropped on auction settlement.
          Total delivered can be less than requested if lender liquidity or redeemable collateral are insufficient
     @param trove_id Unique identifier of the Trove
-    @param debt_amount Amount of additional debt to issue before the upfront fee in borrow token precision
-    @param max_upfront_fee Maximum upfront fee the caller is willing to pay in borrow token precision
+    @param debt_amount Amount of additional debt to issue before the upfront fee
+    @param max_upfront_fee Maximum upfront fee the caller is willing to pay
     @param min_debt_out Minimum amount of debt tokens to be received atomically from idle liquidity
-    @param min_collateral_out Minimum amount of collateral tokens to be redeemed in collateral token precision
+    @param min_collateral_out Minimum amount of collateral tokens to be redeemed
     """
     # Make sure debt amount is non-zero
     assert debt_amount > 0, "!debt_amount"
@@ -654,8 +654,9 @@ def repay(trove_id: uint256, debt_amount: uint256):
     """
     @notice Repay part of the debt of an existing Trove
     @dev Only callable by the Trove owner
+    @dev Caller must approve this contract to transfer borrow tokens on its behalf before calling
     @param trove_id Unique identifier of the Trove
-    @param debt_amount Amount of debt to repay in borrow token precision
+    @param debt_amount Amount of debt to repay
     """
     # Make sure debt amount is non-zero
     assert debt_amount > 0, "!debt_amount"
@@ -722,9 +723,10 @@ def adjust_interest_rate(
     @notice Adjust the annual interest rate of an existing Trove
     @dev Only callable by the Trove owner
     @param trove_id Unique identifier of the Trove
-    @param new_annual_interest_rate New fixed annual interest rate to pay on the debt in borrow token precision
+    @param new_annual_interest_rate New fixed annual interest rate to pay on the debt
     @param prev_id ID of previous Trove for the new insert position
     @param next_id ID of next Trove for the new insert position
+    @param max_upfront_fee Maximum upfront fee the caller is willing to pay
     """
     # Make sure the new annual interest rate is within bounds
     assert new_annual_interest_rate >= MIN_ANNUAL_INTEREST_RATE, "!MIN_ANNUAL_INTEREST_RATE"
@@ -739,7 +741,7 @@ def adjust_interest_rate(
     # Make sure the Trove is active
     assert trove.status == Status.ACTIVE, "!active"
 
-    # Make sure user is actually changing his rate
+    # Make sure user is actually changing their rate
     assert new_annual_interest_rate != trove.annual_interest_rate, "!new_annual_interest_rate"
 
     # Get the Trove's debt after accruing interest
@@ -819,6 +821,7 @@ def close_trove(trove_id: uint256):
     """
     @notice Close an existing Trove by repaying all its debt and withdrawing all its collateral
     @dev Only callable by the Trove owner
+    @dev Caller must approve this contract to transfer borrow tokens on its behalf before calling
     @param trove_id Unique identifier of the Trove
     """
     # Cache Trove info
@@ -877,6 +880,7 @@ def close_zombie_trove(trove_id: uint256):
     """
     @notice Close a zombie Trove by repaying all its debt (if it has any) and withdrawing all its collateral
     @dev Only callable by the Trove owner
+    @dev If non-zero debt, caller must approve this contract to transfer borrow tokens on its behalf before calling
     @param trove_id Unique identifier of the Trove
     """
     # Cache Trove info
@@ -944,7 +948,7 @@ def close_zombie_trove(trove_id: uint256):
 def liquidate_troves(trove_ids: uint256[_MAX_ITERATIONS]):
     """
     @notice Liquidate a list of unhealthy Troves
-    @dev Uses the `dutch_desk` contract to auction off the collateral tokens
+    @dev Uses the Dutch Desk contract to auction off the collateral tokens
     @param trove_ids List of unique identifiers of the unhealthy Troves
     """
     # Make sure that first trove id is non-zero
@@ -1070,12 +1074,12 @@ def _liquidate_single_trove(trove_id: uint256, current_zombie_trove_id: uint256,
 def redeem(debt_amount: uint256, receiver: address):
     """
     @notice Attempt to free the specified amount of borrow tokens by selling collateral
-    @dev Can only be called by the `lender` contract
-    @dev Uses the `dutch_desk` contract to auction off the redeemed collateral tokens
-    @param debt_amount Target amount of borrow tokens to free in borrow token precision
+    @dev Can only be called by the Lender contract
+    @dev Uses the Dutch Desk contract to auction off the redeemed collateral tokens
+    @param debt_amount Target amount of borrow tokens to free
     @param receiver Address to transfer the auction proceeds to
     """
-    # Make sure the caller is the lender
+    # Make sure the caller is the Lender contract
     assert msg.sender == LENDER, "!lender"
 
     # Attempt to redeem the specified `debt_amount` and transfer the resulting borrow tokens to the `receiver`
@@ -1258,15 +1262,15 @@ def _calculate_collateral_ratio(
 ) -> uint256:
     """
     @notice Calculate the collateral ratio
-    @param collateral_amount Amount of collateral in collateral token precision
-    @param debt_amount Amount of debt in borrow token precision
+    @param collateral_amount Amount of collateral
+    @param debt_amount Amount of debt
     @param collateral_price Price from oracle scaled by 10^(36 + borrow_decimals - collateral_decimals)
-    @return collateral_ratio The collateral ratio in borrow token precision
+    @return collateral_ratio The collateral ratio
     """
     # Convert collateral to borrow token value
     collateral_value: uint256 = collateral_amount * collateral_price // _PRICE_ORACLE_PRECISION
 
-    # Return ratio as percentage in borrow token precision
+    # Return ratio as percentage
     return collateral_value * _BORROW_TOKEN_PRECISION // debt_amount
 
 
@@ -1276,8 +1280,8 @@ def _calculate_accrued_interest(weighted_debt: uint256, period: uint256) -> uint
     """
     @notice Calculate the interest accrued on weighted debt over a given period
     @param weighted_debt The debt weighted by the annual interest rate
-    @param period The time period over which interest is calculated (in seconds)
-    @return interest The interest accrued over the period in borrow token precision
+    @param period The time period over which interest is calculated
+    @return interest The interest accrued over the period
     """
     return weighted_debt * period // _ONE_YEAR // _BORROW_TOKEN_PRECISION
 
@@ -1398,8 +1402,8 @@ def _transfer_borrow_tokens(
     min_collateral_out: uint256,
 ):
     """
-    @notice Transfer borrow tokens to the caller, redeeming borrower's collateral if necessary
-    @param amount Amount of borrow tokens to transfer in borrow token precision
+    @notice Transfer borrow tokens to the caller, redeeming other borrowers' collateral if necessary
+    @param amount Amount of borrow tokens to transfer
     @param annual_interest_rate Annual interest rate paid by the borrower
     @param min_debt_out Minimum amount of debt tokens to be received atomically from idle liquidity
     @param min_collateral_out Minimum amount of collateral tokens to be redeemed

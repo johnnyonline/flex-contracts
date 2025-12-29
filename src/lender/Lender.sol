@@ -68,17 +68,17 @@ contract Lender is BaseHooks {
     }
 
     // ============================================================================================
-    // Public view function
+    // Public view functions
     // ============================================================================================
 
-    // @inheritdoc BaseStrategy
+    /// @inheritdoc BaseStrategy
     function availableDepositLimit(address /*_owner*/) public view override returns (uint256) {
         uint256 _depositLimit = depositLimit;
         uint256 _currentAssets = TokenizedStrategy.totalAssets();
         return _depositLimit <= _currentAssets ? 0 : _depositLimit - _currentAssets;
     }
 
-    // @inheritdoc BaseStrategy
+    /// @inheritdoc BaseStrategy
     function availableWithdrawLimit(address /*_owner*/) public view override returns (uint256) {
         // If the strategy is shutdown always allow full withdrawals
         if (TokenizedStrategy.isShutdown()) return type(uint256).max;
@@ -126,14 +126,14 @@ contract Lender is BaseHooks {
 
     /// @inheritdoc BaseStrategy
     function _freeFunds(uint256 _amount) internal override {
-        // Try to free `_amount` by auctioning collateral for borrow tokens.
+        // Try to free `_amount` by redeeming collateral (which triggers an auction).
         // Auction proceeds will be sent to `_auctionProceedsReceiver` which is set in the `_preWithdrawHook`
         TROVE_MANAGER.redeem(_amount, _auctionProceedsReceiver);
     }
 
     /// @inheritdoc BaseStrategy
     function _harvestAndReport() internal override returns (uint256 /*_totalAssets*/) {
-        // Total assets is whatever idle asset we have + the latest total debt figure from the trove manager
+        // Total assets is whatever idle asset we have + the latest total debt figure from the Trove Manager
         return asset.balanceOf(address(this)) + TROVE_MANAGER.sync_total_debt();
     }
 

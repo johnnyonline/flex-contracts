@@ -8,10 +8,10 @@ interface IAuction {
     // ============================================================================================
 
     function PAPI() external view returns (address);
-    function WANT_TOKEN() external view returns (address);
-    function WANT_SCALER() external view returns (uint256);
-    function FROM_TOKEN() external view returns (address);
-    function FROM_SCALER() external view returns (uint256);
+    function BUY_TOKEN() external view returns (address);
+    function BUY_TOKEN_SCALER() external view returns (uint256);
+    function SELL_TOKEN() external view returns (address);
+    function SELL_TOKEN_SCALER() external view returns (uint256);
     function STEP_DURATION() external view returns (uint256);
     function STEP_DECAY_RATE() external view returns (uint256);
     function AUCTION_LENGTH() external view returns (uint256);
