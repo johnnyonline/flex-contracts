@@ -14,14 +14,11 @@ from ethereum.ercs import IERC20Detailed
 
 from snekmate.utils import math
 
-from interfaces import IAuction
 from interfaces import IDutchDesk
 from interfaces import IPriceOracle
 from interfaces import ISortedTroves
 
-# @todo -- permissionless re-kick?
-# @todo -- add min_out on borrow/open_trove to prevent front-running on idle tokens
-# @todo -- a borrower can frontrun another borrower by increasing their rate such that the second borrower cant redeem them and he ends up losing funds (min_redeemed?)
+# @todo -- cleanup comments/docs
 
 # ============================================================================================
 # Events
@@ -140,7 +137,6 @@ struct Trove:
 
 # Contracts
 LENDER: public(immutable(address))
-AUCTION: public(immutable(IAuction))
 DUTCH_DESK: public(immutable(IDutchDesk))
 PRICE_ORACLE: public(immutable(IPriceOracle))
 SORTED_TROVES: public(immutable(ISortedTroves))
@@ -200,7 +196,6 @@ troves: public(HashMap[uint256, Trove])
 @deploy
 def __init__(
     lender: address,
-    auction: address,
     dutch_desk: address,
     price_oracle: address,
     sorted_troves: address,
@@ -211,7 +206,6 @@ def __init__(
     """
     @notice Initialize the contract
     @param lender Address of the Lender contract
-    @param auction Address of the Auction contract
     @param dutch_desk Address of the Dutch Desk contract
     @param price_oracle Address of the Price Oracle contract
     @param sorted_troves Address of the Sorted Troves contract
@@ -221,7 +215,6 @@ def __init__(
     """
     # Set immutable addresses
     LENDER = lender
-    AUCTION = IAuction(auction)
     DUTCH_DESK = IDutchDesk(dutch_desk)
     PRICE_ORACLE = IPriceOracle(price_oracle)
     SORTED_TROVES = ISortedTroves(sorted_troves)
@@ -367,6 +360,8 @@ def open_trove(
     next_id: uint256,
     annual_interest_rate: uint256,
     max_upfront_fee: uint256,
+    min_debt_out: uint256,
+    min_collateral_out: uint256,
 ) -> uint256:
     """
     @notice Open a new Trove with specified collateral, debt, and interest rate
@@ -381,6 +376,8 @@ def open_trove(
     @param next_id ID of next Trove for the insert position
     @param annual_interest_rate Fixed annual interest rate to pay on the debt in borrow token precision
     @param max_upfront_fee Maximum upfront fee the caller is willing to pay in borrow token precision
+    @param min_debt_out Minimum amount of debt tokens to be received atomically from idle liquidity
+    @param min_collateral_out Minimum amount of collateral tokens to be redeemed in collateral token precision
     @return trove_id Unique identifier for the new Trove
     """
     # Make sure collateral and debt amounts are non-zero
@@ -452,7 +449,7 @@ def open_trove(
     assert extcall COLLATERAL_TOKEN.transferFrom(msg.sender, self, collateral_amount, default_return_value=True)
 
     # Deliver borrow tokens to the caller, redeem if liquidity is insufficient
-    self._transfer_borrow_tokens(debt_amount, annual_interest_rate)
+    self._transfer_borrow_tokens(debt_amount, annual_interest_rate, min_debt_out, min_collateral_out)
 
     # Emit event
     log OpenTrove(
@@ -569,6 +566,8 @@ def borrow(
     trove_id: uint256,
     debt_amount: uint256,
     max_upfront_fee: uint256,
+    min_debt_out: uint256,
+    min_collateral_out: uint256,
 ):
     """
     @notice Borrow more tokens from an existing Trove
@@ -579,6 +578,8 @@ def borrow(
     @param trove_id Unique identifier of the Trove
     @param debt_amount Amount of additional debt to issue before the upfront fee in borrow token precision
     @param max_upfront_fee Maximum upfront fee the caller is willing to pay in borrow token precision
+    @param min_debt_out Minimum amount of debt tokens to be received atomically from idle liquidity
+    @param min_collateral_out Minimum amount of collateral tokens to be redeemed in collateral token precision
     """
     # Make sure debt amount is non-zero
     assert debt_amount > 0, "!debt_amount"
@@ -632,7 +633,12 @@ def borrow(
     )
 
     # Deliver borrow tokens to the caller, redeem if liquidity is insufficient
-    self._transfer_borrow_tokens(debt_amount, trove.annual_interest_rate)
+    self._transfer_borrow_tokens(
+        debt_amount,
+        trove.annual_interest_rate,
+        min_debt_out,
+        min_collateral_out,
+    )
 
     # Emit event
     log Borrow(
@@ -1059,42 +1065,39 @@ def _liquidate_single_trove(trove_id: uint256, current_zombie_trove_id: uint256,
 # Redeem
 # ============================================================================================
 
-# @todo -- call `amount` `debt_amount` for consistency with other functions
+
 @external
-def redeem(amount: uint256, receiver: address):
+def redeem(debt_amount: uint256, receiver: address):
     """
     @notice Attempt to free the specified amount of borrow tokens by selling collateral
     @dev Can only be called by the `lender` contract
     @dev Uses the `dutch_desk` contract to auction off the redeemed collateral tokens
-    @param amount Target amount of borrow tokens to free in borrow token precision
+    @param debt_amount Target amount of borrow tokens to free in borrow token precision
     @param receiver Address to transfer the auction proceeds to
     """
     # Make sure the caller is the lender
     assert msg.sender == LENDER, "!lender"
 
-    # Attempt to redeem the specified `amount` and transfer the resulting borrow tokens to the `receiver`
-    self._redeem(amount, max_value(uint256), receiver)
+    # Attempt to redeem the specified `debt_amount` and transfer the resulting borrow tokens to the `receiver`
+    self._redeem(debt_amount, max_value(uint256), receiver)
 
-# @todo -- call `amount` `debt_amount` for consistency with other functions
+
 @internal
-def _redeem(amount: uint256, redeemer_annual_interest_rate: uint256, receiver: address = msg.sender):
+def _redeem(
+    debt_amount: uint256,
+    redeemer_annual_interest_rate: uint256,
+    receiver: address = msg.sender
+) -> uint256:
     """
     @notice Internal implementation of `redeem`
-    @dev Redemptions are blocked during ongoing liquidation auctions.
-         During liquidation, the system is temporarily insolvent - collateral has been seized
-         but not yet sold, so borrow tokens haven't returned to the Lender contract.
-         Allowing redemptions in this state could leave the protocol unable to fulfill them
-         and the redeemer would be at risk of losing funds
     @dev Borrowers can only redeem other borrowers if they're paying a higher interest rate.
          Zombie troves are exempt since they're already below min debt and should be cleared.
          The Lender (for withdrawals) can redeem anyone
-    @param amount Target amount of borrow tokens to free in borrow token precision
+    @param debt_amount Target amount of borrow tokens to free
     @param redeemer_annual_interest_rate Annual interest rate paid by the redeemer
     @param receiver Address to transfer the auction proceeds to
+    @return Amount of collateral tokens that were redeemed
     """
-    # Make sure there is no ongoing liquidation auction
-    assert not staticcall AUCTION.is_ongoing_liquidation_auction(), "ongoing_liquidation" # @todo -- remove this if we add min_redeem to open_trove/borrow
-
     # Accrue interest on the total debt
     self._sync_total_debt()
 
@@ -1114,7 +1117,7 @@ def _redeem(amount: uint256, redeemer_annual_interest_rate: uint256, receiver: a
         trove_to_redeem = staticcall SORTED_TROVES.last()
 
     # Cache the amount of debt we need to free
-    remaining_debt_to_free: uint256 = amount
+    remaining_debt_to_free: uint256 = debt_amount
 
     # Cache the total changes we're making so that later we can update the accounting
     total_debt_decrease: uint256 = 0
@@ -1236,6 +1239,9 @@ def _redeem(amount: uint256, redeemer_annual_interest_rate: uint256, receiver: a
         collateral_amount=total_collateral_decrease,
         debt_amount=total_debt_decrease,
     )
+
+    # Return the amount of collateral tokens that were redeemed
+    return total_collateral_decrease
 
 
 # ============================================================================================
@@ -1385,14 +1391,24 @@ def _sync_total_debt() -> uint256:
 
 
 @internal
-def _transfer_borrow_tokens(amount: uint256, annual_interest_rate: uint256):
+def _transfer_borrow_tokens(
+    amount: uint256,
+    annual_interest_rate: uint256,
+    min_debt_out: uint256,
+    min_collateral_out: uint256,
+):
     """
     @notice Transfer borrow tokens to the caller, redeeming borrower's collateral if necessary
     @param amount Amount of borrow tokens to transfer in borrow token precision
     @param annual_interest_rate Annual interest rate paid by the borrower
+    @param min_debt_out Minimum amount of debt tokens to be received atomically from idle liquidity
+    @param min_collateral_out Minimum amount of collateral tokens to be redeemed
     """
     # Check how much borrow token liquidity the lender has
     available_liquidity: uint256 = staticcall BORROW_TOKEN.balanceOf(LENDER)
+
+    # Make sure we can satisfy the `min_debt_out` requirement
+    assert available_liquidity >= min_debt_out, "!min_debt_out"
 
     # If there's not enough liquidity, redeem the difference. Otherwise just transfer the full amount
     if amount > available_liquidity:
@@ -1401,7 +1417,10 @@ def _transfer_borrow_tokens(amount: uint256, annual_interest_rate: uint256):
             assert extcall BORROW_TOKEN.transferFrom(LENDER, msg.sender, available_liquidity, default_return_value=True)
 
         # Redeem the difference
-        self._redeem(amount - available_liquidity, annual_interest_rate)
+        collateral_out: uint256 = self._redeem(amount - available_liquidity, annual_interest_rate)
+
+        # Make sure we satisfied the `min_collateral_out` requirement
+        assert collateral_out >= min_collateral_out, "!min_collateral_out"
     else:
         # Transfer the full amount
         assert extcall BORROW_TOKEN.transferFrom(LENDER, msg.sender, amount, default_return_value=True)

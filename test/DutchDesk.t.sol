@@ -8,9 +8,6 @@ contract DutchDeskTests is Base {
     function setUp() public override {
         Base.setUp();
 
-        vm.prank(management);
-        dutchDesk.accept_ownership();
-
         // Adjust `maxFuzzAmount` to collateral token decimals
         uint256 _maxFuzzAmount = 1_000_000 ether;
         if (COLLATERAL_TOKEN_PRECISION < 1e18) maxFuzzAmount = _maxFuzzAmount / (1e18 / COLLATERAL_TOKEN_PRECISION);
@@ -23,18 +20,15 @@ contract DutchDeskTests is Base {
     }
 
     function test_setup() public {
-        assertEq(dutchDesk.owner(), management, "E0");
-        assertEq(dutchDesk.pending_owner(), address(0), "E1");
-        assertEq(dutchDesk.TROVE_MANAGER(), address(troveManager), "E2");
-        assertEq(dutchDesk.PRICE_ORACLE(), address(priceOracle), "E3");
-        assertEq(dutchDesk.AUCTION(), address(auction), "E4");
-        assertEq(dutchDesk.BORROW_TOKEN(), address(borrowToken), "E5");
-        assertEq(dutchDesk.COLLATERAL_TOKEN(), address(collateralToken), "E6");
-        assertEq(dutchDesk.STARTING_PRICE_BUFFER_PERCENTAGE(), 1e18 + 15e16, "E7"); // 115%
-        assertEq(dutchDesk.EMERGENCY_STARTING_PRICE_BUFFER_PERCENTAGE(), 1e18 + 100e16, "E8"); // 200%
-        assertEq(dutchDesk.MINIMUM_PRICE_BUFFER_PERCENTAGE(), 1e18 - 5e16, "E9"); // 95%
-        assertEq(dutchDesk.keeper(), keeper, "E10");
-        assertEq(dutchDesk.nonce(), 0, "E11");
+        assertEq(dutchDesk.TROVE_MANAGER(), address(troveManager), "E0");
+        assertEq(dutchDesk.PRICE_ORACLE(), address(priceOracle), "E1");
+        assertEq(dutchDesk.AUCTION(), address(auction), "E2");
+        assertEq(dutchDesk.BORROW_TOKEN(), address(borrowToken), "E3");
+        assertEq(dutchDesk.COLLATERAL_TOKEN(), address(collateralToken), "E4");
+        assertEq(dutchDesk.STARTING_PRICE_BUFFER_PERCENTAGE(), 1e18 + 15e16, "E5"); // 115%
+        assertEq(dutchDesk.EMERGENCY_STARTING_PRICE_BUFFER_PERCENTAGE(), 1e18 + 100e16, "E6"); // 200%
+        assertEq(dutchDesk.MINIMUM_PRICE_BUFFER_PERCENTAGE(), 1e18 - 5e16, "E7"); // 95%
+        assertEq(dutchDesk.nonce(), 0, "E8");
     }
 
     function test_kick_liquidation(
@@ -175,7 +169,6 @@ contract DutchDeskTests is Base {
         assertEq(auction.get_kickable_amount(_auctionId), _amount, "E2");
 
         // Re-kick the auction
-        vm.prank(keeper);
         dutchDesk.re_kick(_auctionId);
 
         assertTrue(auction.is_active(_auctionId), "E3");
@@ -188,29 +181,6 @@ contract DutchDeskTests is Base {
 
         uint256 _expectedMinimumPrice = priceOracle.get_price(false) * dutchDesk.MINIMUM_PRICE_BUFFER_PERCENTAGE() / WAD;
         assertEq(auction.minimum_price(_auctionId), _expectedMinimumPrice, "E6");
-    }
-
-    function test_reKick_invalidCaller(
-        uint256 _amount,
-        address _receiver,
-        address _invalidCaller
-    ) public {
-        _amount = bound(_amount, minFuzzAmount, maxFuzzAmount);
-        vm.assume(_receiver != address(0));
-        vm.assume(_invalidCaller != keeper);
-
-        // Kick an auction
-        airdrop(address(collateralToken), address(troveManager), _amount);
-        vm.prank(address(troveManager));
-        dutchDesk.kick(_amount, _receiver, true);
-
-        // Skip time until auction becomes inactive
-        skip(4 hours);
-
-        // Try to re-kick with invalid caller
-        vm.expectRevert("!keeper");
-        vm.prank(_invalidCaller);
-        dutchDesk.re_kick(0);
     }
 
     function test_reKick_auctionStillActive(
@@ -229,69 +199,7 @@ contract DutchDeskTests is Base {
 
         // Try to re-kick while auction is still active
         vm.expectRevert("active");
-        vm.prank(keeper);
         dutchDesk.re_kick(0);
-    }
-
-    function test_setKeeper(
-        address _newKeeper
-    ) public {
-        vm.prank(management);
-        dutchDesk.set_keeper(_newKeeper);
-
-        assertEq(dutchDesk.keeper(), _newKeeper, "E0");
-    }
-
-    function test_setKeeper_invalidCaller(
-        address _notOwner,
-        address _newKeeper
-    ) public {
-        vm.assume(_notOwner != management);
-
-        vm.expectRevert("!owner");
-        vm.prank(_notOwner);
-        dutchDesk.set_keeper(_newKeeper);
-    }
-
-    function test_transferOwnership(
-        address _newOwner
-    ) public {
-        vm.prank(management);
-        dutchDesk.transfer_ownership(_newOwner);
-
-        assertEq(dutchDesk.owner(), management, "E0");
-        assertEq(dutchDesk.pending_owner(), _newOwner, "E1");
-
-        vm.prank(_newOwner);
-        dutchDesk.accept_ownership();
-
-        assertEq(dutchDesk.owner(), _newOwner, "E2");
-        assertEq(dutchDesk.pending_owner(), address(0), "E3");
-    }
-
-    function test_transferOwnership_invalidCaller(
-        address _newOwner,
-        address _invalidCaller
-    ) public {
-        vm.assume(_invalidCaller != management);
-
-        vm.expectRevert("!owner");
-        vm.prank(_invalidCaller);
-        dutchDesk.transfer_ownership(_newOwner);
-    }
-
-    function test_acceptOwnership_invalidCaller(
-        address _newOwner,
-        address _invalidCaller
-    ) public {
-        vm.assume(_invalidCaller != _newOwner);
-
-        vm.prank(management);
-        dutchDesk.transfer_ownership(_newOwner);
-
-        vm.expectRevert("!pending_owner");
-        vm.prank(_invalidCaller);
-        dutchDesk.accept_ownership();
     }
 
 }

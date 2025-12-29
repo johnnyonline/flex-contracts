@@ -9,8 +9,8 @@
 
 from ethereum.ercs import IERC20Detailed
 
-from ..interfaces import ICurveTwocryptoPool as ICurvePool
-from ...interfaces import IPriceOracle
+from interfaces import ICurveTwocryptoPool as ICurvePool
+from ..interfaces import IPriceOracle
 
 
 # ============================================================================================

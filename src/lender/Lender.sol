@@ -83,7 +83,7 @@ contract Lender is BaseHooks {
         // If the strategy is shutdown always allow full withdrawals
         if (TokenizedStrategy.isShutdown()) return type(uint256).max;
 
-        // Redemptions are blocked during ongoing liquidation auctions.
+        // Withdrawals are blocked during ongoing liquidation auctions.
         // During liquidation, collateral has been seized but not yet sold for borrow tokens.
         // The system is temporarily insolvent until the auction completes and proceeds return to this contract.
         // However, any idle liquidity already in the contract remains available for withdrawal
@@ -126,7 +126,7 @@ contract Lender is BaseHooks {
 
     /// @inheritdoc BaseStrategy
     function _freeFunds(uint256 _amount) internal override {
-        // Try to free `_amount` by auctioning collateral for borrow tokens
+        // Try to free `_amount` by auctioning collateral for borrow tokens.
         // Auction proceeds will be sent to `_auctionProceedsReceiver` which is set in the `_preWithdrawHook`
         TROVE_MANAGER.redeem(_amount, _auctionProceedsReceiver);
     }

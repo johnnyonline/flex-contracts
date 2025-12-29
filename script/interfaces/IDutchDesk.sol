@@ -25,39 +25,20 @@ interface IDutchDesk {
     // Storage
     // ============================================================================================
 
-    function owner() external view returns (address);
-    function pending_owner() external view returns (address);
-    function keeper() external view returns (address);
     function nonce() external view returns (uint256);
 
     // ============================================================================================
-    // Owner functions
-    // ============================================================================================
-
-    function transfer_ownership(
-        address new_owner
-    ) external;
-    function accept_ownership() external;
-    function set_keeper(
-        address new_keeper
-    ) external;
-
-    // ============================================================================================
-    // Keeper functions
-    // ============================================================================================
-
-    function re_kick(
-        uint256 auction_id
-    ) external;
-
-    // ============================================================================================
-    // Mutative functions
+    // Kick
     // ============================================================================================
 
     function kick(
         uint256 kick_amount,
         address receiver,
         bool is_liquidation
+    ) external;
+
+    function re_kick(
+        uint256 auction_id
     ) external;
 
 }

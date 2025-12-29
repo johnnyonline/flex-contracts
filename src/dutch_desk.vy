@@ -10,34 +10,9 @@
 from ethereum.ercs import IERC20
 from ethereum.ercs import IERC20Detailed
 
-from periphery import ownable_2step as ownable
-
 from interfaces import IAuction
 from interfaces import IPriceOracle
 # @todo -- auction step size? and buffers
-
-# ============================================================================================
-# Events
-# ============================================================================================
-
-
-event SetKeeper:
-    old_keeper: address
-    new_keeper: address
-
-
-# ============================================================================================
-# Modules
-# ============================================================================================
-
-
-initializes: ownable
-exports: (
-    ownable.owner,
-    ownable.pending_owner,
-    ownable.transfer_ownership,
-    ownable.accept_ownership,
-)
 
 
 # ============================================================================================
@@ -70,9 +45,6 @@ _WAD: constant(uint256) = 10 ** 18
 # ============================================================================================
 
 
-# Address of the keeper
-keeper: public(address)
-
 # Nonce for auction identifiers
 nonce: public(uint256)
 
@@ -84,7 +56,6 @@ nonce: public(uint256)
 
 @deploy
 def __init__(
-    owner: address,
     lender: address,
     trove_manager: address,
     price_oracle: address,
@@ -94,7 +65,6 @@ def __init__(
 ):
     """
     @notice Initialize the contract
-    @param owner Address of the initial owner
     @param lender Address of the Lender contract
     @param trove_manager Address of the Trove Manager contract
     @param price_oracle Address of the Price Oracle contract
@@ -102,9 +72,6 @@ def __init__(
     @param borrow_token Address of the borrow token
     @param collateral_token Address of the collateral token
     """
-    # Initialize ownable
-    ownable.__init__(owner)
-
     # Set immutable variables
     TROVE_MANAGER = trove_manager
     PRICE_ORACLE = IPriceOracle(price_oracle)
@@ -128,63 +95,7 @@ def __init__(
 
 
 # ============================================================================================
-# Owner functions
-# ============================================================================================
-
-
-@external
-def set_keeper(new_keeper: address):
-    """
-    @notice Set the `keeper` variable
-    @dev Only callable by the current `owner`
-    @param new_keeper New keeper address
-    """
-    # Make sure the caller is the current owner
-    assert msg.sender == ownable.owner, "!owner"
-
-    # Cache the old keeper
-    old_keeper: address = self.keeper
-
-    # Set the new keeper
-    self.keeper = new_keeper
-
-    # Emit event
-    log SetKeeper(old_keeper=old_keeper, new_keeper=new_keeper)
-
-
-# ============================================================================================
-# Keeper functions
-# ============================================================================================
-
-
-@external
-def re_kick(auction_id: uint256):
-    """
-    @notice Re-kick an inactive auction with new starting and minimum prices
-    @dev Only callable by the keeper
-    @dev Will revert if the auction is not kickable
-    @dev An auction may need to be re-kicked if its price has fallen below its minimum price
-    @dev Uses a higher starting price buffer percentage to allow for takers to re-group
-    @dev Does not set the receiver nor transfer collateral as those are already ready in the auction
-    @param auction_id Identifier of the auction to re-kick
-    """
-    # Make sure the caller is the keeper
-    assert msg.sender == self.keeper, "!keeper"
-
-    # Get new starting and minimum prices
-    starting_price: uint256 = 0
-    minimum_price: uint256 = 0
-    starting_price, minimum_price = self._get_prices(
-        staticcall AUCTION.current_amount(auction_id),
-        EMERGENCY_STARTING_PRICE_BUFFER_PERCENTAGE,
-    )
-
-    # Re-kick with new prices
-    extcall AUCTION.re_kick(auction_id, starting_price, minimum_price)  # Reverts if there's nothing to re-kick
-
-
-# ============================================================================================
-# External mutative functions
+# Kick
 # ============================================================================================
 
 
@@ -235,6 +146,28 @@ def kick(
         receiver,
         is_liquidation,
     )
+
+
+@external
+def re_kick(auction_id: uint256):
+    """
+    @notice Re-kick an inactive auction with new starting and minimum prices
+    @dev Will revert if the auction is not kickable
+    @dev An auction may need to be re-kicked if its price has fallen below its minimum price
+    @dev Uses a higher starting price buffer percentage to allow for takers to re-group
+    @dev Does not set the receiver nor transfer collateral as those are already ready in the auction
+    @param auction_id Identifier of the auction to re-kick
+    """
+    # Get new starting and minimum prices
+    starting_price: uint256 = 0
+    minimum_price: uint256 = 0
+    starting_price, minimum_price = self._get_prices(
+        staticcall AUCTION.current_amount(auction_id),
+        EMERGENCY_STARTING_PRICE_BUFFER_PERCENTAGE,
+    )
+
+    # Re-kick with new prices
+    extcall AUCTION.re_kick(auction_id, starting_price, minimum_price)
 
 
 # ============================================================================================

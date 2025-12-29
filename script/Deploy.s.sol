@@ -48,8 +48,8 @@ contract Deploy is Script {
 
     // IERC20 public borrowToken = IERC20(0xf939E0A03FB07F59A73314E73794Be0E57ac1b4E); // crvUSD
     IERC20 public borrowToken = IERC20(0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48); // USDC
-    IERC20 public collateralToken = IERC20(0x18084fbA666a33d37592fA2633fD49a74DD93a88); // tBTC
-    // IERC20 public collateralToken = IERC20(0x2260FAC5E5542a773Aa44fBCfeDf7C193bc2C599); // WBTC
+    // IERC20 public collateralToken = IERC20(0x18084fbA666a33d37592fA2633fD49a74DD93a88); // tBTC
+    IERC20 public collateralToken = IERC20(0x2260FAC5E5542a773Aa44fBCfeDf7C193bc2C599); // WBTC
 
     function run() public {
         uint256 _pk = isTest ? 42_069 : vm.envUint("DEPLOYER_PRIVATE_KEY");
@@ -75,13 +75,7 @@ contract Deploy is Script {
             deployCode(
                 "dutch_desk",
                 abi.encode(
-                    deployer,
-                    _lenderAddress,
-                    _troveManagerAddress,
-                    address(priceOracle),
-                    address(auction),
-                    address(borrowToken),
-                    address(collateralToken)
+                    _lenderAddress, _troveManagerAddress, address(priceOracle), address(auction), address(borrowToken), address(collateralToken)
                 )
             )
         );
@@ -93,7 +87,6 @@ contract Deploy is Script {
                 "trove_manager",
                 abi.encode(
                     _lenderAddress,
-                    address(auction),
                     address(dutchDesk),
                     address(priceOracle),
                     address(sortedTroves),
@@ -107,10 +100,6 @@ contract Deploy is Script {
 
         lender = deployLender(isTest);
         require(address(lender) == _lenderAddress, "!lenderAddress");
-
-        // Set up the Dutch Desk
-        dutchDesk.set_keeper(keeper);
-        dutchDesk.transfer_ownership(management);
 
         if (isTest) {
             vm.label({account: address(priceOracle), newLabel: "PriceOracle"});

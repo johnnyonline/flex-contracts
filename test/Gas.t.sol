@@ -79,7 +79,7 @@ contract GasTests is Base {
         collateralToken.approve(address(troveManager), _collateralNeeded);
 
         uint256 gasBefore = gasleft();
-        troveManager.open_trove(block.timestamp, _collateralNeeded, _minDebt, 0, 0, _rate, type(uint256).max);
+        troveManager.open_trove(block.timestamp, _collateralNeeded, _minDebt, 0, 0, _rate, type(uint256).max, 0, 0);
         uint256 gasUsed = gasBefore - gasleft();
         vm.stopPrank();
 
