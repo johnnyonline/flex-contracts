@@ -2,6 +2,7 @@
 pragma solidity 0.8.23;
 
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/ERC20.sol";
+import {IERC20Metadata} from "@openzeppelin/contracts/token/ERC20/extensions/IERC20Metadata.sol";
 
 import {IAuction} from "./interfaces/IAuction.sol";
 import {IDutchDesk} from "./interfaces/IDutchDesk.sol";
@@ -101,6 +102,7 @@ contract Deploy is Script {
         require(address(lender) == _lenderAddress, "!lenderAddress");
 
         if (isTest) {
+            vm.label({account: address(auction), newLabel: "Auction"});
             vm.label({account: address(priceOracle), newLabel: "PriceOracle"});
             vm.label({account: address(dutchDesk), newLabel: "DutchDesk"});
             vm.label({account: address(sortedTroves), newLabel: "SortedTroves"});
@@ -108,6 +110,7 @@ contract Deploy is Script {
             vm.label({account: address(lender), newLabel: "Lender"});
         } else {
             console.log("---------------------------------");
+            console.log("Auction: ", address(auction));
             console.log("Price Oracle: ", address(priceOracle));
             console.log("Dutch Desk: ", address(dutchDesk));
             console.log("Sorted Troves: ", address(sortedTroves));
@@ -128,6 +131,9 @@ contract Deploy is Script {
             _lender.setKeeper(keeper);
             _lender.setPendingManagement(management);
             _lender.setEmergencyAdmin(emergencyAdmin);
+        } else {
+            uint256 _depositLimit = 2_500 * 10 ** IERC20Metadata(address(borrowToken)).decimals();
+            _lender.setDepositLimit(_depositLimit);
         }
     }
 
