@@ -220,9 +220,9 @@ contract OpenTroveTests is Base {
         assertApproxEqRel(
             (_trove.collateral * priceOracle.get_price() / ORACLE_PRICE_SCALE) * BORROW_TOKEN_PRECISION / _trove.debt,
             DEFAULT_TARGET_COLLATERAL_RATIO,
-            1e15,
+            2e15,
             "E22"
-        ); // 0.1%
+        ); // 0.2%
 
         // Check sorted troves
         assertFalse(sortedTroves.empty(), "E23");
@@ -349,9 +349,9 @@ contract OpenTroveTests is Base {
         assertApproxEqRel(
             (_trove.collateral * priceOracle.get_price() / ORACLE_PRICE_SCALE) * BORROW_TOKEN_PRECISION / _trove.debt,
             DEFAULT_TARGET_COLLATERAL_RATIO,
-            1e15,
+            2e15,
             "E23"
-        ); // 0.1%
+        ); // 0.2%
 
         // Check sorted troves
         assertFalse(sortedTroves.empty(), "E24");
@@ -485,9 +485,9 @@ contract OpenTroveTests is Base {
         assertApproxEqRel(
             (_trove.collateral * priceOracle.get_price() / ORACLE_PRICE_SCALE) * BORROW_TOKEN_PRECISION / _trove.debt,
             DEFAULT_TARGET_COLLATERAL_RATIO,
-            1e15,
+            2e15,
             "E23"
-        ); // 0.1%
+        ); // 0.2%
 
         // Check sorted troves
         assertFalse(sortedTroves.empty(), "E24");

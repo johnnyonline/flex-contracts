@@ -49,7 +49,8 @@ contract Deploy is Script {
     // IERC20 public borrowToken = IERC20(0xf939E0A03FB07F59A73314E73794Be0E57ac1b4E); // crvUSD
     IERC20 public borrowToken = IERC20(0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48); // USDC
     // IERC20 public collateralToken = IERC20(0x18084fbA666a33d37592fA2633fD49a74DD93a88); // tBTC
-    IERC20 public collateralToken = IERC20(0x2260FAC5E5542a773Aa44fBCfeDf7C193bc2C599); // WBTC
+    // IERC20 public collateralToken = IERC20(0x2260FAC5E5542a773Aa44fBCfeDf7C193bc2C599); // WBTC
+    IERC20 public collateralToken = IERC20(0xAc37729B76db6438CE62042AE1270ee574CA7571); // yvWETH-2
 
     function run() public {
         uint256 _pk = isTest ? 42_069 : vm.envUint("DEPLOYER_PRIVATE_KEY");
@@ -70,7 +71,8 @@ contract Deploy is Script {
         address _dutchDeskAddress = computeCreateAddress(deployer, _nonce + 2);
 
         auction = IAuction(deployCode("auction", abi.encode(_dutchDeskAddress, address(borrowToken), address(collateralToken))));
-        priceOracle = IPriceOracle(deployCode("tbtc_to_crvusd_oracle", abi.encode(address(borrowToken), address(collateralToken))));
+        // priceOracle = IPriceOracle(deployCode("tbtc_to_crvusd_oracle", abi.encode(address(borrowToken), address(collateralToken))));
+        priceOracle = IPriceOracle(deployCode("yvweth2_to_usdc_oracle"));
         dutchDesk = IDutchDesk(
             deployCode(
                 "dutch_desk", abi.encode(_troveManagerAddress, address(priceOracle), address(auction), address(borrowToken), address(collateralToken))
