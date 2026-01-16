@@ -56,7 +56,11 @@ contract Handler is Test {
     // Trove Management
     // ============================================================================================
 
-    function openTrove(uint256 _debt, uint256 _rate, uint256 _seed) external {
+    function openTrove(
+        uint256 _debt,
+        uint256 _rate,
+        uint256 _seed
+    ) external {
         _debt = bound(_debt, minDebt + 1, 1_000_000 * borrowTokenPrecision);
         _rate = bound(_rate, minRate, maxRate);
 
@@ -68,21 +72,18 @@ contract Handler is Test {
 
         vm.startPrank(_user);
         collateralToken.approve(address(troveManager), _collateral);
-        try troveManager.open_trove(
-            block.timestamp + troveIds.length,
-            _collateral,
-            _debt,
-            0, 0,
-            _rate,
-            type(uint256).max,
-            0, 0
-        ) returns (uint256 _id) {
+        try troveManager.open_trove(block.timestamp + troveIds.length, _collateral, _debt, 0, 0, _rate, type(uint256).max, 0, 0) returns (
+            uint256 _id
+        ) {
             troveIds.push(_id);
         } catch {}
         vm.stopPrank();
     }
 
-    function addCollateral(uint256 _troveIndex, uint256 _amount) external {
+    function addCollateral(
+        uint256 _troveIndex,
+        uint256 _amount
+    ) external {
         if (troveIds.length == 0) return;
         _troveIndex = bound(_troveIndex, 0, troveIds.length - 1);
         _amount = bound(_amount, 1, 1_000_000 * borrowTokenPrecision);
@@ -98,7 +99,10 @@ contract Handler is Test {
         vm.stopPrank();
     }
 
-    function removeCollateral(uint256 _troveIndex, uint256 _amount) external {
+    function removeCollateral(
+        uint256 _troveIndex,
+        uint256 _amount
+    ) external {
         if (troveIds.length == 0) return;
         _troveIndex = bound(_troveIndex, 0, troveIds.length - 1);
 
@@ -110,7 +114,10 @@ contract Handler is Test {
         try troveManager.remove_collateral(_troveId, _amount) {} catch {}
     }
 
-    function borrow(uint256 _troveIndex, uint256 _amount) external {
+    function borrow(
+        uint256 _troveIndex,
+        uint256 _amount
+    ) external {
         if (troveIds.length == 0) return;
         _troveIndex = bound(_troveIndex, 0, troveIds.length - 1);
         _amount = bound(_amount, 1, 100_000 * borrowTokenPrecision);
@@ -122,7 +129,10 @@ contract Handler is Test {
         try troveManager.borrow(_troveId, _amount, type(uint256).max, 0, 0) {} catch {}
     }
 
-    function repay(uint256 _troveIndex, uint256 _amount) external {
+    function repay(
+        uint256 _troveIndex,
+        uint256 _amount
+    ) external {
         if (troveIds.length == 0) return;
         _troveIndex = bound(_troveIndex, 0, troveIds.length - 1);
 
@@ -138,7 +148,10 @@ contract Handler is Test {
         vm.stopPrank();
     }
 
-    function adjustInterestRate(uint256 _troveIndex, uint256 _newRate) external {
+    function adjustInterestRate(
+        uint256 _troveIndex,
+        uint256 _newRate
+    ) external {
         if (troveIds.length == 0) return;
         _troveIndex = bound(_troveIndex, 0, troveIds.length - 1);
         _newRate = bound(_newRate, minRate, maxRate);
@@ -150,7 +163,9 @@ contract Handler is Test {
         try troveManager.adjust_interest_rate(_troveId, _newRate, 0, 0, type(uint256).max) {} catch {}
     }
 
-    function closeTrove(uint256 _troveIndex) external {
+    function closeTrove(
+        uint256 _troveIndex
+    ) external {
         if (troveIds.length == 0) return;
         _troveIndex = bound(_troveIndex, 0, troveIds.length - 1);
 
@@ -170,7 +185,9 @@ contract Handler is Test {
     // Time & Sync
     // ============================================================================================
 
-    function warp(uint256 _time) external {
+    function warp(
+        uint256 _time
+    ) external {
         _time = bound(_time, 1, 365 days);
         skip(_time);
     }
@@ -190,4 +207,5 @@ contract Handler is Test {
     function getTroveCount() external view returns (uint256) {
         return troveIds.length;
     }
+
 }

@@ -1377,12 +1377,9 @@ def _sync_total_debt() -> uint256:
     # `total_debt >= sum(trove debts)` always holds. This prevents `total_debt` from
     # going negative if all troves repay. The difference is small and it should scale
     # with the number of interest minting events
-    # pending_agg_interest: uint256 = math._ceil_div(
-    #     self.total_weighted_debt * (block.timestamp - self.last_debt_update_time),
-    #     _ONE_YEAR * _BORROW_TOKEN_PRECISION
-    # )
-    pending_agg_interest: uint256 = (
-        (self.total_weighted_debt * (block.timestamp - self.last_debt_update_time)) // (_ONE_YEAR * _BORROW_TOKEN_PRECISION)
+    pending_agg_interest: uint256 = math._ceil_div(
+        self.total_weighted_debt * (block.timestamp - self.last_debt_update_time),
+        _ONE_YEAR * _BORROW_TOKEN_PRECISION
     )
 
     # Calculate the new total debt after interest

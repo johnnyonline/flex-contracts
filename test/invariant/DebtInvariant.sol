@@ -8,7 +8,7 @@ contract TotalDebtGeSumTroveDebtsInvariant is BaseInvariant {
 
     function invariant_totalDebtGeSumTroveDebts() external {
         uint256[] memory _ids = handler.getTroveIds();
-        uint256 _totalDebt = troveManager.total_debt();
+        uint256 _totalDebt = troveManager.sync_total_debt();
 
         uint256 _sum = 0;
         for (uint256 i = 0; i < _ids.length; i++) {
@@ -17,4 +17,5 @@ contract TotalDebtGeSumTroveDebtsInvariant is BaseInvariant {
 
         assertGe(_totalDebt, _sum, "CRITICAL: sum(trove debts) > total_debt");
     }
+
 }

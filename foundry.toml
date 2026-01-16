@@ -23,4 +23,8 @@ number_underscore = "preserve"
 quote_style = "double"
 ignore = ["lib/", "src/lender/Lender.sol"]
 
+[invariant]
+runs = 50
+depth = 50
+
 # See more config options https://github.com/foundry-rs/foundry/tree/master/config
