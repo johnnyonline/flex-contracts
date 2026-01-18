@@ -9,9 +9,7 @@ contract ZombieTroveIdConsistencyInvariant is BaseInvariant {
     function invariant_zombieTroveIdConsistency() external {
         uint256 _zombieId = troveManager.zombie_trove_id();
 
-        if (_zombieId == 0) {
-            return;
-        }
+        if (_zombieId == 0) return;
 
         ITroveManager.Trove memory _trove = troveManager.troves(_zombieId);
 
