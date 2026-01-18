@@ -207,5 +207,4 @@ contract Handler is Test {
     function getTroveCount() external view returns (uint256) {
         return troveIds.length;
     }
-
 }
