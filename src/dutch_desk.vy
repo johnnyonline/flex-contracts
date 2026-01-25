@@ -99,6 +99,7 @@ def __init__(
 @external
 def kick(
     kick_amount: uint256,
+    maximum_amount: uint256,
     receiver: address,
     is_liquidation: bool = False,
 ):
@@ -107,6 +108,7 @@ def kick(
     @dev Only callable by the Trove Manager contract
     @dev Caller must approve this contract to transfer collateral tokens on its behalf before calling
     @param kick_amount Amount of collateral tokens to auction
+    @param maximum_amount The maximum amount borrow tokens to be received
     @param receiver Address to receive the auction proceeds in borrow tokens
     @param is_liquidation Whether this auction is for liquidated collateral
     """
@@ -138,6 +140,7 @@ def kick(
     extcall AUCTION.kick(  # Pulls collateral tokens
         auction_id,
         kick_amount,
+        maximum_amount,
         starting_price,
         minimum_price,
         receiver,

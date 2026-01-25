@@ -7,5 +7,5 @@
 
 
 @external
-def kick(amount: uint256, receiver: address = empty(address), is_liquidation: bool = False):
+def kick(amount: uint256, maximum_amount: uint256, receiver: address = empty(address), is_liquidation: bool = False):
     ...

@@ -47,6 +47,8 @@ struct AuctionInfo:
     kick_timestamp: uint256  # The timestamp the auction was kicked
     initial_amount: uint256  # The initial amount of sell token available
     current_amount: uint256  # The current amount of sell token available
+    maximum_amount: uint256  # The maximum amount of buy token to be received. Any surplus goes to Lender contract
+    amount_received: uint256  # The amount of buy token already received toward the maximum amount
     starting_price: uint256  # The amount to start the auction at, unscaled "lot size" in buy token
     minimum_price: uint256  # The minimum price per token for the auction, scaled to WAD
     receiver: address  # The address that will receive the auction proceeds
@@ -58,8 +60,9 @@ struct AuctionInfo:
 # ============================================================================================
 
 
-# Only address that can kick auctions (the Dutch Desk contract)
-PAPI: public(immutable(address))
+# Contracts
+PAPI: public(immutable(address))  # only address that can kick auctions (the Dutch Desk contract)
+LENDER: public(immutable(address))
 
 # Info of the token being bought
 BUY_TOKEN: public(immutable(IERC20))
@@ -99,10 +102,11 @@ _auctions: HashMap[uint256, AuctionInfo]
 
 
 @deploy
-def __init__(papi: address, buy_token: address, sell_token: address):
+def __init__(papi: address, lender: address, buy_token: address, sell_token: address):
     """
     @notice Initialize the contract
     @param papi Address that is allowed to kick auctions
+    @param lender Address of the Lender contract
     @param buy_token Address of the token being bought
     @param sell_token Address of the token being sold
     """
@@ -117,8 +121,9 @@ def __init__(papi: address, buy_token: address, sell_token: address):
     sell_token_decimals: uint256 = convert(staticcall IERC20Detailed(sell_token).decimals(), uint256)
     assert sell_token_decimals <= _MAX_TOKEN_DECIMALS, "!sell_token_decimals"
 
-    # Set papi address
+    # Set contract addresses
     PAPI = papi
+    LENDER = lender
 
     # Set buy token info
     BUY_TOKEN = IERC20(buy_token)
@@ -286,6 +291,28 @@ def current_amount(auction_id: uint256) -> uint256:
 
 @external
 @view
+def maximum_amount(auction_id: uint256) -> uint256:
+    """
+    @notice Get the maximum amount of buy token to be received
+    @param auction_id The identifier for the auction
+    @return The maximum amount of buy token to be received
+    """
+    return self._auctions[auction_id].maximum_amount
+
+
+@external
+@view
+def amount_received(auction_id: uint256) -> uint256:
+    """
+    @notice Get the amount of buy token already received toward the maximum amount
+    @param auction_id The identifier for the auction
+    @return The amount of buy token already received toward the maximum amount
+    """
+    return self._auctions[auction_id].amount_received
+
+
+@external
+@view
 def starting_price(auction_id: uint256) -> uint256:
     """
     @notice Get the starting price for the auction
@@ -339,6 +366,7 @@ def is_liquidation(auction_id: uint256) -> bool:
 def kick(
     auction_id: uint256,
     kick_amount: uint256,
+    maximum_amount: uint256,
     starting_price: uint256,
     minimum_price: uint256,
     receiver: address,
@@ -350,6 +378,7 @@ def kick(
     @dev Caller must approve this contract to transfer sell tokens on its behalf before calling
     @param auction_id The identifier for the auction
     @param kick_amount The amount of sell token to kick the auction with
+    @param maximum_amount The maximum amount of buy token to be received
     @param starting_price The starting price for the auction, unscaled "lot size" in buy token
     @param minimum_price The minimum price for the auction, scaled to WAD
     @param receiver The address that will receive the auction proceeds
@@ -385,6 +414,8 @@ def kick(
         kick_timestamp=block.timestamp,
         initial_amount=kick_amount,
         current_amount=kick_amount,
+        maximum_amount=maximum_amount,
+        amount_received=0,
         starting_price=starting_price,
         minimum_price=minimum_price,
         receiver=receiver,
@@ -511,8 +542,33 @@ def take(
             data,
         )
 
-    # Pull the buy token from the caller to the auction receiver
-    assert extcall BUY_TOKEN.transferFrom(msg.sender, auction.receiver, needed_amount, default_return_value=True)
+    # If liquidation auction, all proceeds goes to the Lender contract.
+    # Otherwise, make sure the receiver does not get more than expected and transfer the surplus goes to the surplus receiver
+    if auction.is_liquidation:
+        # Liquidation: all to the Lender contract
+        assert extcall BUY_TOKEN.transferFrom(msg.sender, LENDER, needed_amount, default_return_value=True)
+    else:
+        # How much the receiver still needs
+        receiver_remaining: uint256 = auction.maximum_amount - auction.amount_received
+
+        # If the bought amount is less than the receiver's expected amount, transfer him all of it.
+        # Otherwise, cover the receiver first, then transfer the surplus to the surplus receiver
+        if needed_amount <= receiver_remaining:
+            # Entire amount to the receiver
+            auction.amount_received += needed_amount
+            assert extcall BUY_TOKEN.transferFrom(msg.sender, auction.receiver, needed_amount, default_return_value=True)
+        else:
+            # Cover the receiver first
+            if receiver_remaining > 0:
+                auction.amount_received = auction.maximum_amount
+                assert extcall BUY_TOKEN.transferFrom(msg.sender, auction.receiver, receiver_remaining, default_return_value=True)
+
+            # Surplus to the surplus receiver
+            surplus: uint256 = needed_amount - receiver_remaining
+            assert extcall BUY_TOKEN.transferFrom(msg.sender, LENDER, surplus, default_return_value=True)
+
+        # Update storage again to reflect amount received
+        self._auctions[auction_id].amount_received = auction.amount_received
 
     # Emit event
     log AuctionTake(

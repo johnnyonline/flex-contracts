@@ -33,6 +33,7 @@ interface IDutchDesk {
 
     function kick(
         uint256 kick_amount,
+        uint256 maximum_amount,
         address receiver,
         bool is_liquidation
     ) external;

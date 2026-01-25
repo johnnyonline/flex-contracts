@@ -998,8 +998,9 @@ def liquidate_troves(trove_ids: uint256[_MAX_ITERATIONS]):
         total_weighted_debt_to_decrease, # weighted_debt_decrease
     )
 
-    # Kick the auction. Proceeds will be sent to the lender
-    extcall DUTCH_DESK.kick(total_collateral_to_decrease, LENDER, _LIQUIDATION_AUCTION)  # Pulls collateral tokens
+    # Kick the auction. Proceeds will be sent to the Lender contract.
+    # We can pass `0` as the `maximum_amount` as any surplus will be sent to the Lender contract anyway because it's a liquidation auction
+    extcall DUTCH_DESK.kick(total_collateral_to_decrease, 0, LENDER, _LIQUIDATION_AUCTION)  # Pulls collateral tokens
 
 
 @internal
@@ -1234,8 +1235,9 @@ def _redeem(
     # Update the contract's recorded collateral balance
     self.collateral_balance -= total_collateral_decrease
 
-    # Kick the auction. Proceeds will be sent to the `receiver`
-    extcall DUTCH_DESK.kick(total_collateral_decrease, receiver)  # Pulls collateral tokens
+    # Kick the auction.
+    # Proceeds up to `total_debt_decrease` will be sent to the `receiver`, any surplus will be sent to the Lender contract
+    extcall DUTCH_DESK.kick(total_collateral_decrease, total_debt_decrease, receiver)  # Pulls collateral tokens
 
     # Emit event
     log Redeem(

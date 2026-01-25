@@ -44,9 +44,9 @@ contract DutchDeskTests is Base {
         uint256 _nonceBefore = dutchDesk.nonce();
 
         vm.prank(address(troveManager));
-        dutchDesk.kick(_amount, _receiver, true);
+        dutchDesk.kick(_amount, 0, _receiver, true); // maximum_amount=0 for liquidations
 
-        uint256 _auctionId = _nonceBefore; // nonce is auction ID, incremented after kick
+        uint256 _auctionId = _nonceBefore;
 
         assertTrue(auction.is_active(_auctionId), "E0");
         assertEq(auction.get_available_amount(_auctionId), _amount, "E1");
@@ -63,13 +63,16 @@ contract DutchDeskTests is Base {
         assertEq(dutchDesk.nonce(), _nonceBefore + 1, "E6");
         assertTrue(auction.is_ongoing_liquidation_auction(), "E7");
         assertEq(auction.liquidation_auctions(), 1, "E8");
+        assertEq(auction.maximum_amount(_auctionId), 0, "E9");
     }
 
     function test_kick_redemption(
         uint256 _amount,
+        uint256 _maximumAmount,
         address _receiver
     ) public {
         _amount = bound(_amount, minFuzzAmount, maxFuzzAmount);
+        _maximumAmount = bound(_maximumAmount, 1, type(uint256).max);
         vm.assume(_receiver != address(0));
 
         // Collateral is transferred from troveManager via kick
@@ -78,9 +81,9 @@ contract DutchDeskTests is Base {
         uint256 _nonceBefore = dutchDesk.nonce();
 
         vm.prank(address(troveManager));
-        dutchDesk.kick(_amount, _receiver, false);
+        dutchDesk.kick(_amount, _maximumAmount, _receiver, false);
 
-        uint256 _auctionId = _nonceBefore; // nonce is auction ID, incremented after kick
+        uint256 _auctionId = _nonceBefore;
 
         assertTrue(auction.is_active(_auctionId), "E0");
         assertEq(auction.get_available_amount(_auctionId), _amount, "E1");
@@ -97,6 +100,7 @@ contract DutchDeskTests is Base {
         assertEq(dutchDesk.nonce(), _nonceBefore + 1, "E6");
         assertFalse(auction.is_ongoing_liquidation_auction(), "E7");
         assertEq(auction.liquidation_auctions(), 0, "E8");
+        assertEq(auction.maximum_amount(_auctionId), _maximumAmount, "E9");
     }
 
     function test_kick_zeroAmount(
@@ -106,7 +110,7 @@ contract DutchDeskTests is Base {
         uint256 _nonceBefore = dutchDesk.nonce();
 
         vm.prank(address(troveManager));
-        dutchDesk.kick(0, _receiver, _isLiquidation);
+        dutchDesk.kick(0, 0, _receiver, _isLiquidation);
 
         // Nothing should happen - nonce unchanged, no active auction
         assertEq(dutchDesk.nonce(), _nonceBefore, "E0");
@@ -127,7 +131,7 @@ contract DutchDeskTests is Base {
         // First kick
         airdrop(address(collateralToken), address(troveManager), _amount1);
         vm.prank(address(troveManager));
-        dutchDesk.kick(_amount1, _receiver1, true);
+        dutchDesk.kick(_amount1, 0, _receiver1, true);
 
         assertTrue(auction.is_active(0), "E0");
         assertEq(auction.get_available_amount(0), _amount1, "E1");
@@ -136,7 +140,7 @@ contract DutchDeskTests is Base {
         // Second kick creates a new auction with nonce 1
         airdrop(address(collateralToken), address(troveManager), _amount2);
         vm.prank(address(troveManager));
-        dutchDesk.kick(_amount2, _receiver2, true);
+        dutchDesk.kick(_amount2, 0, _receiver2, true);
 
         assertTrue(auction.is_active(1), "E3");
         assertEq(auction.get_available_amount(1), _amount2, "E4");
@@ -157,7 +161,7 @@ contract DutchDeskTests is Base {
         // Kick an auction
         airdrop(address(collateralToken), address(troveManager), _amount);
         vm.prank(address(troveManager));
-        dutchDesk.kick(_amount, _receiver, true);
+        dutchDesk.kick(_amount, 0, _receiver, true);
 
         uint256 _auctionId = 0;
         assertTrue(auction.is_active(_auctionId), "E0");
@@ -193,7 +197,7 @@ contract DutchDeskTests is Base {
         // Kick an auction
         airdrop(address(collateralToken), address(troveManager), _amount);
         vm.prank(address(troveManager));
-        dutchDesk.kick(_amount, _receiver, true);
+        dutchDesk.kick(_amount, 0, _receiver, true);
 
         assertTrue(auction.is_active(0), "E0");
 

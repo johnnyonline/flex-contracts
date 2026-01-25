@@ -71,7 +71,7 @@ contract Deploy is Script {
         address _troveManagerAddress = computeCreateAddress(deployer, _nonce + 4);
         address _dutchDeskAddress = computeCreateAddress(deployer, _nonce + 2);
 
-        auction = IAuction(deployCode("auction", abi.encode(_dutchDeskAddress, address(borrowToken), address(collateralToken))));
+        auction = IAuction(deployCode("auction", abi.encode(_dutchDeskAddress, _lenderAddress, address(borrowToken), address(collateralToken))));
         // priceOracle = IPriceOracle(deployCode("tbtc_to_crvusd_oracle", abi.encode(address(borrowToken), address(collateralToken))));
         priceOracle = IPriceOracle(deployCode("yvweth2_to_usdc_oracle"));
         dutchDesk = IDutchDesk(
