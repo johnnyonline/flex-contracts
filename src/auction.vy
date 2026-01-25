@@ -543,7 +543,7 @@ def take(
         )
 
     # If liquidation auction, all proceeds goes to the Lender contract.
-    # Otherwise, make sure the receiver does not get more than expected and transfer the surplus goes to the surplus receiver
+    # Otherwise, make sure the receiver does not get more than the maximum and transfer the surplus to the surplus receiver
     if auction.is_liquidation:
         # Liquidation: all to the Lender contract
         assert extcall BUY_TOKEN.transferFrom(msg.sender, LENDER, needed_amount, default_return_value=True)
@@ -551,7 +551,7 @@ def take(
         # How much the receiver still needs
         receiver_remaining: uint256 = auction.maximum_amount - auction.amount_received
 
-        # If the bought amount is less than the receiver's expected amount, transfer him all of it.
+        # If the bought amount is less than the receiver's maximum amount, transfer him all of it.
         # Otherwise, cover the receiver first, then transfer the surplus to the surplus receiver
         if needed_amount <= receiver_remaining:
             # Entire amount to the receiver
@@ -563,7 +563,7 @@ def take(
                 auction.amount_received = auction.maximum_amount
                 assert extcall BUY_TOKEN.transferFrom(msg.sender, auction.receiver, receiver_remaining, default_return_value=True)
 
-            # Surplus to the surplus receiver
+            # Transfer the surplus to the Lender contract
             surplus: uint256 = needed_amount - receiver_remaining
             assert extcall BUY_TOKEN.transferFrom(msg.sender, LENDER, surplus, default_return_value=True)
 
