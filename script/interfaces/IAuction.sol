@@ -59,6 +59,12 @@ interface IAuction {
     function current_amount(
         uint256 auction_id
     ) external view returns (uint256);
+    function maximum_amount(
+        uint256 auction_id
+    ) external view returns (uint256);
+    function amount_received(
+        uint256 auction_id
+    ) external view returns (uint256);
     function starting_price(
         uint256 auction_id
     ) external view returns (uint256);
@@ -66,6 +72,9 @@ interface IAuction {
         uint256 auction_id
     ) external view returns (uint256);
     function receiver(
+        uint256 auction_id
+    ) external view returns (address);
+    function surplus_receiver(
         uint256 auction_id
     ) external view returns (address);
     function is_liquidation(
@@ -79,9 +88,11 @@ interface IAuction {
     function kick(
         uint256 auction_id,
         uint256 kick_amount,
+        uint256 maximum_amount,
         uint256 starting_price,
         uint256 minimum_price,
         address receiver,
+        address surplus_receiver,
         bool is_liquidation
     ) external;
 

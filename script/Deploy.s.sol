@@ -41,6 +41,7 @@ contract Deploy is Script {
     ILender public lender;
 
     uint256 public minimumCollateralRatio = 110; // 110%
+    uint256 public startingPriceBufferPercentage = 1e18 + 15e16; // 15%
 
     address public management = address(420_420);
     address public emergencyAdmin = address(69_420);
@@ -76,7 +77,16 @@ contract Deploy is Script {
         priceOracle = IPriceOracle(deployCode("yvweth2_to_usdc_oracle"));
         dutchDesk = IDutchDesk(
             deployCode(
-                "dutch_desk", abi.encode(_troveManagerAddress, address(priceOracle), address(auction), address(borrowToken), address(collateralToken))
+                "dutch_desk",
+                abi.encode(
+                    _troveManagerAddress,
+                    _lenderAddress,
+                    address(priceOracle),
+                    address(auction),
+                    address(borrowToken),
+                    address(collateralToken),
+                    startingPriceBufferPercentage
+                )
             )
         );
         require(address(dutchDesk) == _dutchDeskAddress, "!dutchDeskAddress");

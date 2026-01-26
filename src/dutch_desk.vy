@@ -21,6 +21,7 @@ from interfaces import IPriceOracle
 
 # Contracts
 TROVE_MANAGER: public(immutable(address))
+LENDER: public(immutable(address))
 PRICE_ORACLE: public(immutable(IPriceOracle))
 AUCTION: public(immutable(IAuction))
 
@@ -29,8 +30,8 @@ BORROW_TOKEN: public(immutable(IERC20))
 COLLATERAL_TOKEN: public(immutable(IERC20))
 
 # Parameters
+STARTING_PRICE_BUFFER_PERCENTAGE: public(immutable(uint256)) # e.g. `_WAD + 15 * 10 ** 16` for 15%
 MINIMUM_PRICE_BUFFER_PERCENTAGE: public(constant(uint256)) = _WAD - 5 * 10 ** 16  # 5%
-STARTING_PRICE_BUFFER_PERCENTAGE: public(constant(uint256)) = _WAD + 15 * 10 ** 16  # 15%
 EMERGENCY_STARTING_PRICE_BUFFER_PERCENTAGE: public(constant(uint256)) = _WAD + 100 * 10 ** 16  # 100%
 
 # Internal constants
@@ -56,25 +57,34 @@ nonce: public(uint256)
 @deploy
 def __init__(
     trove_manager: address,
+    lender: address,
     price_oracle: address,
     auction: address,
     borrow_token: address,
     collateral_token: address,
+    starting_price_buffer_percentage: uint256,
 ):
     """
     @notice Initialize the contract
+    @dev `starting_price_buffer_percentage` must be >= max oracle deviation from market price
+         to ensure the starting auction price is always above market price, preventing value
+         extraction from oracle lag
     @param trove_manager Address of the Trove Manager contract
+    @param lender Address of the Lender contract
     @param price_oracle Address of the Price Oracle contract
     @param auction Address of the Auction contract
     @param borrow_token Address of the borrow token
     @param collateral_token Address of the collateral token
+    @param starting_price_buffer_percentage Buffer percentage to apply to the collateral price for the starting price
     """
     # Set immutable variables
     TROVE_MANAGER = trove_manager
+    LENDER = lender
     PRICE_ORACLE = IPriceOracle(price_oracle)
     AUCTION = IAuction(auction)
     BORROW_TOKEN = IERC20(borrow_token)
     COLLATERAL_TOKEN = IERC20(collateral_token)
+    STARTING_PRICE_BUFFER_PERCENTAGE = starting_price_buffer_percentage
 
     # Borrow token cannot have more than 18 decimals
     borrow_token_decimals: uint256 = convert(staticcall IERC20Detailed(borrow_token).decimals(), uint256)
@@ -99,14 +109,16 @@ def __init__(
 @external
 def kick(
     kick_amount: uint256,
-    receiver: address,
-    is_liquidation: bool = False,
+    maximum_amount: uint256 = 0,
+    receiver: address = LENDER,
+    is_liquidation: bool = True,
 ):
     """
     @notice Kicks an auction of collateral tokens for borrow tokens
     @dev Only callable by the Trove Manager contract
     @dev Caller must approve this contract to transfer collateral tokens on its behalf before calling
     @param kick_amount Amount of collateral tokens to auction
+    @param maximum_amount The maximum amount borrow tokens to be received
     @param receiver Address to receive the auction proceeds in borrow tokens
     @param is_liquidation Whether this auction is for liquidated collateral
     """
@@ -135,12 +147,14 @@ def kick(
     assert extcall COLLATERAL_TOKEN.transferFrom(TROVE_MANAGER, self, kick_amount, default_return_value=True)
 
     # Kick the auction
-    extcall AUCTION.kick(  # Pulls collateral tokens
+    extcall AUCTION.kick(  # pulls collateral tokens
         auction_id,
         kick_amount,
+        maximum_amount,
         starting_price,
         minimum_price,
         receiver,
+        LENDER,  # surplus receiver
         is_liquidation,
     )
 

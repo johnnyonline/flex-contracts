@@ -21,9 +21,11 @@ def current_amount(auction_id: uint256) -> uint256:
 def kick(
     auction_id: uint256,
     kick_amount: uint256,
+    maximum_amount: uint256,
     starting_price: uint256,
     minimum_price: uint256,
     receiver: address,
+    surplus_receiver: address,
     is_liquidation: bool,
 ):
     ...
