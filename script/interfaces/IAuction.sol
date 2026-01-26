@@ -8,7 +8,6 @@ interface IAuction {
     // ============================================================================================
 
     function PAPI() external view returns (address);
-    function LENDER() external view returns (address);
     function BUY_TOKEN() external view returns (address);
     function BUY_TOKEN_SCALER() external view returns (uint256);
     function SELL_TOKEN() external view returns (address);
@@ -75,6 +74,9 @@ interface IAuction {
     function receiver(
         uint256 auction_id
     ) external view returns (address);
+    function surplus_receiver(
+        uint256 auction_id
+    ) external view returns (address);
     function is_liquidation(
         uint256 auction_id
     ) external view returns (bool);
@@ -90,6 +92,7 @@ interface IAuction {
         uint256 starting_price,
         uint256 minimum_price,
         address receiver,
+        address surplus_receiver,
         bool is_liquidation
     ) external;
 

@@ -25,6 +25,7 @@ def kick(
     starting_price: uint256,
     minimum_price: uint256,
     receiver: address,
+    surplus_receiver: address,
     is_liquidation: bool,
 ):
     ...

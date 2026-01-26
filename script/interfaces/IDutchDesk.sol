@@ -9,6 +9,7 @@ interface IDutchDesk {
 
     // Contracts
     function TROVE_MANAGER() external view returns (address);
+    function LENDER() external view returns (address);
     function PRICE_ORACLE() external view returns (address);
     function AUCTION() external view returns (address);
 

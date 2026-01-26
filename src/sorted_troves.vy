@@ -455,7 +455,7 @@ def _descend_and_ascend_list(annual_interest_rate: uint256, descent_start_id: ui
         if found:
             return ascent_prev, ascent_next
 
-    raise "rekt"  # This should not happen
+    raise "rekt"  # this should not happen
 
 
 @internal

@@ -44,15 +44,16 @@ event AuctionTake:
 
 
 struct AuctionInfo:
-    kick_timestamp: uint256  # The timestamp the auction was kicked
-    initial_amount: uint256  # The initial amount of sell token available
-    current_amount: uint256  # The current amount of sell token available
-    maximum_amount: uint256  # The maximum amount of buy token to be received. Any surplus goes to Lender contract
-    amount_received: uint256  # The amount of buy token already received toward the maximum amount
-    starting_price: uint256  # The amount to start the auction at, unscaled "lot size" in buy token
-    minimum_price: uint256  # The minimum price per token for the auction, scaled to WAD
-    receiver: address  # The address that will receive the auction proceeds
-    is_liquidation: bool  # Whether this auction is selling liquidated collateral
+    kick_timestamp: uint256  # the timestamp the auction was kicked
+    initial_amount: uint256  # the initial amount of sell token available
+    current_amount: uint256  # the current amount of sell token available
+    maximum_amount: uint256  # the maximum amount of buy token to be received. Any surplus goes to Lender contract
+    amount_received: uint256  # the amount of buy token already received toward the maximum amount
+    starting_price: uint256  # the amount to start the auction at, unscaled "lot size" in buy token
+    minimum_price: uint256  # the minimum price per token for the auction, scaled to WAD
+    receiver: address  # the address that will receive the auction proceeds
+    surplus_receiver: address  # the address that will receive any surplus proceeds above maximum_amount
+    is_liquidation: bool  # whether this auction is selling liquidated collateral
 
 
 # ============================================================================================
@@ -60,9 +61,8 @@ struct AuctionInfo:
 # ============================================================================================
 
 
-# Contracts
-PAPI: public(immutable(address))  # only address that can kick auctions (the Dutch Desk contract)
-LENDER: public(immutable(address))
+# Only address that can kick auctions (the Dutch Desk contract)
+PAPI: public(immutable(address))
 
 # Info of the token being bought
 BUY_TOKEN: public(immutable(IERC20))
@@ -75,7 +75,7 @@ SELL_TOKEN_SCALER: public(immutable(uint256))
 # Auction parameters
 STEP_DURATION: public(immutable(uint256))  # e.g., 60 for price change every minute
 STEP_DECAY_RATE: public(immutable(uint256))  # e.g., 50 for 0.5% decrease per step
-AUCTION_LENGTH: public(immutable(uint256))  # In seconds, e.g., 86400 for 1 day
+AUCTION_LENGTH: public(immutable(uint256))  # in seconds, e.g., 86400 for 1 day
 
 # Internal constants
 _MAX_CALLBACK_DATA_SIZE: constant(uint256) = 10**5
@@ -102,11 +102,10 @@ _auctions: HashMap[uint256, AuctionInfo]
 
 
 @deploy
-def __init__(papi: address, lender: address, buy_token: address, sell_token: address):
+def __init__(papi: address, buy_token: address, sell_token: address):
     """
     @notice Initialize the contract
     @param papi Address that is allowed to kick auctions
-    @param lender Address of the Lender contract
     @param buy_token Address of the token being bought
     @param sell_token Address of the token being sold
     """
@@ -123,7 +122,6 @@ def __init__(papi: address, lender: address, buy_token: address, sell_token: add
 
     # Set contract addresses
     PAPI = papi
-    LENDER = lender
 
     # Set buy token info
     BUY_TOKEN = IERC20(buy_token)
@@ -348,6 +346,17 @@ def receiver(auction_id: uint256) -> address:
 
 @external
 @view
+def surplus_receiver(auction_id: uint256) -> address:
+    """
+    @notice Get the surplus receiver address for the auction
+    @param auction_id The identifier for the auction
+    @return The surplus receiver address for the auction
+    """
+    return self._auctions[auction_id].surplus_receiver
+
+
+@external
+@view
 def is_liquidation(auction_id: uint256) -> bool:
     """
     @notice Check if the auction is selling liquidated collateral
@@ -370,6 +379,7 @@ def kick(
     starting_price: uint256,
     minimum_price: uint256,
     receiver: address,
+    surplus_receiver: address,
     is_liquidation: bool,
 ):
     """
@@ -382,6 +392,7 @@ def kick(
     @param starting_price The starting price for the auction, unscaled "lot size" in buy token
     @param minimum_price The minimum price for the auction, scaled to WAD
     @param receiver The address that will receive the auction proceeds
+    @param surplus_receiver The address that will receive any surplus proceeds above maximum_amount
     @param is_liquidation Whether this auction is selling liquidated collateral
     """
     # Make sure caller is Papi
@@ -398,6 +409,9 @@ def kick(
 
     # Make sure receiver is non-zero address
     assert receiver != empty(address), "!receiver"
+
+    # Make sure surplus receiver is non-zero address
+    assert surplus_receiver != empty(address), "!surplus_receiver"
 
     # Bring auction info into memory
     auction: AuctionInfo = self._auctions[auction_id]
@@ -419,6 +433,7 @@ def kick(
         starting_price=starting_price,
         minimum_price=minimum_price,
         receiver=receiver,
+        surplus_receiver=surplus_receiver,
         is_liquidation=is_liquidation,
     )
 
@@ -526,9 +541,6 @@ def take(
         if auction.is_liquidation:
             self.liquidation_auctions -= 1
 
-    # Update storage
-    self._auctions[auction_id] = auction
-
     # Send the token being sold to the take receiver
     assert extcall SELL_TOKEN.transfer(receiver, take_amount, default_return_value=True)
 
@@ -546,7 +558,7 @@ def take(
     # Otherwise, make sure the receiver does not get more than the maximum and transfer the surplus to the surplus receiver
     if auction.is_liquidation:
         # Liquidation: all to the Lender contract
-        assert extcall BUY_TOKEN.transferFrom(msg.sender, LENDER, needed_amount, default_return_value=True)
+        assert extcall BUY_TOKEN.transferFrom(msg.sender, auction.receiver, needed_amount, default_return_value=True)
     else:
         # How much the receiver still needs
         receiver_remaining: uint256 = auction.maximum_amount - auction.amount_received
@@ -565,10 +577,10 @@ def take(
 
             # Transfer the surplus to the Lender contract
             surplus: uint256 = needed_amount - receiver_remaining
-            assert extcall BUY_TOKEN.transferFrom(msg.sender, LENDER, surplus, default_return_value=True)
+            assert extcall BUY_TOKEN.transferFrom(msg.sender, auction.surplus_receiver, surplus, default_return_value=True)
 
-        # Update storage again to reflect amount received
-        self._auctions[auction_id].amount_received = auction.amount_received
+    # Update storage. No need to worry about re-entrancy since non-reentrant pragma is enabled
+    self._auctions[auction_id] = auction
 
     # Emit event
     log AuctionTake(

@@ -159,7 +159,7 @@ _PRICE_ORACLE_PRECISION: constant(uint256) = 10 ** 36
 _WAD: constant(uint256) = 10 ** 18
 _MAX_ITERATIONS: constant(uint256) = 700
 _ONE_YEAR: constant(uint256) = 365 * 60 * 60 * 24
-_LIQUIDATION_AUCTION: constant(bool) = True
+_REDEMPTION_AUCTION: constant(bool) = False
 
 
 # ============================================================================================
@@ -998,9 +998,8 @@ def liquidate_troves(trove_ids: uint256[_MAX_ITERATIONS]):
         total_weighted_debt_to_decrease, # weighted_debt_decrease
     )
 
-    # Kick the auction. Proceeds will be sent to the Lender contract.
-    # We can pass `0` as the `maximum_amount` as any surplus will be sent to the Lender contract anyway because it's a liquidation auction
-    extcall DUTCH_DESK.kick(total_collateral_to_decrease, 0, LENDER, _LIQUIDATION_AUCTION)  # Pulls collateral tokens
+    # Kick the auction. Proceeds will be sent to the Lender contract
+    extcall DUTCH_DESK.kick(total_collateral_to_decrease)  # pulls collateral tokens
 
 
 @internal
@@ -1237,7 +1236,7 @@ def _redeem(
 
     # Kick the auction.
     # Proceeds up to `total_debt_decrease` will be sent to the `receiver`, any surplus will be sent to the Lender contract
-    extcall DUTCH_DESK.kick(total_collateral_decrease, total_debt_decrease, receiver)  # Pulls collateral tokens
+    extcall DUTCH_DESK.kick(total_collateral_decrease, total_debt_decrease, receiver, _REDEMPTION_AUCTION)  # pulls collateral tokens
 
     # Emit event
     log Redeem(
