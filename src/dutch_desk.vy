@@ -200,14 +200,14 @@ def _get_prices(
     @return minimum_price The calculated minimum price
     """
     # Get the collateral price
-    collateral_price: uint256 = staticcall PRICE_ORACLE.get_price(False)  # Price in 1e18 format
+    collateral_price: uint256 = staticcall PRICE_ORACLE.get_price(False)  # price in WAD format
 
     # Calculate the starting price with buffer to the collateral price
     # Starting price is an unscaled "lot size"
     starting_price: uint256 = kick_amount * collateral_price * starting_price_buffer_pct // _WAD // _WAD // _COLLATERAL_TOKEN_PRECISION
 
     # Calculate the minimum price with buffer to the collateral price
-    # Minimum price is per token and is scaled to 1e18
+    # Minimum price is per token and is scaled to WAD
     minimum_price: uint256 = collateral_price * MINIMUM_PRICE_BUFFER_PERCENTAGE // _WAD
 
     return starting_price, minimum_price
