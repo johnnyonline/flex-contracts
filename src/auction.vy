@@ -120,7 +120,7 @@ def __init__(papi: address, buy_token: address, sell_token: address):
     sell_token_decimals: uint256 = convert(staticcall IERC20Detailed(sell_token).decimals(), uint256)
     assert sell_token_decimals <= _MAX_TOKEN_DECIMALS, "!sell_token_decimals"
 
-    # Set contract addresses
+    # Set papi addresses
     PAPI = papi
 
     # Set buy token info
