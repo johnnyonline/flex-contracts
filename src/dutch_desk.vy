@@ -204,7 +204,7 @@ def _get_prices(
 
     # Calculate the starting price with buffer to the collateral price
     # Starting price is an unscaled "lot size"
-    starting_price: uint256 = kick_amount * collateral_price // _WAD * starting_price_buffer_pct // _WAD // _COLLATERAL_TOKEN_PRECISION
+    starting_price: uint256 = kick_amount * collateral_price * starting_price_buffer_pct // _WAD // _WAD // _COLLATERAL_TOKEN_PRECISION
 
     # Calculate the minimum price with buffer to the collateral price
     # Minimum price is per token and is scaled to 1e18
