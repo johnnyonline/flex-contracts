@@ -58,16 +58,19 @@ _troves: HashMap[uint256, Trove]
 
 
 # ============================================================================================
-# Constructor
+# Initialize
 # ============================================================================================
 
 
-@deploy
-def __init__(trove_manager: address):
+@external
+def initialize(trove_manager: address):
     """
     @notice Initialize the contract
     @param trove_manager Address of the Trove Manager
     """
+    # Make sure the contract is not already initialized
+    assert self.trove_manager.address == empty(address), "initialized"
+
     # Set Trove Manager address
     self.trove_manager = ITroveManager(trove_manager)
 

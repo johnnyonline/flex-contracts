@@ -176,12 +176,12 @@ troves: public(HashMap[uint256, Trove])  # Trove ID --> Trove info
 
 
 # ============================================================================================
-# Constructor
+# Initialize
 # ============================================================================================
 
 
-@deploy
-def __init__(
+@external
+def initialize(
     lender: address,
     dutch_desk: address,
     price_oracle: address,
@@ -200,6 +200,9 @@ def __init__(
     @param collateral_token Address of the collateral token
     @param minimum_collateral_ratio Minimum collateral ratio for Troves
     """
+    # Make sure the contract is not already initialized
+    assert self.lender == empty(address), "initialized"
+
     # Set contract addresses
     self.lender = lender
     self.dutch_desk = IDutchDesk(dutch_desk)

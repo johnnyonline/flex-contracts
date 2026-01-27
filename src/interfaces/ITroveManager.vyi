@@ -38,3 +38,21 @@ struct Trove:
 @view
 def troves(trove_id: uint256) -> Trove:
     ...
+
+
+# ============================================================================================
+# Initialize
+# ============================================================================================
+
+
+@external
+def initialize(
+    lender: address,
+    dutch_desk: address,
+    price_oracle: address,
+    sorted_troves: address,
+    borrow_token: address,
+    collateral_token: address,
+    minimum_collateral_ratio: uint256,
+):
+    ...

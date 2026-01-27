@@ -94,20 +94,20 @@ _auctions: HashMap[uint256, AuctionInfo]  # auction ID --> AuctionInfo
 
 
 # ============================================================================================
-# Constructor
+# Initialize
 # ============================================================================================
 
 
-@deploy
-def __init__(papi: address, buy_token: address, sell_token: address):
+@external
+def initialize(papi: address, buy_token: address, sell_token: address):
     """
     @notice Initialize the contract
     @param papi Address that is allowed to kick auctions
     @param buy_token Address of the token being bought
     @param sell_token Address of the token being sold
     """
-    # Make sure buy token is non-zero address
-    assert buy_token != empty(address), "!buy_token"
+    # Make sure the contract is not already initialized
+    assert self.papi == empty(address), "initialized"
 
     # Buy token cannot have more than 18 decimals
     buy_token_decimals: uint256 = convert(staticcall IERC20Detailed(buy_token).decimals(), uint256)

@@ -48,12 +48,12 @@ nonce: public(uint256)
 
 
 # ============================================================================================
-# Constructor
+# Initialize
 # ============================================================================================
 
 
-@deploy
-def __init__(
+@external
+def initialize(
     trove_manager: address,
     lender: address,
     price_oracle: address,
@@ -79,6 +79,9 @@ def __init__(
     @param starting_price_buffer_percentage Buffer percentage to apply to the collateral price for the starting price
     @param emergency_starting_price_buffer_percentage Buffer percentage to apply to the collateral price for the emergency starting price
     """
+    # Make sure the contract is not already initialized
+    assert self.trove_manager == empty(address), "initialized"
+
     # Set contract addresses
     self.trove_manager = trove_manager
     self.lender = lender
