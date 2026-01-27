@@ -402,12 +402,12 @@ contract BorrowTests is Base {
         // Check starting price is set correctly (with buffer)
         assertEq(
             auction.starting_price(0),
-            _auctionAvailable * priceOracle.get_price(false) / WAD * dutchDesk.STARTING_PRICE_BUFFER_PERCENTAGE() / WAD / COLLATERAL_TOKEN_PRECISION,
+            _auctionAvailable * priceOracle.get_price(false) / WAD * dutchDesk.starting_price_buffer_percentage() / WAD / COLLATERAL_TOKEN_PRECISION,
             "E53"
         );
 
         // Check minimum price is set correctly (with buffer)
-        assertEq(auction.minimum_price(0), priceOracle.get_price(false) * dutchDesk.MINIMUM_PRICE_BUFFER_PERCENTAGE() / WAD, "E54");
+        assertEq(auction.minimum_price(0), priceOracle.get_price(false) * dutchDesk.minimum_price_buffer_percentage() / WAD, "E54");
 
         // Take the auction
         takeAuction(0);

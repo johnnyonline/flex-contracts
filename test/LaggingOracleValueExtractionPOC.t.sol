@@ -33,7 +33,7 @@ contract LaggingOracleValueExtractionPOC is Base {
 
         // Max market premium must be less than starting price buffer, otherwise attacker can still profit
         // STARTING_PRICE_BUFFER_PERCENTAGE is 1e18 + buffer%, e.g. 1.15e18 for 15%
-        uint256 _startingBufferBps = (dutchDesk.STARTING_PRICE_BUFFER_PERCENTAGE() - WAD) / 1e14;
+        uint256 _startingBufferBps = (dutchDesk.starting_price_buffer_percentage() - WAD) / 1e14;
         _marketPremiumBps = bound(_marketPremiumBps, 10, _startingBufferBps - 1);
 
         // Lend liquidity

@@ -19,23 +19,6 @@ from interfaces import IPriceOracle
 # ============================================================================================
 
 
-# Contracts
-TROVE_MANAGER: public(immutable(address))
-LENDER: public(immutable(address))
-PRICE_ORACLE: public(immutable(IPriceOracle))
-AUCTION: public(immutable(IAuction))
-
-# Tokens
-BORROW_TOKEN: public(immutable(IERC20))
-COLLATERAL_TOKEN: public(immutable(IERC20))
-
-# Parameters
-STARTING_PRICE_BUFFER_PERCENTAGE: public(immutable(uint256)) # e.g. `_WAD + 15 * 10 ** 16` for 15%
-MINIMUM_PRICE_BUFFER_PERCENTAGE: public(constant(uint256)) = _WAD - 5 * 10 ** 16  # 5%
-EMERGENCY_STARTING_PRICE_BUFFER_PERCENTAGE: public(constant(uint256)) = _WAD + 100 * 10 ** 16  # 100%
-
-# Internal constants
-_COLLATERAL_TOKEN_PRECISION: immutable(uint256)
 _MAX_TOKEN_DECIMALS: constant(uint256) = 18
 _WAD: constant(uint256) = 10 ** 18
 
@@ -45,7 +28,22 @@ _WAD: constant(uint256) = 10 ** 18
 # ============================================================================================
 
 
-# Nonce for auction identifiers
+# Contracts
+trove_manager: public(address)
+lender: public(address)
+price_oracle: public(IPriceOracle)
+auction: public(IAuction)
+
+# Collateral token
+collateral_token: public(IERC20)
+
+# Parameters
+collateral_token_precision: public(uint256)
+minimum_price_buffer_percentage: public(uint256)  # e.g. `_WAD - 5 * 10 ** 16` for 5%
+starting_price_buffer_percentage: public(uint256)  # e.g. `_WAD + 15 * 10 ** 16` for 15%
+emergency_starting_price_buffer_percentage: public(uint256)  # e.g. `_WAD + 100 * 10 ** 16` for 100%
+
+# Accounting
 nonce: public(uint256)
 
 
@@ -62,7 +60,9 @@ def __init__(
     auction: address,
     borrow_token: address,
     collateral_token: address,
+    minimum_price_buffer_percentage: uint256,
     starting_price_buffer_percentage: uint256,
+    emergency_starting_price_buffer_percentage: uint256,
 ):
     """
     @notice Initialize the contract
@@ -75,16 +75,23 @@ def __init__(
     @param auction Address of the Auction contract
     @param borrow_token Address of the borrow token
     @param collateral_token Address of the collateral token
+    @param minimum_price_buffer_percentage Buffer percentage to apply to the collateral price for the minimum price
     @param starting_price_buffer_percentage Buffer percentage to apply to the collateral price for the starting price
+    @param emergency_starting_price_buffer_percentage Buffer percentage to apply to the collateral price for the emergency starting price
     """
-    # Set immutable variables
-    TROVE_MANAGER = trove_manager
-    LENDER = lender
-    PRICE_ORACLE = IPriceOracle(price_oracle)
-    AUCTION = IAuction(auction)
-    BORROW_TOKEN = IERC20(borrow_token)
-    COLLATERAL_TOKEN = IERC20(collateral_token)
-    STARTING_PRICE_BUFFER_PERCENTAGE = starting_price_buffer_percentage
+    # Set contract addresses
+    self.trove_manager = trove_manager
+    self.lender = lender
+    self.price_oracle = IPriceOracle(price_oracle)
+    self.auction = IAuction(auction)
+
+    # Set collateral token addresses
+    self.collateral_token = IERC20(collateral_token)
+
+    # Set parameters
+    self.minimum_price_buffer_percentage = minimum_price_buffer_percentage
+    self.starting_price_buffer_percentage = starting_price_buffer_percentage
+    self.emergency_starting_price_buffer_percentage = emergency_starting_price_buffer_percentage
 
     # Borrow token cannot have more than 18 decimals
     borrow_token_decimals: uint256 = convert(staticcall IERC20Detailed(borrow_token).decimals(), uint256)
@@ -95,10 +102,10 @@ def __init__(
     assert collateral_token_decimals <= _MAX_TOKEN_DECIMALS, "!collateral_token_decimals"
 
     # Set collateral token precision
-    _COLLATERAL_TOKEN_PRECISION = 10 ** collateral_token_decimals
+    self.collateral_token_precision = 10 ** collateral_token_decimals
 
     # Max approve the collateral token to the Auction
-    assert extcall COLLATERAL_TOKEN.approve(auction, max_value(uint256), default_return_value=True)
+    assert extcall IERC20(collateral_token).approve(auction, max_value(uint256), default_return_value=True)
 
 
 # ============================================================================================
@@ -110,12 +117,13 @@ def __init__(
 def kick(
     kick_amount: uint256,
     maximum_amount: uint256 = 0,
-    receiver: address = LENDER,
+    receiver: address = empty(address),
     is_liquidation: bool = True,
 ):
     """
     @notice Kicks an auction of collateral tokens for borrow tokens
     @dev Only callable by the Trove Manager contract
+    @dev Will use the Lender contract as receiver of auction proceeds if `receiver` is zero address
     @dev Caller must approve this contract to transfer collateral tokens on its behalf before calling
     @param kick_amount Amount of collateral tokens to auction
     @param maximum_amount The maximum amount borrow tokens to be received
@@ -123,7 +131,7 @@ def kick(
     @param is_liquidation Whether this auction is for liquidated collateral
     """
     # Make sure caller is the Trove Manager contract
-    assert msg.sender == TROVE_MANAGER, "!trove_manager"
+    assert msg.sender == self.trove_manager, "!trove_manager"
 
     # Do nothing on zero amount
     if kick_amount == 0:
@@ -134,7 +142,7 @@ def kick(
     minimum_price: uint256 = 0
     starting_price, minimum_price = self._get_prices(
         kick_amount,
-        STARTING_PRICE_BUFFER_PERCENTAGE,
+        self.starting_price_buffer_percentage,
     )
 
     # Use the nonce as auction identifier
@@ -144,17 +152,17 @@ def kick(
     self.nonce = auction_id + 1
 
     # Pull the collateral tokens from the Trove Manager
-    assert extcall COLLATERAL_TOKEN.transferFrom(TROVE_MANAGER, self, kick_amount, default_return_value=True)
+    assert extcall self.collateral_token.transferFrom(self.trove_manager, self, kick_amount, default_return_value=True)
 
     # Kick the auction
-    extcall AUCTION.kick(  # pulls collateral tokens
+    extcall self.auction.kick(  # pulls collateral tokens
         auction_id,
         kick_amount,
         maximum_amount,
         starting_price,
         minimum_price,
-        receiver,
-        LENDER,  # surplus receiver
+        receiver if receiver != empty(address) else self.lender,
+        self.lender,  # surplus receiver
         is_liquidation,
     )
 
@@ -169,16 +177,19 @@ def re_kick(auction_id: uint256):
     @dev Does not set the receiver nor transfer collateral as those are already ready in the auction
     @param auction_id Identifier of the auction to re-kick
     """
+    # Cache the Auction contract
+    auction: IAuction = self.auction
+
     # Get new starting and minimum prices
     starting_price: uint256 = 0
     minimum_price: uint256 = 0
     starting_price, minimum_price = self._get_prices(
-        staticcall AUCTION.current_amount(auction_id),
-        EMERGENCY_STARTING_PRICE_BUFFER_PERCENTAGE,
+        staticcall auction.current_amount(auction_id),
+        self.emergency_starting_price_buffer_percentage,
     )
 
     # Re-kick with new prices
-    extcall AUCTION.re_kick(auction_id, starting_price, minimum_price)
+    extcall auction.re_kick(auction_id, starting_price, minimum_price)
 
 
 # ============================================================================================
@@ -200,14 +211,14 @@ def _get_prices(
     @return minimum_price The calculated minimum price
     """
     # Get the collateral price
-    collateral_price: uint256 = staticcall PRICE_ORACLE.get_price(False)  # price in WAD format
+    collateral_price: uint256 = staticcall self.price_oracle.get_price(False)  # price in WAD format
 
     # Calculate the starting price with buffer to the collateral price
     # Starting price is an unscaled "lot size"
-    starting_price: uint256 = kick_amount * collateral_price * starting_price_buffer_pct // _WAD // _WAD // _COLLATERAL_TOKEN_PRECISION
+    starting_price: uint256 = kick_amount * collateral_price * starting_price_buffer_pct // _WAD // _WAD // self.collateral_token_precision
 
     # Calculate the minimum price with buffer to the collateral price
     # Minimum price is per token and is scaled to WAD
-    minimum_price: uint256 = collateral_price * MINIMUM_PRICE_BUFFER_PERCENTAGE // _WAD
+    minimum_price: uint256 = collateral_price * self.minimum_price_buffer_percentage // _WAD
 
     return starting_price, minimum_price
