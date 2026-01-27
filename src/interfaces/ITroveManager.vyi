@@ -25,6 +25,7 @@ struct Trove:
     last_debt_update_time: uint64
     last_interest_rate_adj_time: uint64
     owner: address
+    pending_owner: address
     status: Status
 
 

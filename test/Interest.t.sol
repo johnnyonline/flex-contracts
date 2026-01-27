@@ -15,10 +15,10 @@ contract InterestTests is Base {
         uint256 _rate,
         uint256 _timeElapsed
     ) public {
-        uint256 _minRate = troveManager.MIN_ANNUAL_INTEREST_RATE();
-        uint256 _maxRate = troveManager.MAX_ANNUAL_INTEREST_RATE();
+        uint256 _minRate = troveManager.min_annual_interest_rate();
+        uint256 _maxRate = troveManager.max_annual_interest_rate();
 
-        _amount = bound(_amount, troveManager.MIN_DEBT(), maxFuzzAmount);
+        _amount = bound(_amount, troveManager.min_debt(), maxFuzzAmount);
         _rate = bound(_rate, _minRate, _maxRate);
         _timeElapsed = bound(_timeElapsed, 1 days, 730 days);
 
@@ -87,8 +87,8 @@ contract InterestTests is Base {
 
         // Open 3 troves with different amounts and rates
         for (uint256 i = 0; i < 3; i++) {
-            _amounts[i] = bound(_amounts[i], troveManager.MIN_DEBT(), maxFuzzAmount);
-            _boundedRates[i] = bound(_rates[i], troveManager.MIN_ANNUAL_INTEREST_RATE(), troveManager.MAX_ANNUAL_INTEREST_RATE());
+            _amounts[i] = bound(_amounts[i], troveManager.min_debt(), maxFuzzAmount);
+            _boundedRates[i] = bound(_rates[i], troveManager.min_annual_interest_rate(), troveManager.max_annual_interest_rate());
 
             uint256 _collateralNeeded =
                 (_amounts[i] * DEFAULT_TARGET_COLLATERAL_RATIO / BORROW_TOKEN_PRECISION) * ORACLE_PRICE_SCALE / priceOracle.get_price();
@@ -128,13 +128,13 @@ contract InterestTests is Base {
         uint256 _timeElapsed1,
         uint256 _timeElapsed2
     ) public {
-        uint256 _minRate = troveManager.MIN_ANNUAL_INTEREST_RATE();
-        uint256 _maxRate = troveManager.MAX_ANNUAL_INTEREST_RATE();
+        uint256 _minRate = troveManager.min_annual_interest_rate();
+        uint256 _maxRate = troveManager.max_annual_interest_rate();
 
-        _amount = bound(_amount, troveManager.MIN_DEBT(), maxFuzzAmount);
+        _amount = bound(_amount, troveManager.min_debt(), maxFuzzAmount);
         _initialRate = bound(_initialRate, _minRate, _maxRate);
         _newRate = bound(_newRate, _minRate, _maxRate);
-        _timeElapsed1 = bound(_timeElapsed1, troveManager.INTEREST_RATE_ADJ_COOLDOWN(), 365 days);
+        _timeElapsed1 = bound(_timeElapsed1, troveManager.interest_rate_adj_cooldown(), 365 days);
         _timeElapsed2 = bound(_timeElapsed2, 1 days, 365 days);
 
         // Make sure new rate is different from initial rate

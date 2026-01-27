@@ -29,7 +29,7 @@ contract LaggingOracleValueExtractionPOC is Base {
         uint256 _amount,
         uint256 _marketPremiumBps
     ) public {
-        _amount = bound(_amount, troveManager.MIN_DEBT(), maxFuzzAmount);
+        _amount = bound(_amount, troveManager.min_debt(), maxFuzzAmount);
 
         // Max market premium must be less than starting price buffer, otherwise attacker can still profit
         // STARTING_PRICE_BUFFER_PERCENTAGE is 1e18 + buffer%, e.g. 1.15e18 for 15%
