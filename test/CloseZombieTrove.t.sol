@@ -24,7 +24,7 @@ contract CloseZombieTroveTests is Base {
     function test_closeZombieTrove(
         uint256 _amount
     ) public {
-        _amount = bound(_amount, troveManager.MIN_DEBT(), maxFuzzAmount);
+        _amount = bound(_amount, troveManager.min_debt(), maxFuzzAmount);
 
         // Lend some from lender
         mintAndDepositIntoLender(userLender, _amount);
@@ -163,7 +163,7 @@ contract CloseZombieTroveTests is Base {
     function test_closeZombieTrove_zeroDebt(
         uint256 _amount
     ) public {
-        _amount = bound(_amount, troveManager.MIN_DEBT(), maxFuzzAmount);
+        _amount = bound(_amount, troveManager.min_debt(), maxFuzzAmount);
 
         // Lend some from lender
         mintAndDepositIntoLender(userLender, _amount);
@@ -335,7 +335,7 @@ contract CloseZombieTroveTests is Base {
         address _wrongUser
     ) public {
         vm.assume(_wrongUser != userBorrower);
-        _amount = bound(_amount, troveManager.MIN_DEBT(), maxFuzzAmount);
+        _amount = bound(_amount, troveManager.min_debt(), maxFuzzAmount);
 
         // Lend some from lender
         mintAndDepositIntoLender(userLender, _amount);
@@ -367,7 +367,7 @@ contract CloseZombieTroveTests is Base {
     function test_closeZombieTrove_notZombie(
         uint256 _amount
     ) public {
-        _amount = bound(_amount, troveManager.MIN_DEBT(), maxFuzzAmount);
+        _amount = bound(_amount, troveManager.min_debt(), maxFuzzAmount);
 
         // Lend some from lender
         mintAndDepositIntoLender(userLender, _amount);

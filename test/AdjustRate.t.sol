@@ -15,7 +15,7 @@ contract AdjustRateTests is Base {
     function test_adjustRate(
         uint256 _amount
     ) public {
-        _amount = bound(_amount, troveManager.MIN_DEBT(), maxFuzzAmount);
+        _amount = bound(_amount, troveManager.min_debt(), maxFuzzAmount);
 
         // Lend some from lender
         mintAndDepositIntoLender(userLender, _amount);
@@ -72,7 +72,7 @@ contract AdjustRateTests is Base {
         assertEq(collateralToken.balanceOf(address(dutchDesk)), 0, "E24");
 
         // Skip time to be able to adjust the rate again without upfront fee
-        skip(troveManager.INTEREST_RATE_ADJ_COOLDOWN());
+        skip(troveManager.interest_rate_adj_cooldown());
 
         // Finally adjust the rate
         uint256 _newAnnualInterestRate = DEFAULT_ANNUAL_INTEREST_RATE * 2; // 2%
@@ -132,7 +132,7 @@ contract AdjustRateTests is Base {
     function test_adjustRate_prematurely(
         uint256 _amount
     ) public {
-        _amount = bound(_amount, troveManager.MIN_DEBT(), maxFuzzAmount);
+        _amount = bound(_amount, troveManager.min_debt(), maxFuzzAmount);
 
         // Lend some from lender
         mintAndDepositIntoLender(userLender, _amount);
@@ -189,7 +189,7 @@ contract AdjustRateTests is Base {
         assertEq(collateralToken.balanceOf(address(dutchDesk)), 0, "E24");
 
         // Skip time but still be within the cooldown period
-        skip(troveManager.INTEREST_RATE_ADJ_COOLDOWN() / 2);
+        skip(troveManager.interest_rate_adj_cooldown() / 2);
 
         // Double the interest rate
         uint256 _newAnnualInterestRate = DEFAULT_ANNUAL_INTEREST_RATE * 2; // 2%
@@ -255,7 +255,7 @@ contract AdjustRateTests is Base {
     function test_adjustRate_changePlaceInList(
         uint256 _amount
     ) public {
-        _amount = bound(_amount, troveManager.MIN_DEBT() * 2, maxFuzzAmount);
+        _amount = bound(_amount, troveManager.min_debt() * 2, maxFuzzAmount);
 
         // Lend some from lender
         mintAndDepositIntoLender(userLender, _amount);
@@ -341,7 +341,7 @@ contract AdjustRateTests is Base {
         assertEq(collateralToken.balanceOf(address(dutchDesk)), 0, "E35");
 
         // Skip time to be able to adjust the rate again without upfront fee
-        skip(troveManager.INTEREST_RATE_ADJ_COOLDOWN());
+        skip(troveManager.interest_rate_adj_cooldown());
 
         // Finally adjust the rate
         uint256 _newAnnualInterestRate = DEFAULT_ANNUAL_INTEREST_RATE * 2; // 2%
@@ -355,8 +355,8 @@ contract AdjustRateTests is Base {
         assertEq(_trove.debt, _expectedDebt, "E36"); // did not touch this trove
         assertEq(_trove.collateral, _collateralNeeded, "E37");
         assertEq(_trove.annual_interest_rate, DEFAULT_ANNUAL_INTEREST_RATE, "E38");
-        assertEq(_trove.last_debt_update_time, block.timestamp - troveManager.INTEREST_RATE_ADJ_COOLDOWN(), "E39");
-        assertEq(_trove.last_interest_rate_adj_time, block.timestamp - troveManager.INTEREST_RATE_ADJ_COOLDOWN(), "E40");
+        assertEq(_trove.last_debt_update_time, block.timestamp - troveManager.interest_rate_adj_cooldown(), "E39");
+        assertEq(_trove.last_interest_rate_adj_time, block.timestamp - troveManager.interest_rate_adj_cooldown(), "E40");
         assertEq(_trove.owner, userBorrower, "E41");
         assertEq(_trove.pending_owner, address(0), "E42");
         assertEq(uint256(_trove.status), uint256(ITroveManager.Status.active), "E43");
@@ -404,7 +404,7 @@ contract AdjustRateTests is Base {
 
         // Add interest to `_expectedDebt`
         uint256 _expectedDebtWithInterest = _expectedDebt
-            + ((_expectedDebt * DEFAULT_ANNUAL_INTEREST_RATE * (block.timestamp - (block.timestamp - troveManager.INTEREST_RATE_ADJ_COOLDOWN())))
+            + ((_expectedDebt * DEFAULT_ANNUAL_INTEREST_RATE * (block.timestamp - (block.timestamp - troveManager.interest_rate_adj_cooldown())))
                 / (365 days * BORROW_TOKEN_PRECISION));
 
         // Check global info
@@ -423,7 +423,7 @@ contract AdjustRateTests is Base {
     function test_adjustRate_rateTooLow(
         uint256 _amount
     ) public {
-        _amount = bound(_amount, troveManager.MIN_DEBT(), maxFuzzAmount);
+        _amount = bound(_amount, troveManager.min_debt(), maxFuzzAmount);
 
         // Lend some from lender
         mintAndDepositIntoLender(userLender, _amount);
@@ -436,17 +436,17 @@ contract AdjustRateTests is Base {
         uint256 _troveId = mintAndOpenTrove(userBorrower, _collateralNeeded, _amount, DEFAULT_ANNUAL_INTEREST_RATE);
 
         // Finally adjust the rate
-        uint256 _newAnnualInterestRate = troveManager.MIN_ANNUAL_INTEREST_RATE() - 1; // below minimum
+        uint256 _newAnnualInterestRate = troveManager.min_annual_interest_rate() - 1; // below minimum
 
         vm.prank(userBorrower);
-        vm.expectRevert("!MIN_ANNUAL_INTEREST_RATE");
+        vm.expectRevert("!min_annual_interest_rate");
         troveManager.adjust_interest_rate(_troveId, _newAnnualInterestRate, 0, 0, 0);
     }
 
     function test_adjustRate_rateTooHigh(
         uint256 _amount
     ) public {
-        _amount = bound(_amount, troveManager.MIN_DEBT(), maxFuzzAmount);
+        _amount = bound(_amount, troveManager.min_debt(), maxFuzzAmount);
 
         // Lend some from lender
         mintAndDepositIntoLender(userLender, _amount);
@@ -459,17 +459,17 @@ contract AdjustRateTests is Base {
         uint256 _troveId = mintAndOpenTrove(userBorrower, _collateralNeeded, _amount, DEFAULT_ANNUAL_INTEREST_RATE);
 
         // Finally adjust the rate
-        uint256 _newAnnualInterestRate = troveManager.MAX_ANNUAL_INTEREST_RATE() + 1; // above maximum
+        uint256 _newAnnualInterestRate = troveManager.max_annual_interest_rate() + 1; // above maximum
 
         vm.prank(userBorrower);
-        vm.expectRevert("!MAX_ANNUAL_INTEREST_RATE");
+        vm.expectRevert("!max_annual_interest_rate");
         troveManager.adjust_interest_rate(_troveId, _newAnnualInterestRate, 0, 0, 0);
     }
 
     function test_adjustRate_notOwner(
         uint256 _amount
     ) public {
-        _amount = bound(_amount, troveManager.MIN_DEBT(), maxFuzzAmount);
+        _amount = bound(_amount, troveManager.min_debt(), maxFuzzAmount);
 
         // Lend some from lender
         mintAndDepositIntoLender(userLender, _amount);
@@ -492,7 +492,7 @@ contract AdjustRateTests is Base {
     function test_adjustRate_notActive(
         uint256 _amount
     ) public {
-        _amount = bound(_amount, troveManager.MIN_DEBT(), maxFuzzAmount);
+        _amount = bound(_amount, troveManager.min_debt(), maxFuzzAmount);
 
         // Lend some from lender
         mintAndDepositIntoLender(userLender, _amount);
@@ -524,7 +524,7 @@ contract AdjustRateTests is Base {
     function test_adjustRate_sameRate(
         uint256 _amount
     ) public {
-        _amount = bound(_amount, troveManager.MIN_DEBT(), maxFuzzAmount);
+        _amount = bound(_amount, troveManager.min_debt(), maxFuzzAmount);
 
         // Lend some from lender
         mintAndDepositIntoLender(userLender, _amount);
@@ -547,7 +547,7 @@ contract AdjustRateTests is Base {
     function test_adjustRate_belowMCR(
         uint256 _amount
     ) public {
-        _amount = bound(_amount, troveManager.MIN_DEBT(), maxFuzzAmount);
+        _amount = bound(_amount, troveManager.min_debt(), maxFuzzAmount);
 
         // Lend some from lender
         mintAndDepositIntoLender(userLender, _amount);
@@ -558,17 +558,17 @@ contract AdjustRateTests is Base {
 
         // Calculate the maximum borrowable amount that would leave the trove at MCR
         uint256 _maxBorrowableAtMCR =
-            ((_collateralNeeded * priceOracle.get_price() / ORACLE_PRICE_SCALE) * BORROW_TOKEN_PRECISION / troveManager.MINIMUM_COLLATERAL_RATIO())
+            ((_collateralNeeded * priceOracle.get_price() / ORACLE_PRICE_SCALE) * BORROW_TOKEN_PRECISION / troveManager.minimum_collateral_ratio())
                 * 995 / 1000;
 
         // Open a trove
         uint256 _troveId = mintAndOpenTrove(userBorrower, _collateralNeeded, _maxBorrowableAtMCR, DEFAULT_ANNUAL_INTEREST_RATE);
 
         // Use max annual interest rate to increase the debt as much as possible
-        uint256 _newAnnualInterestRate = troveManager.MAX_ANNUAL_INTEREST_RATE(); // max rate
+        uint256 _newAnnualInterestRate = troveManager.max_annual_interest_rate(); // max rate
 
         vm.prank(userBorrower);
-        vm.expectRevert("!MINIMUM_COLLATERAL_RATIO");
+        vm.expectRevert("!minimum_collateral_ratio");
         troveManager.adjust_interest_rate(_troveId, _newAnnualInterestRate, 0, 0, type(uint256).max);
     }
 

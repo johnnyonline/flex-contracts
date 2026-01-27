@@ -36,31 +36,30 @@ interface ITroveManager {
     }
 
     // ============================================================================================
-    // Constants
-    // ============================================================================================
-
-    // Contracts
-    function LENDER() external view returns (address);
-    function DUTCH_DESK() external view returns (address);
-    function PRICE_ORACLE() external view returns (address);
-    function SORTED_TROVES() external view returns (address);
-
-    // Tokens
-    function BORROW_TOKEN() external view returns (address);
-    function COLLATERAL_TOKEN() external view returns (address);
-
-    // Parameters
-    function MIN_DEBT() external view returns (uint256);
-    function MINIMUM_COLLATERAL_RATIO() external view returns (uint256);
-    function MIN_ANNUAL_INTEREST_RATE() external view returns (uint256);
-    function MAX_ANNUAL_INTEREST_RATE() external view returns (uint256);
-    function UPFRONT_INTEREST_PERIOD() external view returns (uint256);
-    function INTEREST_RATE_ADJ_COOLDOWN() external view returns (uint256);
-
-    // ============================================================================================
     // Storage
     // ============================================================================================
 
+    // Contracts
+    function lender() external view returns (address);
+    function dutch_desk() external view returns (address);
+    function price_oracle() external view returns (address);
+    function sorted_troves() external view returns (address);
+
+    // Tokens
+    function borrow_token() external view returns (address);
+    function collateral_token() external view returns (address);
+
+    // Parameters
+    function one_pct() external view returns (uint256);
+    function borrow_token_precision() external view returns (uint256);
+    function min_debt() external view returns (uint256);
+    function minimum_collateral_ratio() external view returns (uint256);
+    function min_annual_interest_rate() external view returns (uint256);
+    function max_annual_interest_rate() external view returns (uint256);
+    function upfront_interest_period() external view returns (uint256);
+    function interest_rate_adj_cooldown() external view returns (uint256);
+
+    // Accounting
     function zombie_trove_id() external view returns (uint256);
     function total_debt() external view returns (uint256);
     function total_weighted_debt() external view returns (uint256);

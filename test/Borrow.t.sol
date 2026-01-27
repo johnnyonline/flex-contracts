@@ -19,8 +19,8 @@ contract BorrowTests is Base {
         uint256 _lendAmount,
         uint256 _borrowAmount
     ) public {
-        _lendAmount = bound(_lendAmount, troveManager.MIN_DEBT() * 2, maxFuzzAmount);
-        _borrowAmount = bound(_borrowAmount, troveManager.MIN_DEBT() * 2, _lendAmount);
+        _lendAmount = bound(_lendAmount, troveManager.min_debt() * 2, maxFuzzAmount);
+        _borrowAmount = bound(_borrowAmount, troveManager.min_debt() * 2, _lendAmount);
 
         // Lend some from lender
         mintAndDepositIntoLender(userLender, _lendAmount);
@@ -144,21 +144,21 @@ contract BorrowTests is Base {
         uint256 _lendAmount,
         uint256 _borrowAmount
     ) public {
-        _lendAmount = bound(_lendAmount, troveManager.MIN_DEBT(), maxFuzzAmount);
+        _lendAmount = bound(_lendAmount, troveManager.min_debt(), maxFuzzAmount);
         _borrowAmount = bound(_borrowAmount, _lendAmount, maxFuzzAmount);
 
         // Lend some from lender
         mintAndDepositIntoLender(userLender, _lendAmount);
 
         // Calculate how much collateral is needed for the borrow amount
-        uint256 _collateralNeeded = ((_borrowAmount + troveManager.MIN_DEBT()) * DEFAULT_TARGET_COLLATERAL_RATIO / BORROW_TOKEN_PRECISION)
+        uint256 _collateralNeeded = ((_borrowAmount + troveManager.min_debt()) * DEFAULT_TARGET_COLLATERAL_RATIO / BORROW_TOKEN_PRECISION)
             * ORACLE_PRICE_SCALE / priceOracle.get_price();
 
         // Calculate expected debt (borrow amount + upfront fee)
-        uint256 _expectedDebt = troveManager.MIN_DEBT() + troveManager.get_upfront_fee(troveManager.MIN_DEBT(), DEFAULT_ANNUAL_INTEREST_RATE);
+        uint256 _expectedDebt = troveManager.min_debt() + troveManager.get_upfront_fee(troveManager.min_debt(), DEFAULT_ANNUAL_INTEREST_RATE);
 
         // Open a trove
-        uint256 _troveId = mintAndOpenTrove(userBorrower, _collateralNeeded, troveManager.MIN_DEBT(), DEFAULT_ANNUAL_INTEREST_RATE);
+        uint256 _troveId = mintAndOpenTrove(userBorrower, _collateralNeeded, troveManager.min_debt(), DEFAULT_ANNUAL_INTEREST_RATE);
 
         // Check trove info
         ITroveManager.Trove memory _trove = troveManager.troves(_troveId);
@@ -187,8 +187,8 @@ contract BorrowTests is Base {
         assertEq(collateralToken.balanceOf(address(troveManager)), _collateralNeeded, "E14");
         assertEq(collateralToken.balanceOf(address(troveManager)), troveManager.collateral_balance(), "E15");
         assertEq(borrowToken.balanceOf(address(troveManager)), 0, "E16");
-        assertEq(borrowToken.balanceOf(address(lender)), _lendAmount - troveManager.MIN_DEBT(), "E17");
-        assertEq(borrowToken.balanceOf(userBorrower), troveManager.MIN_DEBT(), "E18");
+        assertEq(borrowToken.balanceOf(address(lender)), _lendAmount - troveManager.min_debt(), "E17");
+        assertEq(borrowToken.balanceOf(userBorrower), troveManager.min_debt(), "E18");
 
         // Check global info
         assertEq(troveManager.total_debt(), _expectedDebt, "E19");
@@ -265,7 +265,7 @@ contract BorrowTests is Base {
     function test_borrowFromActiveTrove_redeemAnotherBorrower(
         uint256 _amount
     ) public {
-        _amount = bound(_amount, troveManager.MIN_DEBT() * 2, maxFuzzAmount);
+        _amount = bound(_amount, troveManager.min_debt() * 2, maxFuzzAmount);
 
         // Lend some from lender
         mintAndDepositIntoLender(userLender, _amount);
@@ -402,12 +402,12 @@ contract BorrowTests is Base {
         // Check starting price is set correctly (with buffer)
         assertEq(
             auction.starting_price(0),
-            _auctionAvailable * priceOracle.get_price(false) / WAD * dutchDesk.STARTING_PRICE_BUFFER_PERCENTAGE() / WAD / COLLATERAL_TOKEN_PRECISION,
+            _auctionAvailable * priceOracle.get_price(false) / WAD * dutchDesk.starting_price_buffer_percentage() / WAD / COLLATERAL_TOKEN_PRECISION,
             "E53"
         );
 
         // Check minimum price is set correctly (with buffer)
-        assertEq(auction.minimum_price(0), priceOracle.get_price(false) * dutchDesk.MINIMUM_PRICE_BUFFER_PERCENTAGE() / WAD, "E54");
+        assertEq(auction.minimum_price(0), priceOracle.get_price(false) * dutchDesk.minimum_price_buffer_percentage() / WAD, "E54");
 
         // Take the auction
         takeAuction(0);
@@ -460,7 +460,7 @@ contract BorrowTests is Base {
     function test_borrowFromActiveTrove_zeroDebt(
         uint256 _amount
     ) public {
-        _amount = bound(_amount, troveManager.MIN_DEBT(), maxFuzzAmount);
+        _amount = bound(_amount, troveManager.min_debt(), maxFuzzAmount);
 
         // Lend some from lender
         mintAndDepositIntoLender(userLender, _amount);
@@ -487,7 +487,7 @@ contract BorrowTests is Base {
     function test_borrowFromActiveTrove_notOwner(
         uint256 _amount
     ) public {
-        _amount = bound(_amount, troveManager.MIN_DEBT(), maxFuzzAmount);
+        _amount = bound(_amount, troveManager.min_debt(), maxFuzzAmount);
 
         // Lend some from lender
         mintAndDepositIntoLender(userLender, _amount);
@@ -514,7 +514,7 @@ contract BorrowTests is Base {
     function test_borrowFromActiveTrove_notActiveTrove(
         uint256 _amount
     ) public {
-        _amount = bound(_amount, troveManager.MIN_DEBT(), maxFuzzAmount);
+        _amount = bound(_amount, troveManager.min_debt(), maxFuzzAmount);
 
         // Lend some from lender
         mintAndDepositIntoLender(userLender, _amount);
@@ -551,7 +551,7 @@ contract BorrowTests is Base {
     function test_borrowFromActiveTrove_upfrontFeeTooHigh(
         uint256 _amount
     ) public {
-        _amount = bound(_amount, troveManager.MIN_DEBT(), maxFuzzAmount);
+        _amount = bound(_amount, troveManager.min_debt(), maxFuzzAmount);
 
         // Lend some from lender
         mintAndDepositIntoLender(userLender, _amount);
@@ -578,7 +578,7 @@ contract BorrowTests is Base {
     function test_borrowFromActiveTrove_belowMCR(
         uint256 _amount
     ) public {
-        _amount = bound(_amount, troveManager.MIN_DEBT(), maxFuzzAmount);
+        _amount = bound(_amount, troveManager.min_debt(), maxFuzzAmount);
 
         // Lend some from lender
         mintAndDepositIntoLender(userLender, _amount);
@@ -589,14 +589,14 @@ contract BorrowTests is Base {
 
         // Calculate the maximum amount that can be borrowed while staying above MCR
         uint256 _maxBorrowable =
-            (_collateralNeeded * priceOracle.get_price() / ORACLE_PRICE_SCALE) * BORROW_TOKEN_PRECISION / troveManager.MINIMUM_COLLATERAL_RATIO();
+            (_collateralNeeded * priceOracle.get_price() / ORACLE_PRICE_SCALE) * BORROW_TOKEN_PRECISION / troveManager.minimum_collateral_ratio();
 
         // Open a trove
         uint256 _troveId = mintAndOpenTrove(userBorrower, _collateralNeeded, _amount, DEFAULT_ANNUAL_INTEREST_RATE);
 
         // Try to borrow more than is allowed while staying above MCR
         vm.prank(userBorrower);
-        vm.expectRevert("!MINIMUM_COLLATERAL_RATIO");
+        vm.expectRevert("!minimum_collateral_ratio");
         troveManager.borrow(
             _troveId,
             _maxBorrowable,
@@ -610,7 +610,7 @@ contract BorrowTests is Base {
     function test_borrowFromActiveTrove_multipleAuctions(
         uint256 _amount
     ) public {
-        _amount = bound(_amount, troveManager.MIN_DEBT() * 10, maxFuzzAmount);
+        _amount = bound(_amount, troveManager.min_debt() * 10, maxFuzzAmount);
 
         // Lend some from lender
         mintAndDepositIntoLender(userLender, _amount);
@@ -630,7 +630,7 @@ contract BorrowTests is Base {
 
         // Second borrower opens trove - redeems victim partially (creates auction 0)
         uint256 _secondCollateralNeeded = _collateralNeeded * 4;
-        uint256 _troveId = mintAndOpenTrove(userBorrower, _secondCollateralNeeded, troveManager.MIN_DEBT(), DEFAULT_ANNUAL_INTEREST_RATE * 2);
+        uint256 _troveId = mintAndOpenTrove(userBorrower, _secondCollateralNeeded, troveManager.min_debt(), DEFAULT_ANNUAL_INTEREST_RATE * 2);
 
         // First auction created from opening trove
         assertEq(dutchDesk.nonce(), 1, "E1");
@@ -659,7 +659,7 @@ contract BorrowTests is Base {
         address _thirdBorrower = address(999);
         uint256 _thirdCollateralNeeded = (troveManager.troves(_troveId).debt * DEFAULT_TARGET_COLLATERAL_RATIO / BORROW_TOKEN_PRECISION)
             * ORACLE_PRICE_SCALE / priceOracle.get_price() * 2;
-        uint256 _thirdTroveId = mintAndOpenTrove(_thirdBorrower, _thirdCollateralNeeded, troveManager.MIN_DEBT(), DEFAULT_ANNUAL_INTEREST_RATE * 3);
+        uint256 _thirdTroveId = mintAndOpenTrove(_thirdBorrower, _thirdCollateralNeeded, troveManager.min_debt(), DEFAULT_ANNUAL_INTEREST_RATE * 3);
 
         // Third auction created
         assertEq(dutchDesk.nonce(), 3, "E8");
@@ -702,7 +702,7 @@ contract BorrowTests is Base {
     function test_borrowFromActiveTrove_cannotRedeemHigherRateBorrower(
         uint256 _amount
     ) public {
-        _amount = bound(_amount, troveManager.MIN_DEBT() * 2, maxFuzzAmount);
+        _amount = bound(_amount, troveManager.min_debt() * 2, maxFuzzAmount);
 
         // Lend some from lender
         mintAndDepositIntoLender(userLender, _amount);
@@ -750,7 +750,7 @@ contract BorrowTests is Base {
     function test_borrowFromActiveTrove_canRedeemLowerRateBorrower(
         uint256 _amount
     ) public {
-        _amount = bound(_amount, troveManager.MIN_DEBT() * 2, maxFuzzAmount);
+        _amount = bound(_amount, troveManager.min_debt() * 2, maxFuzzAmount);
 
         // Lend some from lender
         mintAndDepositIntoLender(userLender, _amount);
@@ -800,7 +800,7 @@ contract BorrowTests is Base {
     function test_borrowFromActiveTrove_canRedeemZombieTroveAtAnyRate(
         uint256 _amount
     ) public {
-        _amount = bound(_amount, troveManager.MIN_DEBT(), maxFuzzAmount);
+        _amount = bound(_amount, troveManager.min_debt(), maxFuzzAmount);
 
         // Lend some from lender
         mintAndDepositIntoLender(userLender, _amount);
@@ -810,7 +810,7 @@ contract BorrowTests is Base {
             (_amount * DEFAULT_TARGET_COLLATERAL_RATIO / BORROW_TOKEN_PRECISION) * ORACLE_PRICE_SCALE / priceOracle.get_price();
 
         // 1st borrower opens a trove at a high rate (takes all liquidity)
-        uint256 _highRate = troveManager.MIN_ANNUAL_INTEREST_RATE() * 2;
+        uint256 _highRate = troveManager.min_annual_interest_rate() * 2;
         uint256 _troveIdVictim = mintAndOpenTrove(anotherUserBorrower, _collateralNeeded, _amount, _highRate);
 
         // Make sure there's no liquidity left in the lender
@@ -833,8 +833,8 @@ contract BorrowTests is Base {
 
         // 2nd borrower opens a trove at min rate (much lower than zombie's rate)
         // with extra collateral to borrow more later
-        uint256 _minRate = troveManager.MIN_ANNUAL_INTEREST_RATE();
-        uint256 _initialBorrow = troveManager.MIN_DEBT();
+        uint256 _minRate = troveManager.min_annual_interest_rate();
+        uint256 _initialBorrow = troveManager.min_debt();
         uint256 _secondCollateralNeeded = ((_initialBorrow + _trove.debt * 2) * DEFAULT_TARGET_COLLATERAL_RATIO / BORROW_TOKEN_PRECISION)
             * ORACLE_PRICE_SCALE / priceOracle.get_price();
 
@@ -861,7 +861,7 @@ contract BorrowTests is Base {
     function test_borrowFromActiveTrove_minDebtOutTooHigh(
         uint256 _amount
     ) public {
-        _amount = bound(_amount, troveManager.MIN_DEBT(), maxFuzzAmount);
+        _amount = bound(_amount, troveManager.min_debt(), maxFuzzAmount);
 
         mintAndDepositIntoLender(userLender, _amount);
 
@@ -886,7 +886,7 @@ contract BorrowTests is Base {
     function test_borrowFromActiveTrove_minCollateralOutTooHigh(
         uint256 _amount
     ) public {
-        _amount = bound(_amount, troveManager.MIN_DEBT() * 2, maxFuzzAmount);
+        _amount = bound(_amount, troveManager.min_debt() * 2, maxFuzzAmount);
 
         mintAndDepositIntoLender(userLender, _amount);
 
@@ -897,7 +897,7 @@ contract BorrowTests is Base {
         mintAndOpenTrove(anotherUserBorrower, _collateralNeeded, _amount, DEFAULT_ANNUAL_INTEREST_RATE);
 
         // 2nd borrower opens trove with extra collateral for later borrow
-        uint256 _troveId = mintAndOpenTrove(userBorrower, _collateralNeeded * 2, troveManager.MIN_DEBT(), DEFAULT_ANNUAL_INTEREST_RATE * 2);
+        uint256 _troveId = mintAndOpenTrove(userBorrower, _collateralNeeded * 2, troveManager.min_debt(), DEFAULT_ANNUAL_INTEREST_RATE * 2);
 
         // 2nd borrower tries to borrow with min_collateral_out higher than what can be redeemed
         vm.prank(userBorrower);

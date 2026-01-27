@@ -13,7 +13,7 @@ contract TransferOwnershipTests is Base {
         uint256 _amount,
         address _newOwner
     ) public returns (uint256) {
-        _amount = bound(_amount, troveManager.MIN_DEBT(), maxFuzzAmount);
+        _amount = bound(_amount, troveManager.min_debt(), maxFuzzAmount);
 
         // Lend some from lender
         mintAndDepositIntoLender(userLender, _amount);
@@ -51,7 +51,7 @@ contract TransferOwnershipTests is Base {
         uint256 _amount,
         address _newOwner
     ) public {
-        _amount = bound(_amount, troveManager.MIN_DEBT(), maxFuzzAmount);
+        _amount = bound(_amount, troveManager.min_debt(), maxFuzzAmount);
 
         // Start the ownership transfer process
         uint256 _troveId = test_transferOwnership(_amount, _newOwner);

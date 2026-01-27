@@ -34,8 +34,6 @@ struct Trove:
 # ============================================================================================
 
 
-TROVE_MANAGER: public(immutable(ITroveManager))
-
 _ROOT_TROVE_ID: constant(uint256) = 0
 _BAD_HINT: constant(uint256) = 0
 _MAX_TROVES: constant(uint256) = 1000
@@ -45,6 +43,9 @@ _MAX_TROVES: constant(uint256) = 1000
 # Storage
 # ============================================================================================
 
+
+# Trove Manager contract
+trove_manager: public((ITroveManager))
 
 # Current size of the list
 _size: uint256
@@ -57,17 +58,21 @@ _troves: HashMap[uint256, Trove]
 
 
 # ============================================================================================
-# Constructor
+# Initialize
 # ============================================================================================
 
 
-@deploy
-def __init__(trove_manager: address):
+@external
+def initialize(trove_manager: address):
     """
     @notice Initialize the contract
     @param trove_manager Address of the Trove Manager
     """
-    TROVE_MANAGER = ITroveManager(trove_manager)
+    # Make sure the contract is not already initialized
+    assert self.trove_manager.address == empty(address), "initialized"
+
+    # Set Trove Manager address
+    self.trove_manager = ITroveManager(trove_manager)
 
     # Technically this is not needed as long as _ROOT_TROVE_ID is 0, but it doesn't hurt
     trove: Trove = empty(Trove)
@@ -203,7 +208,7 @@ def insert(trove_id: uint256, annual_interest_rate: uint256, prev_id: uint256, n
     @param next_id ID of next Trove for the insert position
     """
     # Make sure caller is the trove manager
-    assert msg.sender == TROVE_MANAGER.address, "!trove_manager"
+    assert msg.sender == self.trove_manager.address, "!trove_manager"
 
     # Make sure the trove is not already in the list
     assert not self._contains(trove_id), "exists"
@@ -226,7 +231,7 @@ def remove(trove_id: uint256):
     @param trove_id Trove's ID
     """
     # Make sure caller is the trove manager
-    assert msg.sender == TROVE_MANAGER.address, "!trove_manager"
+    assert msg.sender == self.trove_manager.address, "!trove_manager"
 
     # Make sure the Trove is in the list
     assert self._contains(trove_id), "!exists"
@@ -249,7 +254,7 @@ def re_insert(trove_id: uint256, new_annual_interest_rate: uint256, prev_id: uin
     @param next_id ID of next Trove for the new insert position
     """
     # Make sure caller is the trove manager
-    assert msg.sender == TROVE_MANAGER.address, "!trove_manager"
+    assert msg.sender == self.trove_manager.address, "!trove_manager"
 
     # Make sure the Trove is in the list
     assert self._contains(trove_id), "!exists"
@@ -466,7 +471,7 @@ def _trove_annual_interest_rate(trove_id: uint256) -> uint256:
     @param trove_id Trove's ID
     @return Annual interest rate of the Trove
     """
-    trove: ITroveManager.Trove = staticcall TROVE_MANAGER.troves(trove_id)
+    trove: ITroveManager.Trove = staticcall self.trove_manager.troves(trove_id)
     return trove.annual_interest_rate
 
 

@@ -4,28 +4,25 @@ pragma solidity 0.8.23;
 interface IDutchDesk {
 
     // ============================================================================================
-    // Constants
-    // ============================================================================================
-
-    // Contracts
-    function TROVE_MANAGER() external view returns (address);
-    function LENDER() external view returns (address);
-    function PRICE_ORACLE() external view returns (address);
-    function AUCTION() external view returns (address);
-
-    // Tokens
-    function BORROW_TOKEN() external view returns (address);
-    function COLLATERAL_TOKEN() external view returns (address);
-
-    // Parameters
-    function MINIMUM_PRICE_BUFFER_PERCENTAGE() external view returns (uint256);
-    function STARTING_PRICE_BUFFER_PERCENTAGE() external view returns (uint256);
-    function EMERGENCY_STARTING_PRICE_BUFFER_PERCENTAGE() external view returns (uint256);
-
-    // ============================================================================================
     // Storage
     // ============================================================================================
 
+    // Contracts
+    function trove_manager() external view returns (address);
+    function lender() external view returns (address);
+    function price_oracle() external view returns (address);
+    function auction() external view returns (address);
+
+    // Collateral token
+    function collateral_token() external view returns (address);
+
+    // Parameters
+    function collateral_token_precision() external view returns (uint256);
+    function minimum_price_buffer_percentage() external view returns (uint256);
+    function starting_price_buffer_percentage() external view returns (uint256);
+    function emergency_starting_price_buffer_percentage() external view returns (uint256);
+
+    // Accounting
     function nonce() external view returns (uint256);
 
     // ============================================================================================

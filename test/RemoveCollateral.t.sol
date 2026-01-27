@@ -13,7 +13,7 @@ contract RemoveCollateralTests is Base {
         uint256 _amount,
         uint256 _collateralToRemove
     ) public {
-        _amount = bound(_amount, troveManager.MIN_DEBT(), maxFuzzAmount);
+        _amount = bound(_amount, troveManager.min_debt(), maxFuzzAmount);
 
         // Lend some from lender
         mintAndDepositIntoLender(userLender, _amount);
@@ -24,7 +24,7 @@ contract RemoveCollateralTests is Base {
 
         // Make sure we don't try to remove too much collateral
         uint256 _maxCollateralToRemove = _collateralNeeded
-            - ((_amount * troveManager.MINIMUM_COLLATERAL_RATIO() / BORROW_TOKEN_PRECISION) * ORACLE_PRICE_SCALE / priceOracle.get_price());
+            - ((_amount * troveManager.minimum_collateral_ratio() / BORROW_TOKEN_PRECISION) * ORACLE_PRICE_SCALE / priceOracle.get_price());
 
         // Decrease a touch
         _maxCollateralToRemove = _maxCollateralToRemove * 99 / 100;
@@ -137,7 +137,7 @@ contract RemoveCollateralTests is Base {
     function test_removeCollateral_notOwner(
         uint256 _amount
     ) public {
-        _amount = bound(_amount, troveManager.MIN_DEBT(), maxFuzzAmount);
+        _amount = bound(_amount, troveManager.min_debt(), maxFuzzAmount);
 
         // Lend some from lender
         mintAndDepositIntoLender(userLender, _amount);
@@ -158,7 +158,7 @@ contract RemoveCollateralTests is Base {
     function test_removeCollateral_troveNotActive(
         uint256 _amount
     ) public {
-        _amount = bound(_amount, troveManager.MIN_DEBT(), maxFuzzAmount);
+        _amount = bound(_amount, troveManager.min_debt(), maxFuzzAmount);
 
         // Lend some from lender
         mintAndDepositIntoLender(userLender, _amount);
@@ -189,7 +189,7 @@ contract RemoveCollateralTests is Base {
     function test_removeCollateral_insufficientCollateralInTrove(
         uint256 _amount
     ) public {
-        _amount = bound(_amount, troveManager.MIN_DEBT(), maxFuzzAmount);
+        _amount = bound(_amount, troveManager.min_debt(), maxFuzzAmount);
 
         // Lend some from lender
         mintAndDepositIntoLender(userLender, _amount);
@@ -210,7 +210,7 @@ contract RemoveCollateralTests is Base {
     function test_removeCollateral_belowMCR(
         uint256 _amount
     ) public {
-        _amount = bound(_amount, troveManager.MIN_DEBT(), maxFuzzAmount);
+        _amount = bound(_amount, troveManager.min_debt(), maxFuzzAmount);
 
         // Lend some from lender
         mintAndDepositIntoLender(userLender, _amount);
@@ -221,7 +221,7 @@ contract RemoveCollateralTests is Base {
 
         // Calculate the minimum collateral to leave in the trove to stay above MCR
         uint256 _minCollateralToLeave =
-            ((_amount * troveManager.MINIMUM_COLLATERAL_RATIO() / BORROW_TOKEN_PRECISION) * ORACLE_PRICE_SCALE) / priceOracle.get_price();
+            ((_amount * troveManager.minimum_collateral_ratio() / BORROW_TOKEN_PRECISION) * ORACLE_PRICE_SCALE) / priceOracle.get_price();
 
         // Open a trove
         uint256 _troveId = mintAndOpenTrove(userBorrower, _collateralNeeded, _amount, DEFAULT_ANNUAL_INTEREST_RATE);
@@ -231,7 +231,7 @@ contract RemoveCollateralTests is Base {
 
         // Try to remove more collateral than is in the trove
         vm.prank(userBorrower);
-        vm.expectRevert("!MINIMUM_COLLATERAL_RATIO");
+        vm.expectRevert("!minimum_collateral_ratio");
         troveManager.remove_collateral(_troveId, _maxCollateralToRemove);
     }
 

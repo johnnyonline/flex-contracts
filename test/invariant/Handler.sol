@@ -45,11 +45,11 @@ contract Handler is Test {
         collateralToken = _collateralToken;
         lender = _lender;
 
-        minDebt = troveManager.MIN_DEBT();
-        minRate = troveManager.MIN_ANNUAL_INTEREST_RATE();
-        maxRate = troveManager.MAX_ANNUAL_INTEREST_RATE();
+        minDebt = troveManager.min_debt();
+        minRate = troveManager.min_annual_interest_rate();
+        maxRate = troveManager.max_annual_interest_rate();
         borrowTokenPrecision = 10 ** IERC20Metadata(address(borrowToken)).decimals();
-        minimumCollateralRatio = troveManager.MINIMUM_COLLATERAL_RATIO();
+        minimumCollateralRatio = troveManager.minimum_collateral_ratio();
     }
 
     // ============================================================================================

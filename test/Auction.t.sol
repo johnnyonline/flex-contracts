@@ -20,13 +20,15 @@ contract AuctionTests is Base {
     }
 
     function test_setup() public {
-        assertEq(auction.PAPI(), address(dutchDesk), "E0");
-        assertEq(auction.BUY_TOKEN(), address(borrowToken), "E1");
-        assertEq(auction.SELL_TOKEN(), address(collateralToken), "E2");
-        assertEq(auction.STEP_DURATION(), 60, "E3");
-        assertEq(auction.STEP_DECAY_RATE(), 50, "E4");
-        assertEq(auction.AUCTION_LENGTH(), 1 days, "E5");
-        assertEq(auction.liquidation_auctions(), 0, "E6");
+        assertEq(auction.papi(), address(dutchDesk), "E0");
+        assertEq(auction.buy_token(), address(borrowToken), "E1");
+        assertEq(auction.buy_token_scaler(), WAD / BORROW_TOKEN_PRECISION, "E2");
+        assertEq(auction.sell_token(), address(collateralToken), "E3");
+        assertEq(auction.sell_token_scaler(), WAD / COLLATERAL_TOKEN_PRECISION, "E4");
+        assertEq(auction.step_duration(), 60, "E5");
+        assertEq(auction.step_decay_rate(), 50, "E6");
+        assertEq(auction.auction_length(), 1 days, "E7");
+        assertEq(auction.liquidation_auctions(), 0, "E8");
     }
 
     function test_kick(
@@ -199,7 +201,7 @@ contract AuctionTests is Base {
         auction.kick(_auctionId, _kickAmount, 0, 1e18, 1e17, userLender, address(lender), false);
 
         // Skip past auction duration so it becomes inactive
-        skip(auction.AUCTION_LENGTH() + 1);
+        skip(auction.auction_length() + 1);
 
         // Verify auction is inactive but has kickable amount
         assertFalse(auction.is_active(_auctionId), "E0");
@@ -263,7 +265,7 @@ contract AuctionTests is Base {
         auction.kick(_auctionId, _kickAmount, 0, 1e18, 1e17, userLender, address(lender), false);
 
         // Skip past auction duration so it becomes inactive
-        skip(auction.AUCTION_LENGTH() + 1);
+        skip(auction.auction_length() + 1);
 
         // Try to re-kick with zero starting price - should revert
         vm.prank(address(dutchDesk));
@@ -283,7 +285,7 @@ contract AuctionTests is Base {
         auction.kick(_auctionId, _kickAmount, 0, 1e18, 1e17, userLender, address(lender), false);
 
         // Skip past auction duration so it becomes inactive
-        skip(auction.AUCTION_LENGTH() + 1);
+        skip(auction.auction_length() + 1);
 
         // Try to re-kick with zero minimum price - should revert
         vm.prank(address(dutchDesk));
@@ -303,7 +305,7 @@ contract AuctionTests is Base {
         auction.kick(_auctionId, _kickAmount, type(uint256).max, 1e18, 1e17, userLender, address(lender), false);
 
         // Skip some time to let price decay
-        skip(auction.STEP_DURATION() * 10);
+        skip(auction.step_duration() * 10);
 
         // Get needed amount and airdrop to liquidator
         uint256 _neededAmount = auction.get_needed_amount(_auctionId, type(uint256).max, block.timestamp);
@@ -333,7 +335,7 @@ contract AuctionTests is Base {
         _kickAmount = bound(_kickAmount, minFuzzAmount, maxFuzzAmount);
 
         // Skip some time first to calculate expected needed amount
-        skip(auction.STEP_DURATION() * 10);
+        skip(auction.step_duration() * 10);
 
         // Estimate needed amount to set maximum_amount lower
         uint256 _estimatedNeeded = _kickAmount * 95e16 / COLLATERAL_TOKEN_PRECISION; // ~95% of collateral value
@@ -374,7 +376,7 @@ contract AuctionTests is Base {
         auction.kick(_auctionId, _kickAmount, 0, 1e18, 1e17, address(lender), address(lender), true);
 
         // Skip some time to let price decay
-        skip(auction.STEP_DURATION() * 10);
+        skip(auction.step_duration() * 10);
 
         // Get needed amount and airdrop to liquidator
         uint256 _neededAmount = auction.get_needed_amount(_auctionId, type(uint256).max, block.timestamp);
@@ -403,7 +405,7 @@ contract AuctionTests is Base {
         auction.kick(_auctionId, _kickAmount, type(uint256).max, 1e18, 1e17, userLender, address(lender), false);
 
         // Skip some time
-        skip(auction.STEP_DURATION() * 10);
+        skip(auction.step_duration() * 10);
 
         // Take only half
         uint256 _takeAmount = _kickAmount / 2;
@@ -499,7 +501,7 @@ contract AuctionTests is Base {
         assertTrue(auction.is_ongoing_liquidation_auction(), "E1");
 
         // Skip time and take
-        skip(auction.STEP_DURATION() * 10);
+        skip(auction.step_duration() * 10);
         uint256 _neededAmount = auction.get_needed_amount(_auctionId, type(uint256).max, block.timestamp);
         airdrop(address(borrowToken), liquidator, _neededAmount);
 
@@ -528,17 +530,17 @@ contract AuctionTests is Base {
         uint256 _initialPrice = auction.get_price(_auctionId, block.timestamp);
 
         // Skip one step duration
-        skip(auction.STEP_DURATION());
+        skip(auction.step_duration());
 
         // Verify price decayed by ~0.5%
         uint256 _priceAfterOneStep = auction.get_price(_auctionId, block.timestamp);
         assertLt(_priceAfterOneStep, _initialPrice, "E0");
 
-        uint256 _expectedPrice = _initialPrice * (10000 - auction.STEP_DECAY_RATE()) / 10000;
+        uint256 _expectedPrice = _initialPrice * (10000 - auction.step_decay_rate()) / 10000;
         assertApproxEqRel(_priceAfterOneStep, _expectedPrice, 1e15, "E1");
 
         // Skip more steps
-        skip(auction.STEP_DURATION() * 10);
+        skip(auction.step_duration() * 10);
 
         // Verify continued decay
         uint256 _priceAfterManySteps = auction.get_price(_auctionId, block.timestamp);
@@ -560,7 +562,7 @@ contract AuctionTests is Base {
         assertTrue(auction.is_active(_auctionId), "E0");
 
         // Skip past auction duration
-        skip(auction.AUCTION_LENGTH() + 1);
+        skip(auction.auction_length() + 1);
 
         // Verify auction is inactive with 0 price
         assertFalse(auction.is_active(_auctionId), "E1");
@@ -587,7 +589,7 @@ contract AuctionTests is Base {
         assertEq(auction.get_available_amount(_auctionId), _kickAmount, "E1");
 
         // After expiration, available amount should be 0
-        skip(auction.AUCTION_LENGTH() + 1);
+        skip(auction.auction_length() + 1);
         assertEq(auction.get_available_amount(_auctionId), 0, "E2");
     }
 
@@ -609,7 +611,7 @@ contract AuctionTests is Base {
         assertEq(auction.get_kickable_amount(_auctionId), 0, "E1");
 
         // After expiration, kickable amount should equal current amount
-        skip(auction.AUCTION_LENGTH() + 1);
+        skip(auction.auction_length() + 1);
         assertEq(auction.get_kickable_amount(_auctionId), _kickAmount, "E2");
     }
 
@@ -633,7 +635,7 @@ contract AuctionTests is Base {
         assertLt(_partialNeeded, _neededAmount, "E1");
 
         // After price decay, needed amount should be less
-        skip(auction.STEP_DURATION() * 10);
+        skip(auction.step_duration() * 10);
         uint256 _neededAmountLater = auction.get_needed_amount(_auctionId, _kickAmount, block.timestamp);
         assertLt(_neededAmountLater, _neededAmount, "E2");
     }
@@ -653,7 +655,7 @@ contract AuctionTests is Base {
         auction.kick(_auctionId, _kickAmount, 0, 1e18, 1e17, userLender, address(lender), false);
 
         // Skip some time to let price decay
-        skip(auction.STEP_DURATION() * 10);
+        skip(auction.step_duration() * 10);
 
         // Get needed amount for partial take and airdrop to malicious taker
         uint256 _takeAmount = _kickAmount / 2;
@@ -687,7 +689,7 @@ contract AuctionTests is Base {
         auction.kick(_auctionId, _kickAmount, 0, 1e18, 1e17, userLender, address(lender), false);
 
         // Skip some time
-        skip(auction.STEP_DURATION() * 10);
+        skip(auction.step_duration() * 10);
 
         // Get needed amount and airdrop to malicious taker
         uint256 _takeAmount = _kickAmount / 2;
@@ -718,7 +720,7 @@ contract AuctionTests is Base {
         auction.kick(_auctionId, _kickAmount, 0, 1e18, 1e17, userLender, address(lender), false);
 
         // Skip some time
-        skip(auction.STEP_DURATION() * 10);
+        skip(auction.step_duration() * 10);
 
         // Get needed amount and airdrop to malicious taker
         uint256 _takeAmount = _kickAmount / 2;
@@ -749,7 +751,7 @@ contract AuctionTests is Base {
         auction.kick(_auctionId, _kickAmount, 0, 1e18, 1e17, userLender, address(lender), false);
 
         // Skip some time
-        skip(auction.STEP_DURATION() * 10);
+        skip(auction.step_duration() * 10);
 
         // Get needed amount and airdrop to malicious taker
         uint256 _takeAmount = _kickAmount / 2;

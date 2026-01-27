@@ -34,7 +34,7 @@ contract Lender is BaseHooks {
     // Storage
     // ============================================================================================
 
-    /// @notice The receiver of auction proceeds
+    /// @notice Receiver of auction proceeds
     address private _auctionProceedsReceiver;
 
     /// @notice The strategy deposit limit

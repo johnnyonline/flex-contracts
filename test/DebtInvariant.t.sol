@@ -34,9 +34,9 @@ contract DebtInvariantTests is Base {
         uint256 _timePerSync,
         uint256 _numSyncs
     ) public {
-        uint256 _minRate = troveManager.MIN_ANNUAL_INTEREST_RATE();
-        uint256 _maxRate = troveManager.MAX_ANNUAL_INTEREST_RATE();
-        uint256 _minDebt = troveManager.MIN_DEBT();
+        uint256 _minRate = troveManager.min_annual_interest_rate();
+        uint256 _maxRate = troveManager.max_annual_interest_rate();
+        uint256 _minDebt = troveManager.min_debt();
 
         // Bound time to small intervals to maximize rounding operations
         _timePerSync = bound(_timePerSync, 1, 365 days);

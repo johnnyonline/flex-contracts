@@ -26,7 +26,7 @@ contract LiquidateTests is Base {
     function test_liquidateTrove(
         uint256 _amount
     ) public {
-        _amount = bound(_amount, troveManager.MIN_DEBT(), maxFuzzAmount);
+        _amount = bound(_amount, troveManager.min_debt(), maxFuzzAmount);
 
         // Lend some from lender
         mintAndDepositIntoLender(userLender, _amount);
@@ -89,11 +89,11 @@ contract LiquidateTests is Base {
         if (BORROW_TOKEN_PRECISION < COLLATERAL_TOKEN_PRECISION) {
             // For low-decimal borrow tokens (e.g., USDC 6d), multiply first to avoid underflow
             _priceDropToBelowMCR =
-                troveManager.MINIMUM_COLLATERAL_RATIO() * _trove.debt * ORACLE_PRICE_SCALE * 99 / (100 * _trove.collateral * BORROW_TOKEN_PRECISION);
+                troveManager.minimum_collateral_ratio() * _trove.debt * ORACLE_PRICE_SCALE * 99 / (100 * _trove.collateral * BORROW_TOKEN_PRECISION);
         } else {
             // For high-decimal borrow tokens (e.g., crvUSD 18d), divide first to avoid overflow
             _priceDropToBelowMCR =
-                troveManager.MINIMUM_COLLATERAL_RATIO() * _trove.debt / (100 * _trove.collateral) * ORACLE_PRICE_SCALE / BORROW_TOKEN_PRECISION * 99;
+                troveManager.minimum_collateral_ratio() * _trove.debt / (100 * _trove.collateral) * ORACLE_PRICE_SCALE / BORROW_TOKEN_PRECISION * 99;
         }
         uint256 _priceDropToBelowMCR18 = _priceDropToBelowMCR * COLLATERAL_TOKEN_PRECISION * WAD / (ORACLE_PRICE_SCALE * BORROW_TOKEN_PRECISION);
         console2.log("_priceDropToBelowMCR:", _priceDropToBelowMCR);
@@ -110,7 +110,7 @@ contract LiquidateTests is Base {
         uint256 _troveCollateralRatioAfter = (_trove.collateral * priceOracle.get_price() / ORACLE_PRICE_SCALE) * BORROW_TOKEN_PRECISION / _trove.debt;
 
         // Make sure Trove is below MCR
-        assertLt(_troveCollateralRatioAfter, troveManager.MINIMUM_COLLATERAL_RATIO(), "E26");
+        assertLt(_troveCollateralRatioAfter, troveManager.minimum_collateral_ratio(), "E26");
 
         // Finally, liquidate the trove
         vm.startPrank(liquidator);
@@ -122,9 +122,9 @@ contract LiquidateTests is Base {
         // Check auction starting price and minimum price
         uint256 _auctionId = 0;
         uint256 _expectedStartingPrice =
-            _collateralNeeded * _priceDropToBelowMCR18 / 1e18 * dutchDesk.STARTING_PRICE_BUFFER_PERCENTAGE() / 1e18 / COLLATERAL_TOKEN_PRECISION;
+            _collateralNeeded * _priceDropToBelowMCR18 / 1e18 * dutchDesk.starting_price_buffer_percentage() / 1e18 / COLLATERAL_TOKEN_PRECISION;
         assertEq(auction.starting_price(_auctionId), _expectedStartingPrice, "E27");
-        uint256 _expectedMinimumPrice = _priceDropToBelowMCR18 * dutchDesk.MINIMUM_PRICE_BUFFER_PERCENTAGE() / WAD;
+        uint256 _expectedMinimumPrice = _priceDropToBelowMCR18 * dutchDesk.minimum_price_buffer_percentage() / WAD;
         assertEq(auction.minimum_price(_auctionId), _expectedMinimumPrice, "E28");
 
         // Take the auction
@@ -183,7 +183,7 @@ contract LiquidateTests is Base {
     function test_liquidateTroves(
         uint256 _amount
     ) public {
-        _amount = bound(_amount, troveManager.MIN_DEBT() * 2, maxFuzzAmount);
+        _amount = bound(_amount, troveManager.min_debt() * 2, maxFuzzAmount);
 
         // Lend some from lender
         mintAndDepositIntoLender(userLender, _amount);
@@ -293,11 +293,11 @@ contract LiquidateTests is Base {
         if (BORROW_TOKEN_PRECISION < COLLATERAL_TOKEN_PRECISION) {
             // For low-decimal borrow tokens (e.g., USDC 6d), multiply first to avoid underflow
             _priceDropToBelowMCR =
-                troveManager.MINIMUM_COLLATERAL_RATIO() * _trove.debt * ORACLE_PRICE_SCALE * 99 / (100 * _trove.collateral * BORROW_TOKEN_PRECISION);
+                troveManager.minimum_collateral_ratio() * _trove.debt * ORACLE_PRICE_SCALE * 99 / (100 * _trove.collateral * BORROW_TOKEN_PRECISION);
         } else {
             // For high-decimal borrow tokens (e.g., crvUSD 18d), divide first to avoid overflow
             _priceDropToBelowMCR =
-                troveManager.MINIMUM_COLLATERAL_RATIO() * _trove.debt / (100 * _trove.collateral) * ORACLE_PRICE_SCALE / BORROW_TOKEN_PRECISION * 99;
+                troveManager.minimum_collateral_ratio() * _trove.debt / (100 * _trove.collateral) * ORACLE_PRICE_SCALE / BORROW_TOKEN_PRECISION * 99;
         }
         uint256 _priceDropToBelowMCR18 = _priceDropToBelowMCR * COLLATERAL_TOKEN_PRECISION * WAD / (ORACLE_PRICE_SCALE * BORROW_TOKEN_PRECISION);
 
@@ -312,7 +312,7 @@ contract LiquidateTests is Base {
         uint256 _troveCollateralRatioAfter = (_trove.collateral * priceOracle.get_price() / ORACLE_PRICE_SCALE) * BORROW_TOKEN_PRECISION / _trove.debt;
 
         // Make sure Trove is below MCR
-        assertLt(_troveCollateralRatioAfter, troveManager.MINIMUM_COLLATERAL_RATIO(), "E52");
+        assertLt(_troveCollateralRatioAfter, troveManager.minimum_collateral_ratio(), "E52");
 
         // Finally, liquidate the troves
         vm.startPrank(liquidator);
@@ -327,10 +327,10 @@ contract LiquidateTests is Base {
         // Note: both troves liquidated in same tx, so collateral = _collateralNeeded * 2
         // uint256 _auctionId = 0;
         uint256 _expectedStartingPrice =
-            _collateralNeeded * 2 * _priceDropToBelowMCR18 / 1e18 * dutchDesk.STARTING_PRICE_BUFFER_PERCENTAGE() / 1e18 / COLLATERAL_TOKEN_PRECISION;
+            _collateralNeeded * 2 * _priceDropToBelowMCR18 / 1e18 * dutchDesk.starting_price_buffer_percentage() / 1e18 / COLLATERAL_TOKEN_PRECISION;
         assertEq(auction.starting_price(0), _expectedStartingPrice, "E53");
         // Minimum price = price * MINIMUM_PRICE_BUFFER_PERCENTAGE / WAD
-        uint256 _expectedMinimumPrice = _priceDropToBelowMCR18 * dutchDesk.MINIMUM_PRICE_BUFFER_PERCENTAGE() / WAD;
+        uint256 _expectedMinimumPrice = _priceDropToBelowMCR18 * dutchDesk.minimum_price_buffer_percentage() / WAD;
         assertEq(auction.minimum_price(0), _expectedMinimumPrice, "E54");
 
         // Take the auction
@@ -428,7 +428,7 @@ contract LiquidateTests is Base {
     function test_liquidateTroves_sequentialLiquidations(
         uint256 _amount
     ) public {
-        _amount = bound(_amount, troveManager.MIN_DEBT() * 2, maxFuzzAmount);
+        _amount = bound(_amount, troveManager.min_debt() * 2, maxFuzzAmount);
 
         // Lend some from lender
         mintAndDepositIntoLender(userLender, _amount);
@@ -467,12 +467,12 @@ contract LiquidateTests is Base {
         uint256 _priceDropToBelowMCR;
         if (BORROW_TOKEN_PRECISION < COLLATERAL_TOKEN_PRECISION) {
             // For low-decimal borrow tokens (e.g., USDC 6d), multiply first to avoid underflow
-            _priceDropToBelowMCR = troveManager.MINIMUM_COLLATERAL_RATIO() * _trove1.debt * ORACLE_PRICE_SCALE * 99
+            _priceDropToBelowMCR = troveManager.minimum_collateral_ratio() * _trove1.debt * ORACLE_PRICE_SCALE * 99
                 / (100 * _trove1.collateral * BORROW_TOKEN_PRECISION);
         } else {
             // For high-decimal borrow tokens (e.g., crvUSD 18d), divide first to avoid overflow
             _priceDropToBelowMCR =
-                troveManager.MINIMUM_COLLATERAL_RATIO() * _trove1.debt * 99 / 100 / _trove1.collateral * ORACLE_PRICE_SCALE / BORROW_TOKEN_PRECISION;
+                troveManager.minimum_collateral_ratio() * _trove1.debt * 99 / 100 / _trove1.collateral * ORACLE_PRICE_SCALE / BORROW_TOKEN_PRECISION;
         }
         uint256 _priceDropToBelowMCR18 = _priceDropToBelowMCR * COLLATERAL_TOKEN_PRECISION * WAD / (ORACLE_PRICE_SCALE * BORROW_TOKEN_PRECISION);
 
@@ -486,12 +486,12 @@ contract LiquidateTests is Base {
         // Make sure both troves are below MCR
         assertLt(
             (_trove1.collateral * priceOracle.get_price() / ORACLE_PRICE_SCALE) * BORROW_TOKEN_PRECISION / _trove1.debt,
-            troveManager.MINIMUM_COLLATERAL_RATIO(),
+            troveManager.minimum_collateral_ratio(),
             "E7"
         );
         assertLt(
             (_trove2.collateral * priceOracle.get_price() / ORACLE_PRICE_SCALE) * BORROW_TOKEN_PRECISION / _trove2.debt,
-            troveManager.MINIMUM_COLLATERAL_RATIO(),
+            troveManager.minimum_collateral_ratio(),
             "E8"
         );
 
@@ -511,10 +511,10 @@ contract LiquidateTests is Base {
         // Check auction starting price and minimum price after first liquidation
         assertEq(
             auction.starting_price(0),
-            _collateralNeeded * _priceDropToBelowMCR18 / 1e18 * dutchDesk.STARTING_PRICE_BUFFER_PERCENTAGE() / 1e18 / COLLATERAL_TOKEN_PRECISION,
+            _collateralNeeded * _priceDropToBelowMCR18 / 1e18 * dutchDesk.starting_price_buffer_percentage() / 1e18 / COLLATERAL_TOKEN_PRECISION,
             "E12"
         );
-        assertEq(auction.minimum_price(0), _priceDropToBelowMCR18 * dutchDesk.MINIMUM_PRICE_BUFFER_PERCENTAGE() / WAD, "E13");
+        assertEq(auction.minimum_price(0), _priceDropToBelowMCR18 * dutchDesk.minimum_price_buffer_percentage() / WAD, "E13");
 
         // Check first trove is liquidated
         _trove1 = troveManager.troves(_troveId1);
@@ -591,7 +591,7 @@ contract LiquidateTests is Base {
     function test_liquidateTroves_aboveMCR(
         uint256 _amount
     ) public {
-        _amount = bound(_amount, troveManager.MIN_DEBT(), maxFuzzAmount);
+        _amount = bound(_amount, troveManager.min_debt(), maxFuzzAmount);
 
         // Lend some from lender
         mintAndDepositIntoLender(userLender, _amount);
@@ -606,7 +606,7 @@ contract LiquidateTests is Base {
         // Make sure we cannot liquidate a trove that is above MCR
         uint256[MAX_ITERATIONS] memory _troveIdsToLiquidate;
         _troveIdsToLiquidate[0] = _troveId;
-        vm.expectRevert(">=MCR");
+        vm.expectRevert("!collateral_ratio");
         troveManager.liquidate_troves(_troveIdsToLiquidate);
     }
 

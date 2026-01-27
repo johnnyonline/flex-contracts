@@ -41,7 +41,9 @@ contract Deploy is Script {
     ILender public lender;
 
     uint256 public minimumCollateralRatio = 110; // 110%
+    uint256 public minimumPriceBufferPercentage = 1e18 - 5e16; // 5%
     uint256 public startingPriceBufferPercentage = 1e18 + 15e16; // 15%
+    uint256 public emergencyStartingPriceBufferPercentage = 1e18 + 100e16; // 100%
 
     address public management = address(420_420);
     address public emergencyAdmin = address(69_420);
@@ -85,7 +87,9 @@ contract Deploy is Script {
                     address(auction),
                     address(borrowToken),
                     address(collateralToken),
-                    startingPriceBufferPercentage
+                    minimumPriceBufferPercentage,
+                    startingPriceBufferPercentage,
+                    emergencyStartingPriceBufferPercentage
                 )
             )
         );
