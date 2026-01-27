@@ -87,7 +87,7 @@ abstract contract Base is Deploy, Test {
     ) public returns (uint256) {
         // Skip time to reach market price
         // Calculate the number of steps needed to reach oracle price
-        uint256 _stepDuration = auction.STEP_DURATION();
+        uint256 _stepDuration = auction.step_duration();
         uint256 _targetPrice = priceOracle.get_price(false);
         uint256 _currentPrice = auction.get_price(_auctionId, block.timestamp);
         uint256 _steps = 0;

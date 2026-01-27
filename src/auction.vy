@@ -61,23 +61,6 @@ struct AuctionInfo:
 # ============================================================================================
 
 
-# Only address that can kick auctions (the Dutch Desk contract)
-PAPI: public(immutable(address))
-
-# Info of the token being bought
-BUY_TOKEN: public(immutable(IERC20))
-BUY_TOKEN_SCALER: public(immutable(uint256))
-
-# Info of the token being sold
-SELL_TOKEN: public(immutable(IERC20))
-SELL_TOKEN_SCALER: public(immutable(uint256))
-
-# Auction parameters
-STEP_DURATION: public(immutable(uint256))  # e.g., 60 for price change every minute
-STEP_DECAY_RATE: public(immutable(uint256))  # e.g., 50 for 0.5% decrease per step
-AUCTION_LENGTH: public(immutable(uint256))  # in seconds, e.g., 86400 for 1 day
-
-# Internal constants
 _MAX_CALLBACK_DATA_SIZE: constant(uint256) = 10**5
 _MAX_TOKEN_DECIMALS: constant(uint256) = 18
 _WAD: constant(uint256) = 10 ** 18
@@ -89,11 +72,25 @@ _RAY: constant(uint256) = 10 ** 27
 # ============================================================================================
 
 
-# Count of active liquidation auctions
-liquidation_auctions: public(uint256)
+# Papi
+papi: public(address)  # only address that can kick auctions (the Dutch Desk contract)
 
-# Mapping of auction ID to auction info
-_auctions: HashMap[uint256, AuctionInfo]
+# Info of the token being bought
+buy_token: public(IERC20)
+buy_token_scaler: public(uint256)
+
+# Info of the token being sold
+sell_token: public(IERC20)
+sell_token_scaler: public(uint256)
+
+# Auction parameters
+step_duration: public(uint256)  # e.g., 60 for price change every minute
+step_decay_rate: public(uint256)  # e.g., 50 for 0.5% decrease per step
+auction_length: public(uint256)  # in seconds, e.g., 86400 for 1 day
+
+# Accounting
+liquidation_auctions: public(uint256)  # count of active liquidation auctions
+_auctions: HashMap[uint256, AuctionInfo]  # auction ID --> AuctionInfo
 
 
 # ============================================================================================
@@ -121,21 +118,21 @@ def __init__(papi: address, buy_token: address, sell_token: address):
     assert sell_token_decimals <= _MAX_TOKEN_DECIMALS, "!sell_token_decimals"
 
     # Set papi address
-    PAPI = papi
+    self.papi = papi
 
     # Set buy token info
-    BUY_TOKEN = IERC20(buy_token)
-    BUY_TOKEN_SCALER = _WAD // 10 ** buy_token_decimals
+    self.buy_token = IERC20(buy_token)
+    self.buy_token_scaler = _WAD // 10 ** buy_token_decimals
 
     # Set sell token info
-    SELL_TOKEN = IERC20(sell_token)
-    SELL_TOKEN_SCALER = _WAD // 10 ** sell_token_decimals
+    self.sell_token = IERC20(sell_token)
+    self.sell_token_scaler = _WAD // 10 ** sell_token_decimals
 
     # Set auction parameters
     # Default to 50bps every 60 seconds
-    STEP_DURATION = 60
-    STEP_DECAY_RATE = 50
-    AUCTION_LENGTH = 1 * 24 * 60 * 60  # 1 day
+    self.step_duration = 60
+    self.step_decay_rate = 50
+    self.auction_length = 1 * 24 * 60 * 60  # 1 day
 
 
 # ============================================================================================
@@ -396,7 +393,7 @@ def kick(
     @param is_liquidation Whether this auction is selling liquidated collateral
     """
     # Make sure caller is Papi
-    assert msg.sender == PAPI, "!papi"
+    assert msg.sender == self.papi, "!papi"
 
     # Make sure amount to kick is non-zero
     assert kick_amount != 0, "!kick_amount"
@@ -438,7 +435,7 @@ def kick(
     )
 
     # Pull the tokens from Papi
-    assert extcall SELL_TOKEN.transferFrom(PAPI, self, kick_amount, default_return_value=True)
+    assert extcall self.sell_token.transferFrom(self.papi, self, kick_amount, default_return_value=True)
 
     # Emit event
     log AuctionKick(auction_id=auction_id, kick_amount=kick_amount)
@@ -459,7 +456,7 @@ def re_kick(
     @param minimum_price The new minimum price for the auction, scaled to WAD
     """
     # Make sure caller is Papi
-    assert msg.sender == PAPI, "!papi"
+    assert msg.sender == self.papi, "!papi"
 
     # Make sure starting price is non-zero
     assert starting_price != 0, "!starting_price"
@@ -542,7 +539,7 @@ def take(
             self.liquidation_auctions -= 1
 
     # Send the token being sold to the take receiver
-    assert extcall SELL_TOKEN.transfer(receiver, take_amount, default_return_value=True)
+    assert extcall self.sell_token.transfer(receiver, take_amount, default_return_value=True)
 
     # If the caller provided data, perform the callback
     if len(data) != 0:
@@ -553,12 +550,15 @@ def take(
             needed_amount,
             data,
         )
+    
+    # Cache the buy token contract
+    buy_token: IERC20 = self.buy_token
 
     # If liquidation auction, all proceeds goes to the Lender contract.
     # Otherwise, make sure the receiver does not get more than the maximum and transfer the surplus to the surplus receiver
     if auction.is_liquidation:
         # Liquidation: all to the Lender contract
-        assert extcall BUY_TOKEN.transferFrom(msg.sender, auction.receiver, needed_amount, default_return_value=True)
+        assert extcall buy_token.transferFrom(msg.sender, auction.receiver, needed_amount, default_return_value=True)
     else:
         # How much the receiver still needs
         receiver_remaining: uint256 = auction.maximum_amount - auction.amount_received
@@ -568,16 +568,16 @@ def take(
         if needed_amount <= receiver_remaining:
             # Entire amount to the receiver
             auction.amount_received += needed_amount
-            assert extcall BUY_TOKEN.transferFrom(msg.sender, auction.receiver, needed_amount, default_return_value=True)
+            assert extcall buy_token.transferFrom(msg.sender, auction.receiver, needed_amount, default_return_value=True)
         else:
             # Cover the receiver first
             if receiver_remaining > 0:
                 auction.amount_received = auction.maximum_amount
-                assert extcall BUY_TOKEN.transferFrom(msg.sender, auction.receiver, receiver_remaining, default_return_value=True)
+                assert extcall buy_token.transferFrom(msg.sender, auction.receiver, receiver_remaining, default_return_value=True)
 
             # Transfer the surplus to the Lender contract
             surplus: uint256 = needed_amount - receiver_remaining
-            assert extcall BUY_TOKEN.transferFrom(msg.sender, auction.surplus_receiver, surplus, default_return_value=True)
+            assert extcall buy_token.transferFrom(msg.sender, auction.surplus_receiver, surplus, default_return_value=True)
 
     # Update storage. No need to worry about re-entrancy since non-reentrant pragma is enabled
     self._auctions[auction_id] = auction
@@ -616,14 +616,14 @@ def _get_amount_needed(
     @return The amount of buy token needed
     """
     # Scale amount to take to WAD
-    scaled_take_amount: uint256 = take_amount * SELL_TOKEN_SCALER
+    scaled_take_amount: uint256 = take_amount * self.sell_token_scaler
 
     # Calculate needed amount without scaling back to buy yet
     # Price is always scaled to WAD
     needed_amount: uint256 = scaled_take_amount * self._get_price(auction, at_timestamp) // _WAD
 
     # Return needed amount scaled back to buy
-    return needed_amount // BUY_TOKEN_SCALER
+    return needed_amount // self.buy_token_scaler
 
 
 @internal
@@ -636,7 +636,7 @@ def _get_price(auction: AuctionInfo, at_timestamp: uint256 = block.timestamp) ->
     @return The calculated price scaled to WAD
     """
     # Scale initial amount to WAD
-    initial_amount: uint256 = auction.initial_amount * SELL_TOKEN_SCALER
+    initial_amount: uint256 = auction.initial_amount * self.sell_token_scaler
 
     # Return early if no available amount
     if initial_amount == 0:
@@ -649,15 +649,15 @@ def _get_price(auction: AuctionInfo, at_timestamp: uint256 = block.timestamp) ->
     seconds_elapsed: uint256 = at_timestamp - auction.kick_timestamp
 
     # If auction duration has passed, price is `0`
-    if seconds_elapsed > AUCTION_LENGTH:
+    if seconds_elapsed > self.auction_length:
         return 0
 
     # Calculate the number of price steps that have passed
-    steps: uint256 = seconds_elapsed // STEP_DURATION
+    steps: uint256 = seconds_elapsed // self.step_duration
 
     # Convert basis points to RAY multiplier (e.g., 50 bps = 0.995 * 1e27)
     # rayMultiplier = 1e27 - (basisPoints * 1e23)
-    ray_multiplier: uint256 = _RAY - (STEP_DECAY_RATE * 10 ** 23)
+    ray_multiplier: uint256 = _RAY - (self.step_decay_rate * 10 ** 23)
 
     # Calculate the decay multiplier using the configurable decay rate per step
     decay_multiplier: uint256 = self._rpow(ray_multiplier, steps)

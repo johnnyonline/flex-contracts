@@ -11,7 +11,7 @@ contract SortedTrovesTests is Base {
 
     function test_setUp() public {
         assertEq(address(sortedTroves), address(troveManager.sorted_troves()), "E0");
-        assertEq(address(sortedTroves.TROVE_MANAGER()), address(troveManager), "E1");
+        assertEq(address(sortedTroves.trove_manager()), address(troveManager), "E1");
         assertEq(sortedTroves.empty(), true, "E2");
         assertEq(sortedTroves.size(), 0, "E3");
         assertEq(sortedTroves.first(), 0, "E4");
