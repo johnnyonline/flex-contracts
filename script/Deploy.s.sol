@@ -64,8 +64,8 @@ contract Deploy is Script {
 
         vm.startBroadcast(_pk);
 
-        // Deploy original contracts
-        deployOriginalContracts(); // @todo -- deploy using create2
+        // Deploy original contracts using CREATE2
+        deployOriginalContracts();
 
         // Deploy factories using CREATE2
         deployFactories();
@@ -92,10 +92,10 @@ contract Deploy is Script {
     }
 
     function deployOriginalContracts() internal {
-        originalAuction = deployCode("auction", abi.encode(address(0), address(0), address(0)));
-        originalDutchDesk = deployCode("dutch_desk", abi.encode(address(0), address(0), address(0), address(0), address(0), address(0), 0, 0, 0));
-        originalSortedTroves = deployCode("sorted_troves", abi.encode(address(0)));
-        originalTroveManager = deployCode("trove_manager", abi.encode(address(0), address(0), address(0), address(0), address(0), address(0), 0));
+        originalAuction = DEPLOYER.deployCreate2(keccak256(abi.encode(SALT, "auction")), abi.encodePacked(vm.getCode("auction")));
+        originalDutchDesk = DEPLOYER.deployCreate2(keccak256(abi.encode(SALT, "dutch_desk")), abi.encodePacked(vm.getCode("dutch_desk")));
+        originalSortedTroves = DEPLOYER.deployCreate2(keccak256(abi.encode(SALT, "sorted_troves")), abi.encodePacked(vm.getCode("sorted_troves")));
+        originalTroveManager = DEPLOYER.deployCreate2(keccak256(abi.encode(SALT, "trove_manager")), abi.encodePacked(vm.getCode("trove_manager")));
     }
 
     function deployFactories() internal {

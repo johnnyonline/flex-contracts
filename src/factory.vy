@@ -9,12 +9,12 @@
 
 from ethereum.ercs import IERC20Detailed
 
+from interfaces import IERC20Symbol
 from interfaces import ITroveManager
 from interfaces import ISortedTroves
 from interfaces import IDutchDesk
 from interfaces import IAuction
 from interfaces import ILenderFactory
-from interfaces import IERC20Symbol
 
 # ============================================================================================
 # Events
