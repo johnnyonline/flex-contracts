@@ -22,6 +22,18 @@ interface ILender is IStrategy {
     // Management functions
     // ============================================================================================
 
+    function setKeeper(
+        address _keeper
+    ) external;
+
+    function setPendingManagement(
+        address _management
+    ) external;
+
+    function setPerformanceFeeRecipient(
+        address _performanceFeeRecipient
+    ) external;
+
     function setDepositLimit(
         uint256 _depositLimit
     ) external;

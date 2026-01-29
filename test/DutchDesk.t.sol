@@ -32,6 +32,21 @@ contract DutchDeskTests is Base {
         assertEq(dutchDesk.nonce(), 0, "E9");
     }
 
+    function test_initialize_revertsIfAlreadyInitialized() public {
+        vm.expectRevert("initialized");
+        dutchDesk.initialize(
+            address(troveManager),
+            address(lender),
+            address(priceOracle),
+            address(auction),
+            address(borrowToken),
+            address(collateralToken),
+            minimumPriceBufferPercentage,
+            startingPriceBufferPercentage,
+            emergencyStartingPriceBufferPercentage
+        );
+    }
+
     function test_kick_liquidation(
         uint256 _amount
     ) public {

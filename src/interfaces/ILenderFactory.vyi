@@ -7,5 +7,5 @@
 
 
 @external
-def deploy() -> address:
+def deploy(_asset: address, _auction: address, _troveManager: address, _management: address, _performanceFeeRecipient: address, name: String[77]) -> address:
     ...

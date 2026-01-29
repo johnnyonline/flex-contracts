@@ -26,6 +26,22 @@ interface IDutchDesk {
     function nonce() external view returns (uint256);
 
     // ============================================================================================
+    // Initialize
+    // ============================================================================================
+
+    function initialize(
+        address trove_manager,
+        address lender,
+        address price_oracle,
+        address auction,
+        address borrow_token,
+        address collateral_token,
+        uint256 minimum_price_buffer_percentage,
+        uint256 starting_price_buffer_percentage,
+        uint256 emergency_starting_price_buffer_percentage
+    ) external;
+
+    // ============================================================================================
     // Kick
     // ============================================================================================
 

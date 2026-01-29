@@ -156,15 +156,15 @@ sorted_troves: public(ISortedTroves)
 borrow_token: public(IERC20)
 collateral_token: public(IERC20)
 
-# Parameters
+# Market parameters
 one_pct: public(uint256)
 borrow_token_precision: public(uint256)
-min_debt: public(uint256)  # in borrow token precision
+min_debt: public(uint256)  # e.g., `500 * borrow_token_precision` for 500 tokens
 minimum_collateral_ratio: public(uint256)  # e.g., `110 * one_pct` for 110%
-min_annual_interest_rate: public(uint256) # e.g., `0.5 * one_pct` for 0.5%
-max_annual_interest_rate: public(uint256) # e.g., `250 * one_pct` for 250%
 upfront_interest_period: public(uint256)  # e.g., `7 * 24 * 60 * 60` for 7 days
 interest_rate_adj_cooldown: public(uint256)  # e.g., `7 * 24 * 60 * 60` for 7 days
+min_annual_interest_rate: public(uint256) # e.g., `0.5 * one_pct` for 0.5%
+max_annual_interest_rate: public(uint256) # e.g., `250 * one_pct` for 250%
 
 # Accounting
 zombie_trove_id: public(uint256)  # partially redeemed Trove ID; prioritized for continued redemption until fully redeemed
@@ -188,7 +188,10 @@ def initialize(
     sorted_troves: address,
     borrow_token: address,
     collateral_token: address,
-    minimum_collateral_ratio: uint256
+    minimum_debt: uint256,
+    minimum_collateral_ratio: uint256,
+    upfront_interest_period: uint256,
+    interest_rate_adj_cooldown: uint256,
 ):
     """
     @notice Initialize the contract
@@ -198,7 +201,10 @@ def initialize(
     @param sorted_troves Address of the Sorted Troves contract
     @param borrow_token Address of the borrow token
     @param collateral_token Address of the collateral token
+    @param minimum_debt Minimum debt for Troves
     @param minimum_collateral_ratio Minimum collateral ratio for Troves
+    @param upfront_interest_period Upfront interest period for Troves
+    @param interest_rate_adj_cooldown Interest rate adjustment cooldown for Troves
     """
     # Make sure the contract is not already initialized
     assert self.lender == empty(address), "initialized"
@@ -213,9 +219,8 @@ def initialize(
     self.borrow_token = IERC20(borrow_token)
     self.collateral_token = IERC20(collateral_token)
 
-    # Borrow token precision cannot be more than WAD
+    # Get borrow token precision
     borrow_token_precision: uint256 = 10 ** convert(staticcall IERC20Detailed(borrow_token).decimals(), uint256)
-    assert borrow_token_precision <= _WAD, "!borrow_token"
 
     # Define 1% using borrow token precision
     one_pct: uint256 = borrow_token_precision // 100
@@ -223,12 +228,12 @@ def initialize(
     # Set market parameters
     self.one_pct = one_pct
     self.borrow_token_precision = borrow_token_precision
-    self.min_debt = 500 * borrow_token_precision  # 500 borrow tokens
+    self.min_debt = minimum_debt * borrow_token_precision
     self.minimum_collateral_ratio = minimum_collateral_ratio * one_pct
+    self.upfront_interest_period = upfront_interest_period
+    self.interest_rate_adj_cooldown = interest_rate_adj_cooldown
     self.min_annual_interest_rate = one_pct // 2  # 0.5%
     self.max_annual_interest_rate = 250 * one_pct  # 250%
-    self.upfront_interest_period = 7 * 24 * 60 * 60  # 7 days
-    self.interest_rate_adj_cooldown = 7 * 24 * 60 * 60  # 7 days
 
     # Max approve the collateral token to the dutch desk
     assert extcall IERC20(collateral_token).approve(dutch_desk, max_value(uint256), default_return_value=True)

@@ -18,6 +18,11 @@ contract SortedTrovesTests is Base {
         assertEq(sortedTroves.last(), 0, "E5");
     }
 
+    function test_initialize_revertsIfAlreadyInitialized() public {
+        vm.expectRevert("initialized");
+        sortedTroves.initialize(address(troveManager));
+    }
+
     function test_sortedTroves_insert(
         uint256[10] memory _rates
     ) public {

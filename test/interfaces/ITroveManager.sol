@@ -49,15 +49,15 @@ interface ITroveManager {
     function borrow_token() external view returns (address);
     function collateral_token() external view returns (address);
 
-    // Parameters
+    // Market parameters
     function one_pct() external view returns (uint256);
     function borrow_token_precision() external view returns (uint256);
     function min_debt() external view returns (uint256);
     function minimum_collateral_ratio() external view returns (uint256);
-    function min_annual_interest_rate() external view returns (uint256);
-    function max_annual_interest_rate() external view returns (uint256);
     function upfront_interest_period() external view returns (uint256);
     function interest_rate_adj_cooldown() external view returns (uint256);
+    function min_annual_interest_rate() external view returns (uint256);
+    function max_annual_interest_rate() external view returns (uint256);
 
     // Accounting
     function zombie_trove_id() external view returns (uint256);
@@ -68,6 +68,23 @@ interface ITroveManager {
     function troves(
         uint256
     ) external view returns (Trove memory);
+
+    // ============================================================================================
+    // Initialize
+    // ============================================================================================
+
+    function initialize(
+        address lender,
+        address dutch_desk,
+        address price_oracle,
+        address sorted_troves,
+        address borrow_token,
+        address collateral_token,
+        uint256 minimum_debt,
+        uint256 minimum_collateral_ratio,
+        uint256 upfront_interest_period,
+        uint256 interest_rate_adj_cooldown
+    ) external;
 
     // ============================================================================================
     // External view functions

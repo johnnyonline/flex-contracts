@@ -229,8 +229,7 @@ contract CloseZombieTroveTests is Base {
         uint256 _expectedCollateralAfterRedemption = _collateralNeeded - ((_amount + _expectedProfit) * ORACLE_PRICE_SCALE / priceOracle.get_price());
 
         // Report profit
-        vm.prank(keeper);
-        (uint256 _profit, uint256 _loss) = lender.report();
+        (uint256 _profit, uint256 _loss) = IKeeper(lenderFactory.KEEPER()).report(address(lender));
 
         // Check return Values
         assertEq(_profit, _expectedProfit, "E25");

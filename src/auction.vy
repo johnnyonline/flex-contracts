@@ -62,7 +62,6 @@ struct AuctionInfo:
 
 
 _MAX_CALLBACK_DATA_SIZE: constant(uint256) = 10**5
-_MAX_TOKEN_DECIMALS: constant(uint256) = 18
 _WAD: constant(uint256) = 10 ** 18
 _RAY: constant(uint256) = 10 ** 27
 
@@ -99,40 +98,47 @@ _auctions: HashMap[uint256, AuctionInfo]  # auction ID --> AuctionInfo
 
 
 @external
-def initialize(papi: address, buy_token: address, sell_token: address):
+def initialize(
+    papi: address,
+    buy_token: address,
+    sell_token: address,
+    step_duration: uint256,
+    step_decay_rate: uint256,
+    auction_length: uint256,
+):
     """
     @notice Initialize the contract
     @param papi Address that is allowed to kick auctions
     @param buy_token Address of the token being bought
     @param sell_token Address of the token being sold
+    @param step_duration Duration of each price step in seconds
+    @param step_decay_rate Decay rate per step in basis points
+    @param auction_length Total length of the auction in seconds
     """
     # Make sure the contract is not already initialized
     assert self.papi == empty(address), "initialized"
 
-    # Buy token cannot have more than 18 decimals
-    buy_token_decimals: uint256 = convert(staticcall IERC20Detailed(buy_token).decimals(), uint256)
-    assert buy_token_decimals <= _MAX_TOKEN_DECIMALS, "!buy_token_decimals"
-
-    # Sell token cannot have more than 18 decimals
-    sell_token_decimals: uint256 = convert(staticcall IERC20Detailed(sell_token).decimals(), uint256)
-    assert sell_token_decimals <= _MAX_TOKEN_DECIMALS, "!sell_token_decimals"
-
     # Set papi address
     self.papi = papi
+
+    # Get buy token decimals
+    buy_token_decimals: uint256 = convert(staticcall IERC20Detailed(buy_token).decimals(), uint256)
 
     # Set buy token info
     self.buy_token = IERC20(buy_token)
     self.buy_token_scaler = _WAD // 10 ** buy_token_decimals
+
+    # Get sell token decimals
+    sell_token_decimals: uint256 = convert(staticcall IERC20Detailed(sell_token).decimals(), uint256)
 
     # Set sell token info
     self.sell_token = IERC20(sell_token)
     self.sell_token_scaler = _WAD // 10 ** sell_token_decimals
 
     # Set auction parameters
-    # Default to 50bps every 60 seconds
-    self.step_duration = 60
-    self.step_decay_rate = 50
-    self.auction_length = 1 * 24 * 60 * 60  # 1 day
+    self.step_duration = step_duration
+    self.step_decay_rate = step_decay_rate
+    self.auction_length = auction_length
 
 
 # ============================================================================================

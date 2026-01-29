@@ -3,16 +3,49 @@ pragma solidity 0.8.23;
 
 import {IBaseStrategy} from "@tokenized-strategy/interfaces/IBaseStrategy.sol";
 
+import {ILender} from "../src/lender/interfaces/ILender.sol";
+
+import {IAuction} from "./interfaces/IAuction.sol";
+import {IDutchDesk} from "./interfaces/IDutchDesk.sol";
+import {IKeeper} from "./interfaces/IKeeper.sol";
+import {IPriceOracle} from "./interfaces/IPriceOracle.sol";
+import {ISortedTroves} from "./interfaces/ISortedTroves.sol";
+import {ITroveManager} from "./interfaces/ITroveManager.sol";
+
 import "../script/Deploy.s.sol";
 
 import "forge-std/Test.sol";
 
 abstract contract Base is Deploy, Test {
 
+    // Contracts
+    ILender public lender;
+    IPriceOracle public priceOracle;
+    IAuction public auction;
+    IDutchDesk public dutchDesk;
+    ISortedTroves public sortedTroves;
+    ITroveManager public troveManager;
+
+    // Roles
     address public userLender = address(420);
     address public userBorrower = address(69);
     address public anotherUserBorrower = address(555);
     address public liquidator = address(88);
+    address public management = address(420_420);
+    address public performanceFeeRecipient = address(420_69_420);
+    address public keeper = address(69_69);
+
+    // Market parameters
+    uint256 public minimumDebt = 500; // 500 tokens
+    uint256 public minimumCollateralRatio = 110; // 110%
+    uint256 public upfrontInterestPeriod = 7 days; // 7 days
+    uint256 public interestRateAdjCooldown = 7 days; // 7 days
+    uint256 public minimumPriceBufferPercentage = 1e18 - 5e16; // 5%
+    uint256 public startingPriceBufferPercentage = 1e18 + 15e16; // 15%
+    uint256 public emergencyStartingPriceBufferPercentage = 1e18 + 100e16; // 100%
+    uint256 public stepDuration = 60; // 60 seconds
+    uint256 public stepDecayRate = 50; // 0.5%
+    uint256 public auctionLength = 1 days; // 1 day
 
     // Fuzz lend amount from 0.001 of 1e18 coin up to 1 million of a 1e18 coin
     uint256 public maxFuzzAmount = 1_000_000 ether;
@@ -28,15 +61,48 @@ abstract contract Base is Deploy, Test {
     uint256 public constant WAD = 1e18;
 
     function setUp() public virtual {
-        // notify deplyment script that this is a test
+        // Notify deployment script that this is a test
         isTest = true;
 
-        // create fork
+        // Create fork
         uint256 _blockNumber = 23_513_850; // cache state for faster tests
         vm.selectFork(vm.createFork(vm.envString("ETH_RPC_URL"), _blockNumber));
 
-        // deploy and initialize contracts
+        // Deploy factories
         run();
+
+        // Deploy price oracle
+        priceOracle = IPriceOracle(deployCode("yvweth2_to_usdc_oracle"));
+
+        // Deploy market
+        (address _troveManager, address _sortedTroves, address _dutchDesk, address _auction, address _lender) = catFactory.deploy(
+            address(borrowToken),
+            address(collateralToken),
+            address(priceOracle),
+            management,
+            performanceFeeRecipient,
+            minimumDebt,
+            minimumCollateralRatio,
+            upfrontInterestPeriod,
+            interestRateAdjCooldown,
+            minimumPriceBufferPercentage,
+            startingPriceBufferPercentage,
+            emergencyStartingPriceBufferPercentage
+        );
+
+        // Set contract instances
+        troveManager = ITroveManager(_troveManager);
+        sortedTroves = ISortedTroves(_sortedTroves);
+        dutchDesk = IDutchDesk(_dutchDesk);
+        auction = IAuction(_auction);
+        lender = ILender(_lender);
+
+        // Label addresses
+        vm.label(address(troveManager), "TroveManager");
+        vm.label(address(sortedTroves), "SortedTroves");
+        vm.label(address(dutchDesk), "DutchDesk");
+        vm.label(address(auction), "Auction");
+        vm.label(address(lender), "Lender");
 
         // Set up Lender
         vm.prank(management);

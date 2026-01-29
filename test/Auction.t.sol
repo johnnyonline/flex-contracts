@@ -25,10 +25,15 @@ contract AuctionTests is Base {
         assertEq(auction.buy_token_scaler(), WAD / BORROW_TOKEN_PRECISION, "E2");
         assertEq(auction.sell_token(), address(collateralToken), "E3");
         assertEq(auction.sell_token_scaler(), WAD / COLLATERAL_TOKEN_PRECISION, "E4");
-        assertEq(auction.step_duration(), 60, "E5");
-        assertEq(auction.step_decay_rate(), 50, "E6");
-        assertEq(auction.auction_length(), 1 days, "E7");
+        assertEq(auction.step_duration(), stepDuration, "E5");
+        assertEq(auction.step_decay_rate(), stepDecayRate, "E6");
+        assertEq(auction.auction_length(), auctionLength, "E7");
         assertEq(auction.liquidation_auctions(), 0, "E8");
+    }
+
+    function test_initialize_revertsIfAlreadyInitialized() public {
+        vm.expectRevert("initialized");
+        auction.initialize(address(dutchDesk), address(borrowToken), address(collateralToken), stepDuration, stepDecayRate, auctionLength);
     }
 
     function test_kick(

@@ -19,7 +19,6 @@ from interfaces import IPriceOracle
 # ============================================================================================
 
 
-_MAX_TOKEN_DECIMALS: constant(uint256) = 18
 _WAD: constant(uint256) = 10 ** 18
 
 
@@ -96,13 +95,8 @@ def initialize(
     self.starting_price_buffer_percentage = starting_price_buffer_percentage
     self.emergency_starting_price_buffer_percentage = emergency_starting_price_buffer_percentage
 
-    # Borrow token cannot have more than 18 decimals
-    borrow_token_decimals: uint256 = convert(staticcall IERC20Detailed(borrow_token).decimals(), uint256)
-    assert borrow_token_decimals <= _MAX_TOKEN_DECIMALS, "!borrow_token_decimals"
-
-    # Collateral token cannot have more than 18 decimals
+    # Get collateral token decimals
     collateral_token_decimals: uint256 = convert(staticcall IERC20Detailed(collateral_token).decimals(), uint256)
-    assert collateral_token_decimals <= _MAX_TOKEN_DECIMALS, "!collateral_token_decimals"
 
     # Set collateral token precision
     self.collateral_token_precision = 10 ** collateral_token_decimals

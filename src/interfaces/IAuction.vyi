@@ -18,7 +18,14 @@ def current_amount(auction_id: uint256) -> uint256:
 
 
 @external
-def initialize(dutch_desk: address, borrow_token: address, collateral_token: address):
+def initialize(
+    papi: address,
+    buy_token: address,
+    sell_token: address,
+    step_duration: uint256,
+    step_decay_rate: uint256,
+    auction_length: uint256,
+):
     ...
 
 

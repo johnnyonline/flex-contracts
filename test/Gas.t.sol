@@ -1,7 +1,6 @@
 // SPDX-License-Identifier: MIT
 pragma solidity 0.8.23;
 
-import {IAuction} from "../script/interfaces/IAuction.sol";
 import "./Base.sol";
 import {IPriceOracleNotScaled} from "./interfaces/IPriceOracleNotScaled.sol";
 import {IPriceOracleScaled} from "./interfaces/IPriceOracleScaled.sol";

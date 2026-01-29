@@ -53,6 +53,9 @@ def initialize(
     sorted_troves: address,
     borrow_token: address,
     collateral_token: address,
+    minimum_debt: uint256,
     minimum_collateral_ratio: uint256,
+    upfront_interest_period: uint256,
+    interest_rate_adj_cooldown: uint256,
 ):
     ...

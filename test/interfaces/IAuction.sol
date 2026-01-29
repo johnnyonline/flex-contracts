@@ -25,6 +25,19 @@ interface IAuction {
     function liquidation_auctions() external view returns (uint256);
 
     // ============================================================================================
+    // Initialize
+    // ============================================================================================
+
+    function initialize(
+        address papi,
+        address buy_token,
+        address sell_token,
+        uint256 step_duration,
+        uint256 step_decay_rate,
+        uint256 auction_length
+    ) external;
+
+    // ============================================================================================
     // External view functions
     // ============================================================================================
 
