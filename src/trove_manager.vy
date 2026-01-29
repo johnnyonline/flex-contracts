@@ -134,27 +134,6 @@ struct Trove:
 # ============================================================================================
 
 
-# Contracts
-LENDER: public(immutable(address))
-DUTCH_DESK: public(immutable(IDutchDesk))
-PRICE_ORACLE: public(immutable(IPriceOracle))
-SORTED_TROVES: public(immutable(ISortedTroves))
-
-# Tokens
-BORROW_TOKEN: public(immutable(IERC20))
-COLLATERAL_TOKEN: public(immutable(IERC20))
-
-# Parameters
-MIN_DEBT: public(immutable(uint256))  # in borrow token precision
-MINIMUM_COLLATERAL_RATIO: public(immutable(uint256))  # e.g., `110 * _ONE_PCT` for 110%
-MIN_ANNUAL_INTEREST_RATE: public(immutable(uint256)) # e.g., `0.5 * _ONE_PCT` for 0.5%
-MAX_ANNUAL_INTEREST_RATE: public(immutable(uint256)) # e.g., `250 * _ONE_PCT` for 250%
-UPFRONT_INTEREST_PERIOD: public(constant(uint256)) = 7 * 24 * 60 * 60  # 7 days
-INTEREST_RATE_ADJ_COOLDOWN: public(constant(uint256)) = 7 * 24 * 60 * 60  # 7 days
-
-# Internal constants
-_ONE_PCT: immutable(uint256)
-_BORROW_TOKEN_PRECISION: immutable(uint256)
 _PRICE_ORACLE_PRECISION: constant(uint256) = 10 ** 36
 _WAD: constant(uint256) = 10 ** 18
 _MAX_ITERATIONS: constant(uint256) = 700
@@ -167,40 +146,52 @@ _REDEMPTION_AUCTION: constant(bool) = False
 # ============================================================================================
 
 
-# ID of a Trove that has been partially redeemed and is now a "zombie".
-# We will continue redeeming this Trove first until it's fully redeemed
-zombie_trove_id: public(uint256)
+# Contracts
+lender: public(address)
+dutch_desk: public(IDutchDesk)
+price_oracle: public(IPriceOracle)
+sorted_troves: public(ISortedTroves)
 
-# Total outstanding system debt
-total_debt: public(uint256)
+# Tokens
+borrow_token: public(IERC20)
+collateral_token: public(IERC20)
 
-# Sum of individual trove debts weighted by their annual interest rates
-total_weighted_debt: public(uint256)
+# Market parameters
+one_pct: public(uint256)
+borrow_token_precision: public(uint256)
+min_debt: public(uint256)  # e.g., `500 * borrow_token_precision` for 500 tokens
+minimum_collateral_ratio: public(uint256)  # e.g., `110 * one_pct` for 110%
+upfront_interest_period: public(uint256)  # e.g., `7 * 24 * 60 * 60` for 7 days
+interest_rate_adj_cooldown: public(uint256)  # e.g., `7 * 24 * 60 * 60` for 7 days
+min_annual_interest_rate: public(uint256) # e.g., `0.5 * one_pct` for 0.5%
+max_annual_interest_rate: public(uint256) # e.g., `250 * one_pct` for 250%
 
-# Last timestamp when `total_debt` and `total_weighted_debt` were updated
-last_debt_update_time: public(uint256)
-
-# Total collateral tokens currently held by the contract
-collateral_balance: public(uint256)
-
-# Trove ID --> Trove info
-troves: public(HashMap[uint256, Trove])
+# Accounting
+zombie_trove_id: public(uint256)  # partially redeemed Trove ID; prioritized for continued redemption until fully redeemed
+total_debt: public(uint256)  # total outstanding system debt
+total_weighted_debt: public(uint256)  # sum of individual trove debts weighted by their annual interest rates
+last_debt_update_time: public(uint256)  # last timestamp when `total_debt` and `total_weighted_debt` were updated
+collateral_balance: public(uint256)  # total collateral tokens currently held by the contract
+troves: public(HashMap[uint256, Trove])  # Trove ID --> Trove info
 
 
 # ============================================================================================
-# Constructor
+# Initialize
 # ============================================================================================
 
 
-@deploy
-def __init__(
+@external
+def initialize(
     lender: address,
     dutch_desk: address,
     price_oracle: address,
     sorted_troves: address,
     borrow_token: address,
     collateral_token: address,
-    minimum_collateral_ratio: uint256
+    minimum_debt: uint256,
+    minimum_collateral_ratio: uint256,
+    upfront_interest_period: uint256,
+    interest_rate_adj_cooldown: uint256,
 ):
     """
     @notice Initialize the contract
@@ -210,29 +201,42 @@ def __init__(
     @param sorted_troves Address of the Sorted Troves contract
     @param borrow_token Address of the borrow token
     @param collateral_token Address of the collateral token
+    @param minimum_debt Minimum debt for Troves
     @param minimum_collateral_ratio Minimum collateral ratio for Troves
+    @param upfront_interest_period Upfront interest period for Troves
+    @param interest_rate_adj_cooldown Interest rate adjustment cooldown for Troves
     """
-    # Set immutable addresses
-    LENDER = lender
-    DUTCH_DESK = IDutchDesk(dutch_desk)
-    PRICE_ORACLE = IPriceOracle(price_oracle)
-    SORTED_TROVES = ISortedTroves(sorted_troves)
-    BORROW_TOKEN = IERC20(borrow_token)
-    COLLATERAL_TOKEN = IERC20(collateral_token)
+    # Make sure the contract is not already initialized
+    assert self.lender == empty(address), "initialized"
 
-    # Borrow token precision cannot be more than WAD
-    _BORROW_TOKEN_PRECISION = 10 ** convert(staticcall IERC20Detailed(borrow_token).decimals(), uint256)
-    assert _BORROW_TOKEN_PRECISION <= _WAD, "!borrow_token"
+    # Set contract addresses
+    self.lender = lender
+    self.dutch_desk = IDutchDesk(dutch_desk)
+    self.price_oracle = IPriceOracle(price_oracle)
+    self.sorted_troves = ISortedTroves(sorted_troves)
 
-    # Set immutable market parameters
-    _ONE_PCT = _BORROW_TOKEN_PRECISION // 100
-    MIN_DEBT = 500 * _BORROW_TOKEN_PRECISION
-    MINIMUM_COLLATERAL_RATIO = minimum_collateral_ratio * _ONE_PCT
-    MIN_ANNUAL_INTEREST_RATE = _ONE_PCT // 2  # 0.5%
-    MAX_ANNUAL_INTEREST_RATE = 250 * _ONE_PCT  # 250%
+    # Set token addresses
+    self.borrow_token = IERC20(borrow_token)
+    self.collateral_token = IERC20(collateral_token)
+
+    # Get borrow token precision
+    borrow_token_precision: uint256 = 10 ** convert(staticcall IERC20Detailed(borrow_token).decimals(), uint256)
+
+    # Define 1% using borrow token precision
+    one_pct: uint256 = borrow_token_precision // 100
+
+    # Set market parameters
+    self.one_pct = one_pct
+    self.borrow_token_precision = borrow_token_precision
+    self.min_debt = minimum_debt * borrow_token_precision
+    self.minimum_collateral_ratio = minimum_collateral_ratio * one_pct
+    self.upfront_interest_period = upfront_interest_period
+    self.interest_rate_adj_cooldown = interest_rate_adj_cooldown
+    self.min_annual_interest_rate = one_pct // 2  # 0.5%
+    self.max_annual_interest_rate = 250 * one_pct  # 250%
 
     # Max approve the collateral token to the dutch desk
-    assert extcall COLLATERAL_TOKEN.approve(dutch_desk, max_value(uint256), default_return_value=True)
+    assert extcall IERC20(collateral_token).approve(dutch_desk, max_value(uint256), default_return_value=True)
 
 
 # ============================================================================================
@@ -245,7 +249,7 @@ def __init__(
 def get_upfront_fee(debt_amount: uint256, annual_interest_rate: uint256) -> uint256:
     """
     @notice Get the upfront fee for borrowing a specified amount of debt at a given annual interest rate
-    @dev The fee represents prepaid interest over `UPFRONT_INTEREST_PERIOD` using the system's average rate after the new debt
+    @dev The fee represents prepaid interest over upfront interest period using the system's average rate after the new debt
     @param debt_amount The amount of debt to be borrowed
     @param annual_interest_rate The annual interest rate for the debt
     @return upfront_fee The calculated upfront fee
@@ -384,8 +388,8 @@ def open_trove(
     assert debt_amount > 0, "!debt_amount"
 
     # Make sure the annual interest rate is within bounds
-    assert annual_interest_rate >= MIN_ANNUAL_INTEREST_RATE, "!MIN_ANNUAL_INTEREST_RATE"
-    assert annual_interest_rate <= MAX_ANNUAL_INTEREST_RATE, "!MAX_ANNUAL_INTEREST_RATE"
+    assert annual_interest_rate >= self.min_annual_interest_rate, "!min_annual_interest_rate"
+    assert annual_interest_rate <= self.max_annual_interest_rate, "!max_annual_interest_rate"
 
     # Generate the Trove ID
     trove_id: uint256 = convert(keccak256(abi_encode(msg.sender, owner_index)), uint256)
@@ -400,10 +404,10 @@ def open_trove(
     debt_amount_with_fee: uint256 = debt_amount + upfront_fee
 
     # Make sure enough debt is being borrowed
-    assert debt_amount_with_fee > MIN_DEBT, "!MIN_DEBT"
+    assert debt_amount_with_fee > self.min_debt, "!min_debt"
 
     # Get the collateral price
-    collateral_price: uint256 = staticcall PRICE_ORACLE.get_price()
+    collateral_price: uint256 = staticcall self.price_oracle.get_price()
 
     # Calculate the collateral ratio
     trove_collateral_ratio: uint256 = self._calculate_collateral_ratio(
@@ -411,7 +415,7 @@ def open_trove(
     )
 
     # Make sure the collateral ratio is above the minimum collateral ratio
-    assert trove_collateral_ratio >= MINIMUM_COLLATERAL_RATIO, "!MINIMUM_COLLATERAL_RATIO"
+    assert trove_collateral_ratio >= self.minimum_collateral_ratio, "!minimum_collateral_ratio"
 
     # Store the Trove info
     self.troves[trove_id] = Trove(
@@ -437,7 +441,7 @@ def open_trove(
     self.collateral_balance += collateral_amount
 
     # Add the Trove to the sorted troves list
-    extcall SORTED_TROVES.insert(
+    extcall self.sorted_troves.insert(
         trove_id,
         annual_interest_rate,
         prev_id,
@@ -445,7 +449,7 @@ def open_trove(
     )
 
     # Pull the collateral tokens from caller
-    assert extcall COLLATERAL_TOKEN.transferFrom(msg.sender, self, collateral_amount, default_return_value=True)
+    assert extcall self.collateral_token.transferFrom(msg.sender, self, collateral_amount, default_return_value=True)
 
     # Deliver borrow tokens to the caller, redeem if liquidity is insufficient
     self._transfer_borrow_tokens(debt_amount, annual_interest_rate, min_debt_out, min_collateral_out)
@@ -496,7 +500,7 @@ def add_collateral(trove_id: uint256, collateral_amount: uint256):
     self.collateral_balance += collateral_amount
 
     # Pull the collateral tokens from caller
-    assert extcall COLLATERAL_TOKEN.transferFrom(msg.sender, self, collateral_amount, default_return_value=True)
+    assert extcall self.collateral_token.transferFrom(msg.sender, self, collateral_amount, default_return_value=True)
 
     # Emit event
     log AddCollateral(
@@ -533,7 +537,7 @@ def remove_collateral(trove_id: uint256, collateral_amount: uint256):
     trove_debt_after_interest: uint256 = self._get_trove_debt_after_interest(trove)
 
     # Get the collateral price
-    collateral_price: uint256 = staticcall PRICE_ORACLE.get_price()
+    collateral_price: uint256 = staticcall self.price_oracle.get_price()
 
     # Calculate the new collateral amount and collateral ratio
     new_collateral: uint256 = trove.collateral - collateral_amount
@@ -542,7 +546,7 @@ def remove_collateral(trove_id: uint256, collateral_amount: uint256):
     )
 
     # Make sure the new collateral ratio is above the minimum collateral ratio
-    assert collateral_ratio >= MINIMUM_COLLATERAL_RATIO, "!MINIMUM_COLLATERAL_RATIO"
+    assert collateral_ratio >= self.minimum_collateral_ratio, "!minimum_collateral_ratio"
 
     # Update the Trove's collateral info
     self.troves[trove_id].collateral = new_collateral
@@ -551,7 +555,7 @@ def remove_collateral(trove_id: uint256, collateral_amount: uint256):
     self.collateral_balance -= collateral_amount
 
     # Transfer the collateral tokens to caller
-    assert extcall COLLATERAL_TOKEN.transfer(msg.sender, collateral_amount, default_return_value=True)
+    assert extcall self.collateral_token.transfer(msg.sender, collateral_amount, default_return_value=True)
 
     # Emit event
     log RemoveCollateral(
@@ -606,13 +610,13 @@ def borrow(
     new_debt: uint256 = trove_debt_after_interest + debt_amount_with_fee
 
     # Get the collateral price
-    collateral_price: uint256 = staticcall PRICE_ORACLE.get_price()
+    collateral_price: uint256 = staticcall self.price_oracle.get_price()
 
     # Calculate the collateral ratio
     collateral_ratio: uint256 = self._calculate_collateral_ratio(trove.collateral, new_debt, collateral_price)
 
     # Make sure the new collateral ratio is above the minimum collateral ratio
-    assert collateral_ratio >= MINIMUM_COLLATERAL_RATIO, "!MINIMUM_COLLATERAL_RATIO"
+    assert collateral_ratio >= self.minimum_collateral_ratio, "!minimum_collateral_ratio"
 
     # Cache the Trove's old debt for global accounting
     old_debt: uint256 = trove.debt
@@ -674,7 +678,7 @@ def repay(trove_id: uint256, debt_amount: uint256):
     trove_debt_after_interest: uint256 = self._get_trove_debt_after_interest(trove)
 
     # Calculate the maximum allowable repayment to keep the Trove above the minimum debt
-    max_repayment: uint256 = trove_debt_after_interest - MIN_DEBT
+    max_repayment: uint256 = trove_debt_after_interest - self.min_debt
 
     # Scale down the repayment amount if necessary
     debt_to_repay: uint256 = min(debt_amount, max_repayment)
@@ -700,8 +704,8 @@ def repay(trove_id: uint256, debt_amount: uint256):
         old_debt * trove.annual_interest_rate, # weighted_debt_decrease
     )
 
-    # Pull the borrow tokens from caller and transfer them to the lender
-    assert extcall BORROW_TOKEN.transferFrom(msg.sender, LENDER, debt_to_repay, default_return_value=True)
+    # Pull the borrow tokens from caller and transfer them to the Lender contract
+    assert extcall self.borrow_token.transferFrom(msg.sender, self.lender, debt_to_repay, default_return_value=True)
 
     # Emit event
     log Repay(
@@ -729,8 +733,8 @@ def adjust_interest_rate(
     @param max_upfront_fee Maximum upfront fee the caller is willing to pay
     """
     # Make sure the new annual interest rate is within bounds
-    assert new_annual_interest_rate >= MIN_ANNUAL_INTEREST_RATE, "!MIN_ANNUAL_INTEREST_RATE"
-    assert new_annual_interest_rate <= MAX_ANNUAL_INTEREST_RATE, "!MAX_ANNUAL_INTEREST_RATE"
+    assert new_annual_interest_rate >= self.min_annual_interest_rate, "!min_annual_interest_rate"
+    assert new_annual_interest_rate <= self.max_annual_interest_rate, "!max_annual_interest_rate"
 
     # Cache Trove info
     trove: Trove = self.troves[trove_id]
@@ -755,7 +759,7 @@ def adjust_interest_rate(
     upfront_fee: uint256 = 0
 
     # Apply upfront fee on premature adjustments and check collateral ratio
-    if block.timestamp < convert(trove.last_interest_rate_adj_time, uint256) + INTEREST_RATE_ADJ_COOLDOWN:
+    if block.timestamp < convert(trove.last_interest_rate_adj_time, uint256) + self.interest_rate_adj_cooldown:
         # Calculate the upfront fee and make sure the user is ok with it
         upfront_fee = self._get_upfront_fee(new_debt, new_annual_interest_rate, max_upfront_fee)
 
@@ -763,13 +767,13 @@ def adjust_interest_rate(
         new_debt += upfront_fee
 
         # Get the collateral price
-        collateral_price: uint256 = staticcall PRICE_ORACLE.get_price()
+        collateral_price: uint256 = staticcall self.price_oracle.get_price()
 
         # Calculate the collateral ratio
         collateral_ratio: uint256 = self._calculate_collateral_ratio(trove.collateral, new_debt, collateral_price)
 
         # Make sure the new collateral ratio is above the minimum collateral ratio
-        assert collateral_ratio >= MINIMUM_COLLATERAL_RATIO, "!MINIMUM_COLLATERAL_RATIO"
+        assert collateral_ratio >= self.minimum_collateral_ratio, "!minimum_collateral_ratio"
 
     # Cache the Trove's old debt and interest rate for global accounting
     old_debt: uint256 = trove.debt
@@ -795,7 +799,7 @@ def adjust_interest_rate(
     )
 
     # Reinsert the Trove in the sorted list at its new position
-    extcall SORTED_TROVES.re_insert(
+    extcall self.sorted_troves.re_insert(
         trove_id,
         new_annual_interest_rate,
         prev_id,
@@ -858,13 +862,13 @@ def close_trove(trove_id: uint256):
     )
 
     # Remove from sorted list
-    extcall SORTED_TROVES.remove(trove_id)
+    extcall self.sorted_troves.remove(trove_id)
 
-    # Pull the borrow tokens from caller and transfer them to the lender
-    assert extcall BORROW_TOKEN.transferFrom(msg.sender, LENDER, trove_debt_after_interest, default_return_value=True)
+    # Pull the borrow tokens from caller and transfer them to the Lender contract
+    assert extcall self.borrow_token.transferFrom(msg.sender, self.lender, trove_debt_after_interest, default_return_value=True)
 
     # Transfer the collateral tokens to caller
-    assert extcall COLLATERAL_TOKEN.transfer(msg.sender, old_trove.collateral, default_return_value=True)
+    assert extcall self.collateral_token.transfer(msg.sender, old_trove.collateral, default_return_value=True)
 
     # Emit event
     log CloseTrove(
@@ -924,11 +928,11 @@ def close_zombie_trove(trove_id: uint256):
             old_trove.debt * old_trove.annual_interest_rate, # weighted_debt_decrease
         )
 
-        # Pull the borrow tokens from caller and transfer them to the lender
-        assert extcall BORROW_TOKEN.transferFrom(msg.sender, LENDER, trove_debt_after_interest, default_return_value=True)
+        # Pull the borrow tokens from caller and transfer them to the Lender contract
+        assert extcall self.borrow_token.transferFrom(msg.sender, self.lender, trove_debt_after_interest, default_return_value=True)
 
     # Transfer the collateral tokens to caller
-    assert extcall COLLATERAL_TOKEN.transfer(msg.sender, old_trove.collateral, default_return_value=True)
+    assert extcall self.collateral_token.transfer(msg.sender, old_trove.collateral, default_return_value=True)
 
     # Emit event
     log CloseZombieTrove(
@@ -958,7 +962,7 @@ def liquidate_troves(trove_ids: uint256[_MAX_ITERATIONS]):
     current_zombie_trove_id: uint256 = self.zombie_trove_id
 
     # Get the collateral price
-    collateral_price: uint256 = staticcall PRICE_ORACLE.get_price()
+    collateral_price: uint256 = staticcall self.price_oracle.get_price()
 
     # Initialize variables to track total changes
     total_collateral_to_decrease: uint256 = 0
@@ -999,7 +1003,7 @@ def liquidate_troves(trove_ids: uint256[_MAX_ITERATIONS]):
     )
 
     # Kick the auction. Proceeds will be sent to the Lender contract
-    extcall DUTCH_DESK.kick(total_collateral_to_decrease)  # pulls collateral tokens
+    extcall self.dutch_desk.kick(total_collateral_to_decrease)  # pulls collateral tokens
 
 
 @internal
@@ -1029,7 +1033,7 @@ def _liquidate_single_trove(trove_id: uint256, current_zombie_trove_id: uint256,
     )
 
     # Make sure the collateral ratio is below the minimum collateral ratio
-    assert collateral_ratio < MINIMUM_COLLATERAL_RATIO, ">=MCR"
+    assert collateral_ratio < self.minimum_collateral_ratio, "!collateral_ratio"
 
     # Cache the Trove's old info for global accounting
     old_trove: Trove = trove
@@ -1047,7 +1051,7 @@ def _liquidate_single_trove(trove_id: uint256, current_zombie_trove_id: uint256,
 
     # Remove from sorted list if it was active
     if old_trove.status == Status.ACTIVE:
-        extcall SORTED_TROVES.remove(trove_id)
+        extcall self.sorted_troves.remove(trove_id)
 
     # Emit event
     log LiquidateTrove(
@@ -1080,7 +1084,7 @@ def redeem(debt_amount: uint256, receiver: address):
     @param receiver Address to transfer the auction proceeds to
     """
     # Make sure the caller is the Lender contract
-    assert msg.sender == LENDER, "!lender"
+    assert msg.sender == self.lender, "!lender"
 
     # Attempt to redeem the specified `debt_amount` and transfer the resulting borrow tokens to the `receiver`
     self._redeem(debt_amount, max_value(uint256), receiver)
@@ -1106,7 +1110,7 @@ def _redeem(
     self._sync_total_debt()
 
     # Get the collateral price
-    collateral_price: uint256 = staticcall PRICE_ORACLE.get_price()
+    collateral_price: uint256 = staticcall self.price_oracle.get_price()
 
     # Initialize the `is_zombie_trove` flag
     is_zombie_trove: bool = False
@@ -1114,11 +1118,14 @@ def _redeem(
     # Initialize the Trove to redeem variable
     trove_to_redeem: uint256 = self.zombie_trove_id
 
+    # Cache the Sorted Troves contract
+    sorted_troves: ISortedTroves = self.sorted_troves
+
     # Use zombie Trove from previous redemption if it exists. Otherwise get the Trove with the lowest interest rate
     if trove_to_redeem != 0:
         is_zombie_trove = True
     else:
-        trove_to_redeem = staticcall SORTED_TROVES.last()
+        trove_to_redeem = staticcall sorted_troves.last()
 
     # Cache the amount of debt we need to free
     remaining_debt_to_free: uint256 = debt_amount
@@ -1139,7 +1146,7 @@ def _redeem(
             break
 
         # Cache the ID of the next Trove to redeem, i.e., the previous Trove in the sorted list
-        next_trove_to_redeem: uint256 = staticcall SORTED_TROVES.prev(trove_to_redeem)
+        next_trove_to_redeem: uint256 = staticcall sorted_troves.prev(trove_to_redeem)
 
         # Don't want to redeem a borrower's own Trove
         if msg.sender != trove.owner:
@@ -1153,14 +1160,14 @@ def _redeem(
             trove_new_debt: uint256 = trove_debt_after_interest - debt_to_free
 
             # If trove would be left with debt below the minimum, go zombie
-            if trove_new_debt < MIN_DEBT:
+            if trove_new_debt < self.min_debt:
                 # If the trove is not already a zombie trove, we need to mark it as such
                 if not is_zombie_trove:
                     # Mark trove as zombie
                     trove.status = Status.ZOMBIE
 
                     # Remove trove from sorted list
-                    extcall SORTED_TROVES.remove(trove_to_redeem)
+                    extcall sorted_troves.remove(trove_to_redeem)
 
                     # If it's a partial redemption, record it so we know to continue with it next time
                     if trove_new_debt > 0:
@@ -1214,7 +1221,7 @@ def _redeem(
 
         # Get the next Trove to redeem. If we just processed a zombie Trove (which is not in the sorted Troves list),
         # get the Trove with the lowest interest rate. Otherwise, use the previous Trove from the list
-        trove_to_redeem = staticcall SORTED_TROVES.last() if is_zombie_trove else next_trove_to_redeem
+        trove_to_redeem = staticcall sorted_troves.last() if is_zombie_trove else next_trove_to_redeem
 
         # Break if we reached the end of the list
         if trove_to_redeem == 0:
@@ -1236,7 +1243,7 @@ def _redeem(
 
     # Kick the auction.
     # Proceeds up to `total_debt_decrease` will be sent to the `receiver`, any surplus will be sent to the Lender contract
-    extcall DUTCH_DESK.kick(total_collateral_decrease, total_debt_decrease, receiver, _REDEMPTION_AUCTION)  # pulls collateral tokens
+    extcall self.dutch_desk.kick(total_collateral_decrease, total_debt_decrease, receiver, _REDEMPTION_AUCTION)  # pulls collateral tokens
 
     # Emit event
     log Redeem(
@@ -1272,7 +1279,7 @@ def _calculate_collateral_ratio(
     collateral_value: uint256 = collateral_amount * collateral_price // _PRICE_ORACLE_PRECISION
 
     # Return ratio as percentage
-    return collateral_value * _BORROW_TOKEN_PRECISION // debt_amount
+    return collateral_value * self.borrow_token_precision // debt_amount
 
 
 @internal
@@ -1284,7 +1291,7 @@ def _calculate_accrued_interest(weighted_debt: uint256, period: uint256) -> uint
     @param period The time period over which interest is calculated
     @return interest The interest accrued over the period
     """
-    return weighted_debt * period // _ONE_YEAR // _BORROW_TOKEN_PRECISION
+    return weighted_debt * period // _ONE_YEAR // self.borrow_token_precision
 
 
 @internal
@@ -1297,7 +1304,7 @@ def _get_upfront_fee(
     """
     @notice Get the upfront fee for borrowing a specified amount of debt at a given annual interest rate
     @dev Make sure the calculated fee does not exceed `max_upfront_fee`
-    @dev The fee represents prepaid interest over `UPFRONT_INTEREST_PERIOD` using the system's average rate after the new debt
+    @dev The fee represents prepaid interest over upfront interest period using the system's average rate after the new debt
     @param debt_amount The amount of debt to be borrowed
     @param annual_interest_rate The annual interest rate for the debt
     @param max_upfront_fee The maximum upfront fee the caller is willing to pay
@@ -1313,7 +1320,7 @@ def _get_upfront_fee(
     avg_interest_rate: uint256 = new_total_weighted_debt // new_total_debt
 
     # Calculate the upfront fee using the average interest rate
-    upfront_fee: uint256 = self._calculate_accrued_interest(debt_amount * avg_interest_rate, UPFRONT_INTEREST_PERIOD)
+    upfront_fee: uint256 = self._calculate_accrued_interest(debt_amount * avg_interest_rate, self.upfront_interest_period)
 
     # Make sure the user is ok with the upfront fee
     assert upfront_fee <= max_upfront_fee, "!max_upfront_fee"
@@ -1380,7 +1387,7 @@ def _sync_total_debt() -> uint256:
     # with the number of interest minting events
     pending_agg_interest: uint256 = math._ceil_div(
         self.total_weighted_debt * (block.timestamp - self.last_debt_update_time),
-        _ONE_YEAR * _BORROW_TOKEN_PRECISION
+        _ONE_YEAR * self.borrow_token_precision
     )
 
     # Calculate the new total debt after interest
@@ -1409,8 +1416,14 @@ def _transfer_borrow_tokens(
     @param min_debt_out Minimum amount of debt tokens to be received atomically from idle liquidity
     @param min_collateral_out Minimum amount of collateral tokens to be redeemed
     """
-    # Check how much borrow token liquidity the lender has
-    available_liquidity: uint256 = staticcall BORROW_TOKEN.balanceOf(LENDER)
+    # Cache the Lender contract address
+    lender: address = self.lender
+
+    # Cache the borrow token contract
+    borrow_token: IERC20 = self.borrow_token
+
+    # Check how much borrow token liquidity the Lender contract has
+    available_liquidity: uint256 = staticcall borrow_token.balanceOf(lender)
 
     # Make sure we can satisfy the `min_debt_out` requirement
     assert available_liquidity >= min_debt_out, "!min_debt_out"
@@ -1419,7 +1432,7 @@ def _transfer_borrow_tokens(
     if amount > available_liquidity:
         # Transfer whatever we have first
         if available_liquidity > 0:
-            assert extcall BORROW_TOKEN.transferFrom(LENDER, msg.sender, available_liquidity, default_return_value=True)
+            assert extcall borrow_token.transferFrom(lender, msg.sender, available_liquidity, default_return_value=True)
 
         # Redeem the difference
         collateral_out: uint256 = self._redeem(amount - available_liquidity, annual_interest_rate)
@@ -1428,4 +1441,4 @@ def _transfer_borrow_tokens(
         assert collateral_out >= min_collateral_out, "!min_collateral_out"
     else:
         # Transfer the full amount
-        assert extcall BORROW_TOKEN.transferFrom(LENDER, msg.sender, amount, default_return_value=True)
+        assert extcall borrow_token.transferFrom(lender, msg.sender, amount, default_return_value=True)

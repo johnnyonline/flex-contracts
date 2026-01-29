@@ -6,14 +6,7 @@ import "./Base.sol";
 contract PriceOracleTests is Base {
 
     function setUp() public override {
-        // notify deplyment script that this is a test
-        isTest = true;
-
-        // create fork
-        vm.selectFork(vm.createFork(vm.envString("ETH_RPC_URL")));
-
-        // deploy and initialize contracts
-        run();
+        Base.setUp();
     }
 
     function test_priceOracle() public {

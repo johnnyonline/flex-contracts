@@ -4,10 +4,10 @@ pragma solidity 0.8.23;
 interface ISortedTroves {
 
     // ============================================================================================
-    // Constants
+    // Storage
     // ============================================================================================
 
-    function TROVE_MANAGER() external view returns (address);
+    function trove_manager() external view returns (address);
 
     // ============================================================================================
     // View functions
@@ -36,6 +36,14 @@ interface ISortedTroves {
         uint256 prev_id,
         uint256 next_id
     ) external view returns (uint256, uint256);
+
+    // ============================================================================================
+    // Initialize
+    // ============================================================================================
+
+    function initialize(
+        address trove_manager
+    ) external;
 
     // ============================================================================================
     // Mutative functions

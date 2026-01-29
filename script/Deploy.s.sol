@@ -4,14 +4,10 @@ pragma solidity 0.8.23;
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/ERC20.sol";
 import {IERC20Metadata} from "@openzeppelin/contracts/token/ERC20/extensions/IERC20Metadata.sol";
 
-import {IAuction} from "./interfaces/IAuction.sol";
-import {IDutchDesk} from "./interfaces/IDutchDesk.sol";
-import {IPriceOracle} from "./interfaces/IPriceOracle.sol";
-import {ISortedTroves} from "./interfaces/ISortedTroves.sol";
-import {ITroveManager} from "./interfaces/ITroveManager.sol";
+import {ICatFactory} from "./interfaces/ICatFactory.sol";
+import {IDeployer} from "./interfaces/IDeployer.sol";
 
-import {Lender} from "../src/lender/Lender.sol";
-import {ILender} from "../src/lender/interfaces/ILender.sol";
+import {LenderFactory} from "../src/lender/LenderFactory.sol";
 
 import "forge-std/Script.sol";
 
@@ -30,121 +26,85 @@ import "forge-std/Script.sol";
 contract Deploy is Script {
 
     bool public isTest;
-    address public deployer;
+    address public deployerAddress;
 
-    IAuction public auction;
-    IPriceOracle public priceOracle;
-    IDutchDesk public dutchDesk;
-    ISortedTroves public sortedTroves;
-    ITroveManager public troveManager;
+    // Original contracts
+    address public originalAuction;
+    address public originalDutchDesk;
+    address public originalSortedTroves;
+    address public originalTroveManager;
 
-    ILender public lender;
+    // Factories
+    ICatFactory public catFactory;
+    LenderFactory public lenderFactory;
 
-    uint256 public minimumCollateralRatio = 110; // 110%
-    uint256 public startingPriceBufferPercentage = 1e18 + 15e16; // 15%
-
-    address public management = address(420_420);
-    address public emergencyAdmin = address(69_420);
-    address public performanceFeeRecipient = address(420_69_420);
-    address public keeper = address(69_69);
-
+    // Tokens
     // IERC20 public borrowToken = IERC20(0xf939E0A03FB07F59A73314E73794Be0E57ac1b4E); // crvUSD
     IERC20 public borrowToken = IERC20(0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48); // USDC
     // IERC20 public collateralToken = IERC20(0x18084fbA666a33d37592fA2633fD49a74DD93a88); // tBTC
     // IERC20 public collateralToken = IERC20(0x2260FAC5E5542a773Aa44fBCfeDf7C193bc2C599); // WBTC
     IERC20 public collateralToken = IERC20(0xAc37729B76db6438CE62042AE1270ee574CA7571); // yvWETH-2
 
+    // CREATE2 salt
+    bytes32 public constant SALT = bytes32(uint256(420));
+
+    // CREATE2 deployer
+    IDeployer public DEPLOYER = IDeployer(0xba5Ed099633D3B313e4D5F7bdc1305d3c28ba5Ed);
+
     function run() public {
         uint256 _pk = isTest ? 42_069 : vm.envUint("DEPLOYER_PRIVATE_KEY");
 
         // Derive deployer address from private key
-        deployer = vm.addr(_pk);
+        deployerAddress = vm.addr(_pk);
 
         if (!isTest) {
-            require(deployer == address(0x285E3b1E82f74A99D07D2aD25e159E75382bB43B), "!johnnyonline.eth");
-            console.log("Deployer address: %s", deployer);
+            require(deployerAddress == address(0x285E3b1E82f74A99D07D2aD25e159E75382bB43B), "!johnnyonline.eth");
+            console.log("Deployer address: %s", deployerAddress);
         }
 
         vm.startBroadcast(_pk);
 
-        uint256 _nonce = vm.getNonce(deployer);
-        address _lenderAddress = computeCreateAddress(deployer, _nonce + 5);
-        address _troveManagerAddress = computeCreateAddress(deployer, _nonce + 4);
-        address _dutchDeskAddress = computeCreateAddress(deployer, _nonce + 2);
+        // Deploy original contracts using CREATE2
+        deployOriginalContracts();
 
-        auction = IAuction(deployCode("auction", abi.encode(_dutchDeskAddress, address(borrowToken), address(collateralToken))));
-        // priceOracle = IPriceOracle(deployCode("tbtc_to_crvusd_oracle", abi.encode(address(borrowToken), address(collateralToken))));
-        priceOracle = IPriceOracle(deployCode("yvweth2_to_usdc_oracle"));
-        dutchDesk = IDutchDesk(
-            deployCode(
-                "dutch_desk",
-                abi.encode(
-                    _troveManagerAddress,
-                    _lenderAddress,
-                    address(priceOracle),
-                    address(auction),
-                    address(borrowToken),
-                    address(collateralToken),
-                    startingPriceBufferPercentage
-                )
-            )
-        );
-        require(address(dutchDesk) == _dutchDeskAddress, "!dutchDeskAddress");
-
-        sortedTroves = ISortedTroves(deployCode("sorted_troves", abi.encode(_troveManagerAddress)));
-        troveManager = ITroveManager(
-            deployCode(
-                "trove_manager",
-                abi.encode(
-                    _lenderAddress,
-                    address(dutchDesk),
-                    address(priceOracle),
-                    address(sortedTroves),
-                    address(borrowToken),
-                    address(collateralToken),
-                    minimumCollateralRatio
-                )
-            )
-        );
-        require(address(troveManager) == _troveManagerAddress, "!troveManagerAddress");
-
-        lender = deployLender(isTest);
-        require(address(lender) == _lenderAddress, "!lenderAddress");
+        // Deploy factories using CREATE2
+        deployFactories();
 
         if (isTest) {
-            vm.label({account: address(auction), newLabel: "Auction"});
-            vm.label({account: address(priceOracle), newLabel: "PriceOracle"});
-            vm.label({account: address(dutchDesk), newLabel: "DutchDesk"});
-            vm.label({account: address(sortedTroves), newLabel: "SortedTroves"});
-            vm.label({account: address(troveManager), newLabel: "TroveManager"});
-            vm.label({account: address(lender), newLabel: "Lender"});
+            vm.label({account: originalAuction, newLabel: "OriginalAuction"});
+            vm.label({account: originalDutchDesk, newLabel: "OriginalDutchDesk"});
+            vm.label({account: originalSortedTroves, newLabel: "OriginalSortedTroves"});
+            vm.label({account: originalTroveManager, newLabel: "OriginalTroveManager"});
+            vm.label({account: address(lenderFactory), newLabel: "LenderFactory"});
+            vm.label({account: address(catFactory), newLabel: "CatFactory"});
         } else {
-            console.log("---------------------------------");
-            console.log("Auction: ", address(auction));
-            console.log("Price Oracle: ", address(priceOracle));
-            console.log("Dutch Desk: ", address(dutchDesk));
-            console.log("Sorted Troves: ", address(sortedTroves));
-            console.log("Trove Manager: ", address(troveManager));
-            console.log("Lender: ", address(lender));
-            console.log("---------------------------------");
+            console2.log("---------------------------------");
+            console2.log("Original Auction: ", originalAuction);
+            console2.log("Original Dutch Desk: ", originalDutchDesk);
+            console2.log("Original Sorted Troves: ", originalSortedTroves);
+            console2.log("Original Trove Manager: ", originalTroveManager);
+            console2.log("Lender Factory: ", address(lenderFactory));
+            console2.log("Cat Factory: ", address(catFactory));
+            console2.log("---------------------------------");
         }
 
         vm.stopBroadcast();
     }
 
-    function deployLender(
-        bool _isTest
-    ) public returns (ILender _lender) {
-        _lender = ILender(address(new Lender(address(borrowToken), address(auction), address(troveManager), "Lender Strategy")));
-        if (_isTest) {
-            _lender.setPerformanceFeeRecipient(performanceFeeRecipient);
-            _lender.setKeeper(keeper);
-            _lender.setPendingManagement(management);
-            _lender.setEmergencyAdmin(emergencyAdmin);
-        } else {
-            uint256 _depositLimit = 2_500 * 10 ** IERC20Metadata(address(borrowToken)).decimals();
-            _lender.setDepositLimit(_depositLimit);
-        }
+    function deployOriginalContracts() internal {
+        originalAuction = DEPLOYER.deployCreate2(keccak256(abi.encode(SALT, "auction")), abi.encodePacked(vm.getCode("auction")));
+        originalDutchDesk = DEPLOYER.deployCreate2(keccak256(abi.encode(SALT, "dutch_desk")), abi.encodePacked(vm.getCode("dutch_desk")));
+        originalSortedTroves = DEPLOYER.deployCreate2(keccak256(abi.encode(SALT, "sorted_troves")), abi.encodePacked(vm.getCode("sorted_troves")));
+        originalTroveManager = DEPLOYER.deployCreate2(keccak256(abi.encode(SALT, "trove_manager")), abi.encodePacked(vm.getCode("trove_manager")));
+    }
+
+    function deployFactories() internal {
+        lenderFactory = LenderFactory(DEPLOYER.deployCreate2(SALT, vm.getCode("LenderFactory.sol:LenderFactory")));
+        bytes memory catFactoryBytecode = abi.encodePacked(
+            vm.getCode("factory"), abi.encode(originalTroveManager, originalSortedTroves, originalDutchDesk, originalAuction, address(lenderFactory))
+        );
+        catFactory = ICatFactory(DEPLOYER.deployCreate2(SALT, catFactoryBytecode));
+        require(catFactory.LENDER_FACTORY() == address(lenderFactory), "LENDER_FACTORY mismatch");
     }
 
 }

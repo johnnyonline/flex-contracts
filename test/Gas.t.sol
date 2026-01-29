@@ -1,7 +1,6 @@
 // SPDX-License-Identifier: MIT
 pragma solidity 0.8.23;
 
-import {IAuction} from "../script/interfaces/IAuction.sol";
 import "./Base.sol";
 import {IPriceOracleNotScaled} from "./interfaces/IPriceOracleNotScaled.sol";
 import {IPriceOracleScaled} from "./interfaces/IPriceOracleScaled.sol";
@@ -16,7 +15,7 @@ contract GasTests is Base {
     }
 
     function test_gas_redeem() public {
-        uint256 _minDebt = troveManager.MIN_DEBT();
+        uint256 _minDebt = troveManager.min_debt();
         uint256 _rate = DEFAULT_ANNUAL_INTEREST_RATE;
         uint256 _numTroves = 700;
 
@@ -49,7 +48,7 @@ contract GasTests is Base {
     }
 
     function test_gas_openTrove() public {
-        uint256 _minDebt = troveManager.MIN_DEBT();
+        uint256 _minDebt = troveManager.min_debt();
         uint256 _rate = DEFAULT_ANNUAL_INTEREST_RATE;
         uint256 numTroves = 700;
 
@@ -91,7 +90,7 @@ contract GasTests is Base {
     }
 
     function test_gas_liquidateTroves() public {
-        uint256 _minDebt = troveManager.MIN_DEBT();
+        uint256 _minDebt = troveManager.min_debt();
         uint256 _rate = DEFAULT_ANNUAL_INTEREST_RATE;
         uint256 _numTroves = MAX_ITERATIONS;
 

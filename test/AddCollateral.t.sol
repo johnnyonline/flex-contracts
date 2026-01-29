@@ -13,7 +13,7 @@ contract AddCollateralTests is Base {
         uint256 _amount,
         uint256 _collateralAmountToAdd
     ) public {
-        _amount = bound(_amount, troveManager.MIN_DEBT(), maxFuzzAmount);
+        _amount = bound(_amount, troveManager.min_debt(), maxFuzzAmount);
         _collateralAmountToAdd = bound(_collateralAmountToAdd, minFuzzAmount, maxFuzzAmount);
 
         // Lend some from lender
@@ -122,7 +122,7 @@ contract AddCollateralTests is Base {
     function test_addCollateral_zeroCollateral(
         uint256 _amount
     ) public {
-        _amount = bound(_amount, troveManager.MIN_DEBT(), maxFuzzAmount);
+        _amount = bound(_amount, troveManager.min_debt(), maxFuzzAmount);
 
         // Lend some from lender
         mintAndDepositIntoLender(userLender, _amount);
@@ -144,7 +144,7 @@ contract AddCollateralTests is Base {
     function test_addCollateral_notOwner(
         uint256 _amount
     ) public {
-        _amount = bound(_amount, troveManager.MIN_DEBT(), maxFuzzAmount);
+        _amount = bound(_amount, troveManager.min_debt(), maxFuzzAmount);
 
         // Lend some from lender
         mintAndDepositIntoLender(userLender, _amount);
@@ -165,7 +165,7 @@ contract AddCollateralTests is Base {
     function test_addCollateral_notActive(
         uint256 _amount
     ) public {
-        _amount = bound(_amount, troveManager.MIN_DEBT(), maxFuzzAmount);
+        _amount = bound(_amount, troveManager.min_debt(), maxFuzzAmount);
 
         // Lend some from lender
         mintAndDepositIntoLender(userLender, _amount);

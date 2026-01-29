@@ -10,19 +10,24 @@ contract SortedTrovesTests is Base {
     }
 
     function test_setUp() public {
-        assertEq(address(sortedTroves), address(troveManager.SORTED_TROVES()), "E0");
-        assertEq(address(sortedTroves.TROVE_MANAGER()), address(troveManager), "E1");
+        assertEq(address(sortedTroves), address(troveManager.sorted_troves()), "E0");
+        assertEq(address(sortedTroves.trove_manager()), address(troveManager), "E1");
         assertEq(sortedTroves.empty(), true, "E2");
         assertEq(sortedTroves.size(), 0, "E3");
         assertEq(sortedTroves.first(), 0, "E4");
         assertEq(sortedTroves.last(), 0, "E5");
     }
 
+    function test_initialize_revertsIfAlreadyInitialized() public {
+        vm.expectRevert("initialized");
+        sortedTroves.initialize(address(troveManager));
+    }
+
     function test_sortedTroves_insert(
         uint256[10] memory _rates
     ) public {
-        uint256 _minRate = troveManager.MIN_ANNUAL_INTEREST_RATE();
-        uint256 _maxRate = troveManager.MAX_ANNUAL_INTEREST_RATE();
+        uint256 _minRate = troveManager.min_annual_interest_rate();
+        uint256 _maxRate = troveManager.max_annual_interest_rate();
         uint256 _collateral = 10 * COLLATERAL_TOKEN_PRECISION;
         uint256 _debt = 1000 * BORROW_TOKEN_PRECISION;
 
@@ -78,8 +83,8 @@ contract SortedTrovesTests is Base {
     function test_sortedTroves_remove(
         uint256[10] memory _rates
     ) public {
-        uint256 _minRate = troveManager.MIN_ANNUAL_INTEREST_RATE();
-        uint256 _maxRate = troveManager.MAX_ANNUAL_INTEREST_RATE();
+        uint256 _minRate = troveManager.min_annual_interest_rate();
+        uint256 _maxRate = troveManager.max_annual_interest_rate();
         uint256 _collateral = 10 * COLLATERAL_TOKEN_PRECISION;
         uint256 _debt = 1000 * BORROW_TOKEN_PRECISION;
 
@@ -138,8 +143,8 @@ contract SortedTrovesTests is Base {
         uint256[10] memory _rates,
         uint256[10] memory _newRates
     ) public {
-        uint256 _minRate = troveManager.MIN_ANNUAL_INTEREST_RATE();
-        uint256 _maxRate = troveManager.MAX_ANNUAL_INTEREST_RATE();
+        uint256 _minRate = troveManager.min_annual_interest_rate();
+        uint256 _maxRate = troveManager.max_annual_interest_rate();
         uint256 _collateral = 10 * COLLATERAL_TOKEN_PRECISION;
         uint256 _debt = 1000 * BORROW_TOKEN_PRECISION;
 
@@ -220,7 +225,7 @@ contract SortedTrovesTests is Base {
         uint256 _debt = 1000 * BORROW_TOKEN_PRECISION;
 
         mintAndDepositIntoLender(userLender, _debt);
-        uint256 _troveId = mintAndOpenTrove(userBorrower, _collateral, _debt, troveManager.MIN_ANNUAL_INTEREST_RATE());
+        uint256 _troveId = mintAndOpenTrove(userBorrower, _collateral, _debt, troveManager.min_annual_interest_rate());
 
         vm.expectRevert("exists");
         vm.prank(address(troveManager));

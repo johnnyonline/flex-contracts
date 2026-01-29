@@ -16,8 +16,8 @@ contract RepayTests is Base {
         uint256 _amount,
         uint256 _amountToRepay
     ) public {
-        _amount = bound(_amount, troveManager.MIN_DEBT() * 150 / 100, maxFuzzAmount); // At least 50% above min debt so we have something to repay
-        _amountToRepay = bound(_amountToRepay, _amount / 100, _amount - troveManager.MIN_DEBT()); // Make sure we leave at least min debt
+        _amount = bound(_amount, troveManager.min_debt() * 150 / 100, maxFuzzAmount); // At least 50% above min debt so we have something to repay
+        _amountToRepay = bound(_amountToRepay, _amount / 100, _amount - troveManager.min_debt()); // Make sure we leave at least min debt
 
         // Lend some from lender
         mintAndDepositIntoLender(userLender, _amount);
@@ -126,7 +126,7 @@ contract RepayTests is Base {
     function test_repay_zeroAmount(
         uint256 _amount
     ) public {
-        _amount = bound(_amount, troveManager.MIN_DEBT(), maxFuzzAmount);
+        _amount = bound(_amount, troveManager.min_debt(), maxFuzzAmount);
 
         // Lend some from lender
         mintAndDepositIntoLender(userLender, _amount);
@@ -147,7 +147,7 @@ contract RepayTests is Base {
     function test_repay_notOwner(
         uint256 _amount
     ) public {
-        _amount = bound(_amount, troveManager.MIN_DEBT(), maxFuzzAmount);
+        _amount = bound(_amount, troveManager.min_debt(), maxFuzzAmount);
 
         // Lend some from lender
         mintAndDepositIntoLender(userLender, _amount);
@@ -168,7 +168,7 @@ contract RepayTests is Base {
     function test_repay_troveNotActive(
         uint256 _amount
     ) public {
-        _amount = bound(_amount, troveManager.MIN_DEBT(), maxFuzzAmount);
+        _amount = bound(_amount, troveManager.min_debt(), maxFuzzAmount);
 
         // Lend some from lender
         mintAndDepositIntoLender(userLender, _amount);
@@ -199,7 +199,7 @@ contract RepayTests is Base {
     function test_repay_amountScalesDownToMinDebt(
         uint256 _amount
     ) public {
-        _amount = bound(_amount, troveManager.MIN_DEBT() * 150 / 100, maxFuzzAmount); // At least 50% above min debt so we have something to repay
+        _amount = bound(_amount, troveManager.min_debt() * 150 / 100, maxFuzzAmount); // At least 50% above min debt so we have something to repay
 
         // Lend some from lender
         mintAndDepositIntoLender(userLender, _amount);
@@ -219,7 +219,7 @@ contract RepayTests is Base {
 
         // Check trove info
         ITroveManager.Trove memory _trove = troveManager.troves(_troveId);
-        assertEq(_trove.debt, troveManager.MIN_DEBT(), "E0");
+        assertEq(_trove.debt, troveManager.min_debt(), "E0");
     }
 
 }

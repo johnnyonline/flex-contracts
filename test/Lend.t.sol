@@ -33,6 +33,7 @@ contract LendTests is Base {
         assertEq(lender.depositLimit(), type(uint256).max, "E2");
         assertEq(lender.availableWithdrawLimit(userLender), type(uint256).max, "E3");
         assertEq(lender.availableDepositLimit(userLender), type(uint256).max, "E4");
+        assertEq(lender.name(), "Flex yvWETH-2/USDC Lender", "E5");
     }
 
     // 1. lend
@@ -42,7 +43,7 @@ contract LendTests is Base {
     function test_lend(
         uint256 _amount
     ) public {
-        _amount = bound(_amount, troveManager.MIN_DEBT(), maxFuzzAmount);
+        _amount = bound(_amount, troveManager.min_debt(), maxFuzzAmount);
 
         // Bump up interest rate so that's it's profitible to lend
         DEFAULT_ANNUAL_INTEREST_RATE = DEFAULT_ANNUAL_INTEREST_RATE * 5; // 5%
@@ -118,8 +119,7 @@ contract LendTests is Base {
         skip(_daysToSkip);
 
         // Report profit
-        vm.prank(keeper);
-        (uint256 _profit, uint256 _loss) = lender.report();
+        (uint256 _profit, uint256 _loss) = IKeeper(lenderFactory.KEEPER()).report(address(lender));
 
         // Check return Values
         assertApproxEqAbs(_profit, _expectedProfit, 2, "E27");
@@ -196,7 +196,7 @@ contract LendTests is Base {
     function test_lend_noReport(
         uint256 _amount
     ) public {
-        _amount = bound(_amount, troveManager.MIN_DEBT(), maxFuzzAmount);
+        _amount = bound(_amount, troveManager.min_debt(), maxFuzzAmount);
 
         // Bump up interest rate so that's it's profitible to lend
         DEFAULT_ANNUAL_INTEREST_RATE = DEFAULT_ANNUAL_INTEREST_RATE * 5; // 5%
@@ -342,7 +342,7 @@ contract LendTests is Base {
     function test_lend_multipleAuctions(
         uint256 _amount
     ) public {
-        _amount = bound(_amount, troveManager.MIN_DEBT() * 10, maxFuzzAmount);
+        _amount = bound(_amount, troveManager.min_debt() * 10, maxFuzzAmount);
 
         // Bump up interest rate
         DEFAULT_ANNUAL_INTEREST_RATE = DEFAULT_ANNUAL_INTEREST_RATE * 5; // 5%
@@ -387,7 +387,7 @@ contract LendTests is Base {
     // 2. 3 borrowers borrow all liquidity
     // 3. lender withdraws all liquidity and redeems all 3 borrowers in the same tx
     function test_lend_redeemMultipleBorrowers() public {
-        uint256 _minDebt = troveManager.MIN_DEBT();
+        uint256 _minDebt = troveManager.min_debt();
         uint256 _lenderDeposit = _minDebt * 3;
 
         // Lend
@@ -407,8 +407,7 @@ contract LendTests is Base {
         assertEq(borrowToken.balanceOf(address(lender)), 0, "E1");
 
         // Report profit
-        vm.prank(keeper);
-        lender.report();
+        IKeeper(lenderFactory.KEEPER()).report(address(lender));
 
         // Lender withdraws all - should redeem all 3 borrowers
         vm.prank(userLender);
@@ -447,7 +446,7 @@ contract LendTests is Base {
         uint256 _amount,
         uint256 _idleLiquidity
     ) public {
-        _amount = bound(_amount, troveManager.MIN_DEBT(), maxFuzzAmount);
+        _amount = bound(_amount, troveManager.min_debt(), maxFuzzAmount);
         _idleLiquidity = bound(_idleLiquidity, minFuzzAmount, maxFuzzAmount);
 
         // Lend some from lender
@@ -477,10 +476,10 @@ contract LendTests is Base {
         uint256 _priceDropToBelowMCR;
         if (BORROW_TOKEN_PRECISION < COLLATERAL_TOKEN_PRECISION) {
             _priceDropToBelowMCR =
-                troveManager.MINIMUM_COLLATERAL_RATIO() * _trove.debt * ORACLE_PRICE_SCALE * 99 / (100 * _trove.collateral * BORROW_TOKEN_PRECISION);
+                troveManager.minimum_collateral_ratio() * _trove.debt * ORACLE_PRICE_SCALE * 99 / (100 * _trove.collateral * BORROW_TOKEN_PRECISION);
         } else {
             _priceDropToBelowMCR =
-                troveManager.MINIMUM_COLLATERAL_RATIO() * _trove.debt / (100 * _trove.collateral) * ORACLE_PRICE_SCALE / BORROW_TOKEN_PRECISION * 99;
+                troveManager.minimum_collateral_ratio() * _trove.debt / (100 * _trove.collateral) * ORACLE_PRICE_SCALE / BORROW_TOKEN_PRECISION * 99;
         }
         uint256 _priceDropToBelowMCR18 = _priceDropToBelowMCR * COLLATERAL_TOKEN_PRECISION * WAD / (ORACLE_PRICE_SCALE * BORROW_TOKEN_PRECISION);
 
@@ -512,7 +511,7 @@ contract LendTests is Base {
     function test_shutdownCanWithdraw(
         uint256 _amount
     ) public {
-        _amount = bound(_amount, troveManager.MIN_DEBT(), maxFuzzAmount);
+        _amount = bound(_amount, troveManager.min_debt(), maxFuzzAmount);
 
         // Lend some from lender
         mintAndDepositIntoLender(userLender, _amount);
@@ -530,7 +529,7 @@ contract LendTests is Base {
         skip(1 days);
 
         // Shutdown the strategy
-        vm.prank(emergencyAdmin);
+        vm.prank(management);
         lender.shutdownStrategy();
 
         // Available withdraw limit should still be max when shutdown
@@ -553,7 +552,7 @@ contract LendTests is Base {
     function test_shutdownCanWithdraw_duringLiquidation(
         uint256 _amount
     ) public {
-        _amount = bound(_amount, troveManager.MIN_DEBT(), maxFuzzAmount);
+        _amount = bound(_amount, troveManager.min_debt(), maxFuzzAmount);
 
         // Lend some from lender
         mintAndDepositIntoLender(userLender, _amount);
@@ -572,10 +571,10 @@ contract LendTests is Base {
         uint256 _priceDropToBelowMCR;
         if (BORROW_TOKEN_PRECISION < COLLATERAL_TOKEN_PRECISION) {
             _priceDropToBelowMCR =
-                troveManager.MINIMUM_COLLATERAL_RATIO() * _trove.debt * ORACLE_PRICE_SCALE * 99 / (100 * _trove.collateral * BORROW_TOKEN_PRECISION);
+                troveManager.minimum_collateral_ratio() * _trove.debt * ORACLE_PRICE_SCALE * 99 / (100 * _trove.collateral * BORROW_TOKEN_PRECISION);
         } else {
             _priceDropToBelowMCR =
-                troveManager.MINIMUM_COLLATERAL_RATIO() * _trove.debt / (100 * _trove.collateral) * ORACLE_PRICE_SCALE / BORROW_TOKEN_PRECISION * 99;
+                troveManager.minimum_collateral_ratio() * _trove.debt / (100 * _trove.collateral) * ORACLE_PRICE_SCALE / BORROW_TOKEN_PRECISION * 99;
         }
         uint256 _priceDropToBelowMCR18 = _priceDropToBelowMCR * COLLATERAL_TOKEN_PRECISION * WAD / (ORACLE_PRICE_SCALE * BORROW_TOKEN_PRECISION);
 
@@ -595,7 +594,7 @@ contract LendTests is Base {
         assertEq(lender.availableWithdrawLimit(userLender), 0, "E1");
 
         // Shutdown the strategy
-        vm.prank(emergencyAdmin);
+        vm.prank(management);
         lender.shutdownStrategy();
 
         // When shutdown, available withdraw limit should be max even during liquidation

@@ -13,6 +13,9 @@ remappings = [
     "@periphery/=lib/tokenized-strategy-periphery/src/",
 ]
 
+[lint]
+lint_on_build = false
+
 [fmt]
 single_line_statement_blocks = "single"
 multiline_func_header = "params_first"

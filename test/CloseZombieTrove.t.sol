@@ -24,7 +24,7 @@ contract CloseZombieTroveTests is Base {
     function test_closeZombieTrove(
         uint256 _amount
     ) public {
-        _amount = bound(_amount, troveManager.MIN_DEBT(), maxFuzzAmount);
+        _amount = bound(_amount, troveManager.min_debt(), maxFuzzAmount);
 
         // Lend some from lender
         mintAndDepositIntoLender(userLender, _amount);
@@ -163,7 +163,7 @@ contract CloseZombieTroveTests is Base {
     function test_closeZombieTrove_zeroDebt(
         uint256 _amount
     ) public {
-        _amount = bound(_amount, troveManager.MIN_DEBT(), maxFuzzAmount);
+        _amount = bound(_amount, troveManager.min_debt(), maxFuzzAmount);
 
         // Lend some from lender
         mintAndDepositIntoLender(userLender, _amount);
@@ -229,8 +229,7 @@ contract CloseZombieTroveTests is Base {
         uint256 _expectedCollateralAfterRedemption = _collateralNeeded - ((_amount + _expectedProfit) * ORACLE_PRICE_SCALE / priceOracle.get_price());
 
         // Report profit
-        vm.prank(keeper);
-        (uint256 _profit, uint256 _loss) = lender.report();
+        (uint256 _profit, uint256 _loss) = IKeeper(lenderFactory.KEEPER()).report(address(lender));
 
         // Check return Values
         assertEq(_profit, _expectedProfit, "E25");
@@ -335,7 +334,7 @@ contract CloseZombieTroveTests is Base {
         address _wrongUser
     ) public {
         vm.assume(_wrongUser != userBorrower);
-        _amount = bound(_amount, troveManager.MIN_DEBT(), maxFuzzAmount);
+        _amount = bound(_amount, troveManager.min_debt(), maxFuzzAmount);
 
         // Lend some from lender
         mintAndDepositIntoLender(userLender, _amount);
@@ -367,7 +366,7 @@ contract CloseZombieTroveTests is Base {
     function test_closeZombieTrove_notZombie(
         uint256 _amount
     ) public {
-        _amount = bound(_amount, troveManager.MIN_DEBT(), maxFuzzAmount);
+        _amount = bound(_amount, troveManager.min_debt(), maxFuzzAmount);
 
         // Lend some from lender
         mintAndDepositIntoLender(userLender, _amount);

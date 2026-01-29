@@ -4,23 +4,38 @@ pragma solidity 0.8.23;
 interface IAuction {
 
     // ============================================================================================
-    // Constants
-    // ============================================================================================
-
-    function PAPI() external view returns (address);
-    function BUY_TOKEN() external view returns (address);
-    function BUY_TOKEN_SCALER() external view returns (uint256);
-    function SELL_TOKEN() external view returns (address);
-    function SELL_TOKEN_SCALER() external view returns (uint256);
-    function STEP_DURATION() external view returns (uint256);
-    function STEP_DECAY_RATE() external view returns (uint256);
-    function AUCTION_LENGTH() external view returns (uint256);
-
-    // ============================================================================================
     // Storage
     // ============================================================================================
 
+    // Papi
+    function papi() external view returns (address);
+
+    // Tokens
+    function buy_token() external view returns (address);
+    function buy_token_scaler() external view returns (uint256);
+    function sell_token() external view returns (address);
+    function sell_token_scaler() external view returns (uint256);
+
+    // Parameters
+    function step_duration() external view returns (uint256);
+    function step_decay_rate() external view returns (uint256);
+    function auction_length() external view returns (uint256);
+
+    // Accounting
     function liquidation_auctions() external view returns (uint256);
+
+    // ============================================================================================
+    // Initialize
+    // ============================================================================================
+
+    function initialize(
+        address papi,
+        address buy_token,
+        address sell_token,
+        uint256 step_duration,
+        uint256 step_decay_rate,
+        uint256 auction_length
+    ) external;
 
     // ============================================================================================
     // External view functions

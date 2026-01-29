@@ -8,6 +8,9 @@ import {BaseStrategy} from "@tokenized-strategy/BaseStrategy.sol";
 import {IAuction} from "./interfaces/IAuction.sol";
 import {ITroveManager} from "./interfaces/ITroveManager.sol";
 
+/// @title Lender
+/// @author Flex
+/// @notice Tokenized Strategy vault that provides liquidity to the Flex lending market
 contract Lender is BaseHooks {
 
     using SafeERC20 for ERC20;
@@ -34,7 +37,7 @@ contract Lender is BaseHooks {
     // Storage
     // ============================================================================================
 
-    /// @notice The receiver of auction proceeds
+    /// @notice Receiver of auction proceeds
     address private _auctionProceedsReceiver;
 
     /// @notice The strategy deposit limit
