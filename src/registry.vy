@@ -9,6 +9,7 @@
 
 from interfaces import ITroveManager
 
+
 # ============================================================================================
 # Events
 # ============================================================================================
@@ -35,7 +36,6 @@ event UnendorseMarket:
 
 
 flag Status:
-    NON_EXISTENT
     ENDORSED
     UNENDORSED
 
@@ -77,7 +77,7 @@ markets_by_pair: HashMap[uint256, DynArray[address, _MAX_UINT32]]  # key --> lis
 def __init__(daddy: address):
     """
     @notice Constructor
-    @param daddy Address of the Daddy
+    @param daddy Address of Daddy
     """
     # Set Daddy
     self.daddy = daddy
@@ -198,14 +198,14 @@ def endorse(trove_manager: address):
     """
     @notice Endorse a market
     @dev Only callable by Daddy
-    @dev Can't endorse an already endorsed or unendorsed market
+    @dev Can't endorse an already endorsed market or reendorse an unendorsed market
     @param trove_manager Address of the Trove Manager contract of the market to endorse
     """
     # Make sure caller is Daddy
     assert msg.sender == self.daddy, "bad daddy"
 
-    # Make sure market is non-existent
-    assert self.market_status[trove_manager] == Status.NON_EXISTENT, "!NON_EXISTENT"
+    # Make sure market has not been endorsed before
+    assert self.market_status[trove_manager] == empty(Status), "!empty"
 
     # Add to the list
     self.markets.append(trove_manager)

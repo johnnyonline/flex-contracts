@@ -83,6 +83,7 @@ def __init__(
     @param auction Address of the Auction contract to clone
     @param lender_factory Address of the Lender Factory contract
     """
+    # Set immutable contracts
     TROVE_MANAGER = trove_manager
     SORTED_TROVES = sorted_troves
     DUTCH_DESK = dutch_desk
