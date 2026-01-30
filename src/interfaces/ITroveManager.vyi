@@ -36,6 +36,18 @@ struct Trove:
 
 @external
 @view
+def borrow_token() -> address:
+    ...
+
+
+@external
+@view
+def collateral_token() -> address:
+    ...
+
+
+@external
+@view
 def troves(trove_id: uint256) -> Trove:
     ...
 
