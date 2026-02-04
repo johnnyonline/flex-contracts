@@ -219,7 +219,7 @@ abstract contract Base is Deploy, Test {
             0, // lower_hint
             _annualInterestRate, // annual_interest_rate
             type(uint256).max, // max_upfront_fee
-            0, // min_debt_out
+            0, // min_borrow_out
             0 // min_collateral_out
         );
         vm.stopPrank();

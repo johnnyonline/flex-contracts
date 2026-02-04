@@ -88,7 +88,7 @@ contract BorrowTests is Base {
             _troveId,
             _borrowAmount,
             type(uint256).max, // max_upfront_fee
-            0, // min_debt_out
+            0, // min_borrow_out
             0 // min_collateral_out
         );
 
@@ -209,7 +209,7 @@ contract BorrowTests is Base {
             _troveId,
             _borrowAmount,
             type(uint256).max, // max_upfront_fee
-            0, // min_debt_out
+            0, // min_borrow_out
             0 // min_collateral_out
         );
 
@@ -382,7 +382,7 @@ contract BorrowTests is Base {
             _secondTroveId,
             _secondBorrowAmount, // borrow a bit more to wipe out the first borrower
             type(uint256).max, // max_upfront_fee
-            0, // min_debt_out
+            0, // min_borrow_out
             0 // min_collateral_out
         );
 
@@ -479,7 +479,7 @@ contract BorrowTests is Base {
             _troveId,
             0, // debt_amount
             type(uint256).max, // max_upfront_fee
-            0, // min_debt_out
+            0, // min_borrow_out
             0 // min_collateral_out
         );
     }
@@ -506,7 +506,7 @@ contract BorrowTests is Base {
             _troveId,
             _amount,
             type(uint256).max, // max_upfront_fee
-            0, // min_debt_out
+            0, // min_borrow_out
             0 // min_collateral_out
         );
     }
@@ -543,7 +543,7 @@ contract BorrowTests is Base {
             _troveId,
             _amount,
             type(uint256).max, // max_upfront_fee
-            0, // min_debt_out
+            0, // min_borrow_out
             0 // min_collateral_out
         );
     }
@@ -570,7 +570,7 @@ contract BorrowTests is Base {
             _troveId,
             _amount,
             0, // max_upfront_fee
-            0, // min_debt_out
+            0, // min_borrow_out
             0 // min_collateral_out
         );
     }
@@ -601,7 +601,7 @@ contract BorrowTests is Base {
             _troveId,
             _maxBorrowable,
             type(uint256).max, // max_upfront_fee
-            0, // min_debt_out
+            0, // min_borrow_out
             0 // min_collateral_out
         );
     }
@@ -732,7 +732,7 @@ contract BorrowTests is Base {
             _troveId,
             _halfAmount, // try to borrow more
             type(uint256).max, // max_upfront_fee
-            0, // min_debt_out
+            0, // min_borrow_out
             0 // min_collateral_out
         );
 
@@ -781,7 +781,7 @@ contract BorrowTests is Base {
             _troveId,
             _victimDebt, // borrow enough to fully redeem victim
             type(uint256).max, // max_upfront_fee
-            0, // min_debt_out
+            0, // min_borrow_out
             0 // min_collateral_out
         );
 
@@ -846,7 +846,7 @@ contract BorrowTests is Base {
             _troveId,
             _trove.debt, // borrow enough to clear zombie's remaining debt
             type(uint256).max, // max_upfront_fee
-            0, // min_debt_out
+            0, // min_borrow_out
             0 // min_collateral_out
         );
 
@@ -873,12 +873,12 @@ contract BorrowTests is Base {
         uint256 _lenderBalance = borrowToken.balanceOf(address(lender));
 
         vm.prank(userBorrower);
-        vm.expectRevert("!min_debt_out");
+        vm.expectRevert("!min_borrow_out");
         troveManager.borrow(
             _troveId,
             _amount,
             type(uint256).max,
-            _lenderBalance + 1, // min_debt_out higher than available
+            _lenderBalance + 1, // min_borrow_out higher than available
             0 // min_collateral_out
         );
     }
@@ -906,7 +906,7 @@ contract BorrowTests is Base {
             _troveId,
             _amount,
             type(uint256).max,
-            0, // min_debt_out
+            0, // min_borrow_out
             type(uint256).max // min_collateral_out higher than what can be redeemed
         );
     }

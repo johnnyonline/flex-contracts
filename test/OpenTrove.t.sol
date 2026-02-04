@@ -531,7 +531,7 @@ contract OpenTroveTests is Base {
             0, // lower_hint
             DEFAULT_ANNUAL_INTEREST_RATE, // annual_interest_rate
             type(uint256).max, // max_upfront_fee
-            0, // min_debt_out
+            0, // min_borrow_out
             0 // min_collateral_out
         );
     }
@@ -547,7 +547,7 @@ contract OpenTroveTests is Base {
             0, // lower_hint
             DEFAULT_ANNUAL_INTEREST_RATE, // annual_interest_rate
             type(uint256).max, // max_upfront_fee
-            0, // min_debt_out
+            0, // min_borrow_out
             0 // min_collateral_out
         );
     }
@@ -566,7 +566,7 @@ contract OpenTroveTests is Base {
             0, // lower_hint
             _tooLowRate, // annual_interest_rate
             type(uint256).max, // max_upfront_fee
-            0, // min_debt_out
+            0, // min_borrow_out
             0 // min_collateral_out
         );
     }
@@ -585,7 +585,7 @@ contract OpenTroveTests is Base {
             0, // lower_hint
             _tooHighRate, // annual_interest_rate
             type(uint256).max, // max_upfront_fee
-            0, // min_debt_out
+            0, // min_borrow_out
             0 // min_collateral_out
         );
     }
@@ -614,7 +614,7 @@ contract OpenTroveTests is Base {
             0, // lower_hint
             DEFAULT_ANNUAL_INTEREST_RATE, // annual_interest_rate
             type(uint256).max, // max_upfront_fee
-            0, // min_debt_out
+            0, // min_borrow_out
             0 // min_collateral_out
         );
     }
@@ -642,7 +642,7 @@ contract OpenTroveTests is Base {
             0, // lower_hint
             DEFAULT_ANNUAL_INTEREST_RATE, // annual_interest_rate
             _upfrontFee - 1, // max_upfront_fee
-            0, // min_debt_out
+            0, // min_borrow_out
             0 // min_collateral_out
         );
     }
@@ -658,7 +658,7 @@ contract OpenTroveTests is Base {
             0, // lower_hint
             DEFAULT_ANNUAL_INTEREST_RATE, // annual_interest_rate
             type(uint256).max, // max_upfront_fee
-            0, // min_debt_out
+            0, // min_borrow_out
             0 // min_collateral_out
         );
     }
@@ -685,7 +685,7 @@ contract OpenTroveTests is Base {
             0, // lower_hint
             DEFAULT_ANNUAL_INTEREST_RATE, // annual_interest_rate
             type(uint256).max, // max_upfront_fee
-            0, // min_debt_out
+            0, // min_borrow_out
             0 // min_collateral_out
         );
     }
@@ -805,7 +805,7 @@ contract OpenTroveTests is Base {
             0, // lower_hint
             _lowerRate, // annual_interest_rate - lower than 1st borrower
             type(uint256).max, // max_upfront_fee
-            0, // min_debt_out
+            0, // min_borrow_out
             0 // min_collateral_out
         );
         vm.stopPrank();
@@ -931,7 +931,7 @@ contract OpenTroveTests is Base {
 
         vm.startPrank(userBorrower);
         collateralToken.approve(address(troveManager), _collateralNeeded);
-        vm.expectRevert("!min_debt_out");
+        vm.expectRevert("!min_borrow_out");
         troveManager.open_trove(
             block.timestamp,
             _collateralNeeded,
@@ -940,7 +940,7 @@ contract OpenTroveTests is Base {
             0,
             DEFAULT_ANNUAL_INTEREST_RATE,
             type(uint256).max,
-            _amount + 1, // min_debt_out higher than available
+            _amount + 1, // min_borrow_out higher than available
             0 // min_collateral_out
         );
         vm.stopPrank();

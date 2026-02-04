@@ -366,7 +366,7 @@ def open_trove(
     next_id: uint256,
     annual_interest_rate: uint256,
     max_upfront_fee: uint256,
-    min_debt_out: uint256,
+    min_borrow_out: uint256,
     min_collateral_out: uint256,
 ) -> uint256:
     """
@@ -383,7 +383,7 @@ def open_trove(
     @param next_id ID of next Trove for the insert position
     @param annual_interest_rate Fixed annual interest rate to pay on the debt
     @param max_upfront_fee Maximum upfront fee the caller is willing to pay
-    @param min_debt_out Minimum amount of debt tokens to be received atomically from idle liquidity
+    @param min_borrow_out Minimum borrow tokens received atomically from idle liquidity
     @param min_collateral_out Minimum amount of collateral tokens to be redeemed
     @return trove_id Unique identifier for the new Trove
     """
@@ -456,7 +456,7 @@ def open_trove(
     assert extcall self.collateral_token.transferFrom(msg.sender, self, collateral_amount, default_return_value=True)
 
     # Deliver borrow tokens to the caller, redeem if liquidity is insufficient
-    self._transfer_borrow_tokens(debt_amount, annual_interest_rate, min_debt_out, min_collateral_out)
+    self._transfer_borrow_tokens(debt_amount, annual_interest_rate, min_borrow_out, min_collateral_out)
 
     # Emit event
     log OpenTrove(
@@ -574,7 +574,7 @@ def borrow(
     trove_id: uint256,
     debt_amount: uint256,
     max_upfront_fee: uint256,
-    min_debt_out: uint256,
+    min_borrow_out: uint256,
     min_collateral_out: uint256,
 ):
     """
@@ -586,7 +586,7 @@ def borrow(
     @param trove_id Unique identifier of the Trove
     @param debt_amount Amount of additional debt to issue before the upfront fee
     @param max_upfront_fee Maximum upfront fee the caller is willing to pay
-    @param min_debt_out Minimum amount of debt tokens to be received atomically from idle liquidity
+    @param min_borrow_out Minimum borrow tokens received atomically from idle liquidity
     @param min_collateral_out Minimum amount of collateral tokens to be redeemed
     """
     # Make sure debt amount is non-zero
@@ -644,7 +644,7 @@ def borrow(
     self._transfer_borrow_tokens(
         debt_amount,
         trove.annual_interest_rate,
-        min_debt_out,
+        min_borrow_out,
         min_collateral_out,
     )
 
@@ -1414,14 +1414,14 @@ def _sync_total_debt() -> uint256:
 def _transfer_borrow_tokens(
     amount: uint256,
     annual_interest_rate: uint256,
-    min_debt_out: uint256,
+    min_borrow_out: uint256,
     min_collateral_out: uint256,
 ):
     """
     @notice Transfer borrow tokens to the caller, redeeming other borrowers' collateral if necessary
     @param amount Amount of borrow tokens to transfer
     @param annual_interest_rate Annual interest rate paid by the borrower
-    @param min_debt_out Minimum amount of debt tokens to be received atomically from idle liquidity
+    @param min_borrow_out Minimum borrow tokens received atomically from idle liquidity
     @param min_collateral_out Minimum amount of collateral tokens to be redeemed
     """
     # Cache the Lender contract address
@@ -1433,8 +1433,8 @@ def _transfer_borrow_tokens(
     # Check how much borrow token liquidity the Lender contract has
     available_liquidity: uint256 = staticcall borrow_token.balanceOf(lender)
 
-    # Make sure we can satisfy the `min_debt_out` requirement
-    assert available_liquidity >= min_debt_out, "!min_debt_out"
+    # Make sure we can satisfy the `min_borrow_out` requirement
+    assert available_liquidity >= min_borrow_out, "!min_borrow_out"
 
     # If there's not enough liquidity, redeem the difference. Otherwise just transfer the full amount
     if amount > available_liquidity:
