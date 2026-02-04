@@ -207,7 +207,7 @@ def initialize(
     @param minimum_collateral_ratio Minimum CR to avoid liquidation
     @param upfront_interest_period Duration for upfront interest charges
     @param interest_rate_adj_cooldown Cooldown between rate adjustments
-    @param liquidator_fee_percentage Liquidator's immediate collateral fee
+    @param liquidator_fee_percentage Portion of liquidated collateral paid to the caller
     """
     # Make sure the contract is not already initialized
     assert self.lender == empty(address), "initialized"

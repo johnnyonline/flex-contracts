@@ -127,7 +127,7 @@ def deploy(
     @param minimum_collateral_ratio Minimum CR to avoid liquidation
     @param upfront_interest_period Duration for upfront interest charges
     @param interest_rate_adj_cooldown Cooldown between rate adjustments
-    @param liquidator_fee_percentage Liquidator's immediate collateral fee
+    @param liquidator_fee_percentage Portion of liquidated collateral paid to the caller
     @param minimum_price_buffer_percentage Minimum auction price buffer
     @param starting_price_buffer_percentage Starting auction price buffer
     @param emergency_starting_price_buffer_percentage Emergency starting auction price buffer
