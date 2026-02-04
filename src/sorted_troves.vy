@@ -66,7 +66,7 @@ _troves: HashMap[uint256, Trove]
 def initialize(trove_manager: address):
     """
     @notice Initialize the contract
-    @param trove_manager Address of the Trove Manager
+    @param trove_manager Address of the Trove Manager contract
     """
     # Make sure the contract is not already initialized
     assert self.trove_manager.address == empty(address), "initialized"

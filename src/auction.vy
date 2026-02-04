@@ -108,12 +108,12 @@ def initialize(
 ):
     """
     @notice Initialize the contract
-    @param papi Address that is allowed to kick auctions
+    @param papi Address allowed to kick auctions
     @param buy_token Address of the token being bought
     @param sell_token Address of the token being sold
-    @param step_duration Duration of each price step in seconds
-    @param step_decay_rate Decay rate per step in basis points
-    @param auction_length Total length of the auction in seconds
+    @param step_duration Duration of each price step
+    @param step_decay_rate Decay rate per step
+    @param auction_length Total auction duration
     """
     # Make sure the contract is not already initialized
     assert self.papi == empty(address), "initialized"
