@@ -69,5 +69,6 @@ def initialize(
     minimum_collateral_ratio: uint256,
     upfront_interest_period: uint256,
     interest_rate_adj_cooldown: uint256,
+    liquidator_fee_percentage: uint256,
 ):
     ...

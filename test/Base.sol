@@ -40,6 +40,7 @@ abstract contract Base is Deploy, Test {
     uint256 public minimumCollateralRatio = 110; // 110%
     uint256 public upfrontInterestPeriod = 7 days; // 7 days
     uint256 public interestRateAdjCooldown = 7 days; // 7 days
+    uint256 public liquidatorFeePercentage = 1e15; // 0.1%
     uint256 public minimumPriceBufferPercentage = 1e18 - 5e16; // 5%
     uint256 public startingPriceBufferPercentage = 1e18 + 15e16; // 15%
     uint256 public emergencyStartingPriceBufferPercentage = 1e18 + 100e16; // 100%
@@ -75,20 +76,8 @@ abstract contract Base is Deploy, Test {
         priceOracle = IPriceOracle(deployCode("yvweth2_to_usdc_oracle"));
 
         // Deploy market
-        (address _troveManager, address _sortedTroves, address _dutchDesk, address _auction, address _lender) = catFactory.deploy(
-            address(borrowToken),
-            address(collateralToken),
-            address(priceOracle),
-            management,
-            performanceFeeRecipient,
-            minimumDebt,
-            minimumCollateralRatio,
-            upfrontInterestPeriod,
-            interestRateAdjCooldown,
-            minimumPriceBufferPercentage,
-            startingPriceBufferPercentage,
-            emergencyStartingPriceBufferPercentage
-        );
+        (address _troveManager, address _sortedTroves, address _dutchDesk, address _auction, address _lender) =
+            catFactory.deploy(address(borrowToken), address(collateralToken), address(priceOracle), management, performanceFeeRecipient);
 
         // Set contract instances
         troveManager = ITroveManager(_troveManager);

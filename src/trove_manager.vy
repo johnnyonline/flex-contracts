@@ -163,6 +163,7 @@ min_debt: public(uint256)  # e.g., `500 * borrow_token_precision` for 500 tokens
 minimum_collateral_ratio: public(uint256)  # e.g., `110 * one_pct` for 110%
 upfront_interest_period: public(uint256)  # e.g., `7 * 24 * 60 * 60` for 7 days
 interest_rate_adj_cooldown: public(uint256)  # e.g., `7 * 24 * 60 * 60` for 7 days
+liquidator_fee_percentage: public(uint256)  # e.g., `10 ** 15` for 0.1%
 min_annual_interest_rate: public(uint256) # e.g., `0.5 * one_pct` for 0.5%
 max_annual_interest_rate: public(uint256) # e.g., `250 * one_pct` for 250%
 
@@ -192,6 +193,7 @@ def initialize(
     minimum_collateral_ratio: uint256,
     upfront_interest_period: uint256,
     interest_rate_adj_cooldown: uint256,
+    liquidator_fee_percentage: uint256,
 ):
     """
     @notice Initialize the contract
@@ -201,10 +203,11 @@ def initialize(
     @param sorted_troves Address of the Sorted Troves contract
     @param borrow_token Address of the borrow token
     @param collateral_token Address of the collateral token
-    @param minimum_debt Minimum debt for Troves
-    @param minimum_collateral_ratio Minimum collateral ratio for Troves
-    @param upfront_interest_period Upfront interest period for Troves
-    @param interest_rate_adj_cooldown Interest rate adjustment cooldown for Troves
+    @param minimum_debt Minimum borrowable amount
+    @param minimum_collateral_ratio Minimum CR to avoid liquidation
+    @param upfront_interest_period Duration for upfront interest charges
+    @param interest_rate_adj_cooldown Cooldown between rate adjustments
+    @param liquidator_fee_percentage Liquidator's immediate collateral fee
     """
     # Make sure the contract is not already initialized
     assert self.lender == empty(address), "initialized"
@@ -232,6 +235,7 @@ def initialize(
     self.minimum_collateral_ratio = minimum_collateral_ratio * one_pct
     self.upfront_interest_period = upfront_interest_period
     self.interest_rate_adj_cooldown = interest_rate_adj_cooldown
+    self.liquidator_fee_percentage = liquidator_fee_percentage
     self.min_annual_interest_rate = one_pct // 2  # 0.5%
     self.max_annual_interest_rate = 250 * one_pct  # 250%
 
@@ -1002,8 +1006,12 @@ def liquidate_troves(trove_ids: uint256[_MAX_ITERATIONS]):
         total_weighted_debt_to_decrease, # weighted_debt_decrease
     )
 
+    # Transfer a portion of the liquidated collateral to the caller
+    liquidator_fee: uint256 = total_collateral_to_decrease * self.liquidator_fee_percentage // _WAD
+    assert extcall self.collateral_token.transfer(msg.sender, liquidator_fee, default_return_value=True)
+
     # Kick the auction. Proceeds will be sent to the Lender contract
-    extcall self.dutch_desk.kick(total_collateral_to_decrease)  # pulls collateral tokens
+    extcall self.dutch_desk.kick(total_collateral_to_decrease - liquidator_fee)  # pulls collateral tokens
 
 
 @internal

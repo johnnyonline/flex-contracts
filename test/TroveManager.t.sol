@@ -43,7 +43,8 @@ contract TroveManagerTests is Base {
             minimumDebt,
             minimumCollateralRatio,
             upfrontInterestPeriod,
-            interestRateAdjCooldown
+            interestRateAdjCooldown,
+            liquidatorFeePercentage
         );
     }
 

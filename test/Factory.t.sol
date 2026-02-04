@@ -22,15 +22,16 @@ contract FactoryTests is Base {
         assertEq(catFactory.MINIMUM_COLLATERAL_RATIO(), minimumCollateralRatio, "E6");
         assertEq(catFactory.UPFRONT_INTEREST_PERIOD(), upfrontInterestPeriod, "E7");
         assertEq(catFactory.INTEREST_RATE_ADJ_COOLDOWN(), interestRateAdjCooldown, "E8");
-        assertEq(catFactory.MINIMUM_PRICE_BUFFER_PERCENTAGE(), minimumPriceBufferPercentage, "E9");
-        assertEq(catFactory.STARTING_PRICE_BUFFER_PERCENTAGE(), startingPriceBufferPercentage, "E10");
-        assertEq(catFactory.EMERGENCY_STARTING_PRICE_BUFFER_PERCENTAGE(), emergencyStartingPriceBufferPercentage, "E11");
-        assertEq(catFactory.STEP_DURATION(), stepDuration, "E12");
-        assertEq(catFactory.STEP_DECAY_RATE(), stepDecayRate, "E13");
-        assertEq(catFactory.AUCTION_LENGTH(), auctionLength, "E14");
+        assertEq(catFactory.LIQUIDATOR_FEE_PERCENTAGE(), liquidatorFeePercentage, "E9");
+        assertEq(catFactory.MINIMUM_PRICE_BUFFER_PERCENTAGE(), minimumPriceBufferPercentage, "E10");
+        assertEq(catFactory.STARTING_PRICE_BUFFER_PERCENTAGE(), startingPriceBufferPercentage, "E11");
+        assertEq(catFactory.EMERGENCY_STARTING_PRICE_BUFFER_PERCENTAGE(), emergencyStartingPriceBufferPercentage, "E12");
+        assertEq(catFactory.STEP_DURATION(), stepDuration, "E13");
+        assertEq(catFactory.STEP_DECAY_RATE(), stepDecayRate, "E14");
+        assertEq(catFactory.AUCTION_LENGTH(), auctionLength, "E15");
 
         // Version
-        assertEq(catFactory.VERSION(), "1.0.0", "E15");
+        assertEq(catFactory.VERSION(), "1.0.0", "E16");
     }
 
 }

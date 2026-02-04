@@ -47,6 +47,7 @@ MINIMUM_DEBT: public(constant(uint256)) = 500  # 500 units of borrow token
 MINIMUM_COLLATERAL_RATIO: public(constant(uint256)) = 110  # 110%
 UPFRONT_INTEREST_PERIOD: public(constant(uint256)) = 7 * 24 * 60 * 60  # 7 days
 INTEREST_RATE_ADJ_COOLDOWN: public(constant(uint256)) = 7 * 24 * 60 * 60  # 7 days
+LIQUIDATOR_FEE_PERCENTAGE: public(constant(uint256)) = 10 ** 15  # 0.1%
 MINIMUM_PRICE_BUFFER_PERCENTAGE: public(constant(uint256)) = _WAD - 5 * 10 ** 16  # 5%
 STARTING_PRICE_BUFFER_PERCENTAGE: public(constant(uint256)) = _WAD + 15 * 10 ** 16  # 15%
 EMERGENCY_STARTING_PRICE_BUFFER_PERCENTAGE: public(constant(uint256)) = _WAD + 100 * 10 ** 16  # 100%
@@ -107,6 +108,7 @@ def deploy(
     minimum_collateral_ratio: uint256 = MINIMUM_COLLATERAL_RATIO,
     upfront_interest_period: uint256 = UPFRONT_INTEREST_PERIOD,
     interest_rate_adj_cooldown: uint256 = INTEREST_RATE_ADJ_COOLDOWN,
+    liquidator_fee_percentage: uint256 = LIQUIDATOR_FEE_PERCENTAGE,
     minimum_price_buffer_percentage: uint256 = MINIMUM_PRICE_BUFFER_PERCENTAGE,
     starting_price_buffer_percentage: uint256 = STARTING_PRICE_BUFFER_PERCENTAGE,
     emergency_starting_price_buffer_percentage: uint256 = EMERGENCY_STARTING_PRICE_BUFFER_PERCENTAGE,
@@ -121,13 +123,14 @@ def deploy(
     @param price_oracle Address of the Price Oracle contract
     @param management Address of the management
     @param performance_fee_recipient Address of the performance fee recipient
-    @param minimum_debt Minimum debt for Troves
-    @param minimum_collateral_ratio Minimum collateral ratio for Troves
-    @param upfront_interest_period Upfront interest period for Troves
-    @param interest_rate_adj_cooldown Interest rate adjustment cooldown for Troves
-    @param minimum_price_buffer_percentage Buffer percentage to apply to the collateral price for the minimum price
-    @param starting_price_buffer_percentage Buffer percentage to apply to the collateral price for the starting price
-    @param emergency_starting_price_buffer_percentage Buffer percentage to apply to the collateral price for the emergency starting price
+    @param minimum_debt Minimum borrowable amount
+    @param minimum_collateral_ratio Minimum CR to avoid liquidation
+    @param upfront_interest_period Duration for upfront interest charges
+    @param interest_rate_adj_cooldown Cooldown between rate adjustments
+    @param liquidator_fee_percentage Liquidator's immediate collateral fee
+    @param minimum_price_buffer_percentage Minimum auction price buffer
+    @param starting_price_buffer_percentage Starting auction price buffer
+    @param emergency_starting_price_buffer_percentage Emergency starting auction price buffer
     @return trove_manager Address of the deployed Trove Manager contract
     @return sorted_troves Address of the deployed Sorted Troves contract
     @return dutch_desk Address of the deployed Dutch Desk contract
@@ -187,6 +190,7 @@ def deploy(
         minimum_collateral_ratio,
         upfront_interest_period,
         interest_rate_adj_cooldown,
+        liquidator_fee_percentage,
     )
 
     # Initialize the Sorted Troves contract

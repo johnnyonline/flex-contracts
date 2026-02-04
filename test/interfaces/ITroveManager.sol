@@ -56,6 +56,7 @@ interface ITroveManager {
     function minimum_collateral_ratio() external view returns (uint256);
     function upfront_interest_period() external view returns (uint256);
     function interest_rate_adj_cooldown() external view returns (uint256);
+    function liquidator_fee_percentage() external view returns (uint256);
     function min_annual_interest_rate() external view returns (uint256);
     function max_annual_interest_rate() external view returns (uint256);
 
@@ -83,7 +84,8 @@ interface ITroveManager {
         uint256 minimum_debt,
         uint256 minimum_collateral_ratio,
         uint256 upfront_interest_period,
-        uint256 interest_rate_adj_cooldown
+        uint256 interest_rate_adj_cooldown,
+        uint256 liquidator_fee_percentage
     ) external;
 
     // ============================================================================================

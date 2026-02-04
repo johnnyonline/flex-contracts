@@ -19,6 +19,7 @@ interface ICatFactory {
     function MINIMUM_COLLATERAL_RATIO() external view returns (uint256);
     function UPFRONT_INTEREST_PERIOD() external view returns (uint256);
     function INTEREST_RATE_ADJ_COOLDOWN() external view returns (uint256);
+    function LIQUIDATOR_FEE_PERCENTAGE() external view returns (uint256);
     function MINIMUM_PRICE_BUFFER_PERCENTAGE() external view returns (uint256);
     function STARTING_PRICE_BUFFER_PERCENTAGE() external view returns (uint256);
     function EMERGENCY_STARTING_PRICE_BUFFER_PERCENTAGE() external view returns (uint256);
@@ -38,14 +39,7 @@ interface ICatFactory {
         address collateralToken,
         address priceOracle,
         address management,
-        address performanceFeeRecipient,
-        uint256 minimumDebt,
-        uint256 minimumCollateralRatio,
-        uint256 upfrontInterestPeriod,
-        uint256 interestRateAdjCooldown,
-        uint256 minimumPriceBufferPercentage,
-        uint256 startingPriceBufferPercentage,
-        uint256 emergencyStartingPriceBufferPercentage
+        address performanceFeeRecipient
     ) external returns (address, address, address, address, address);
 
 }

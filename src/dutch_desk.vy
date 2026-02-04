@@ -74,9 +74,9 @@ def initialize(
     @param auction Address of the Auction contract
     @param borrow_token Address of the borrow token
     @param collateral_token Address of the collateral token
-    @param minimum_price_buffer_percentage Buffer percentage to apply to the collateral price for the minimum price
-    @param starting_price_buffer_percentage Buffer percentage to apply to the collateral price for the starting price
-    @param emergency_starting_price_buffer_percentage Buffer percentage to apply to the collateral price for the emergency starting price
+    @param minimum_price_buffer_percentage Minimum auction price buffer
+    @param starting_price_buffer_percentage Starting auction price buffer
+    @param emergency_starting_price_buffer_percentage Emergency starting auction price buffer
     """
     # Make sure the contract is not already initialized
     assert self.trove_manager == empty(address), "initialized"
