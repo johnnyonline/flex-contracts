@@ -49,10 +49,10 @@ UPFRONT_INTEREST_PERIOD: public(constant(uint256)) = 7 * 24 * 60 * 60  # 7 days
 INTEREST_RATE_ADJ_COOLDOWN: public(constant(uint256)) = 7 * 24 * 60 * 60  # 7 days
 LIQUIDATOR_FEE_PERCENTAGE: public(constant(uint256)) = 10 ** 15  # 0.1%
 MINIMUM_PRICE_BUFFER_PERCENTAGE: public(constant(uint256)) = _WAD - 5 * 10 ** 16  # 5%
-STARTING_PRICE_BUFFER_PERCENTAGE: public(constant(uint256)) = _WAD + 15 * 10 ** 16  # 15%
-EMERGENCY_STARTING_PRICE_BUFFER_PERCENTAGE: public(constant(uint256)) = _WAD + 100 * 10 ** 16  # 100%
-STEP_DURATION: public(constant(uint256)) = 60  # 60 seconds (i.e., reduce price by step decay rate every 60 seconds)
-STEP_DECAY_RATE: public(constant(uint256)) = 50  # 0.5% (i.e., reduce price by 0.5% every step duration)
+STARTING_PRICE_BUFFER_PERCENTAGE: public(constant(uint256)) = _WAD + 1 * 10 ** 16  # 1%
+EMERGENCY_STARTING_PRICE_BUFFER_PERCENTAGE: public(constant(uint256)) = _WAD + 20 * 10 ** 16  # 20%
+STEP_DURATION: public(constant(uint256)) = 20  # 20 seconds (i.e., reduce price by step decay rate every 20 seconds)
+STEP_DECAY_RATE: public(constant(uint256)) = 20  # 0.2% (i.e., reduce price by 0.2% every step duration)
 AUCTION_LENGTH: public(constant(uint256)) = 1 * 24 * 60 * 60  # 1 day
 
 # Version
