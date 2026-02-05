@@ -49,8 +49,8 @@ struct AuctionInfo:
     current_amount: uint256  # the current amount of sell token available
     maximum_amount: uint256  # the maximum amount of buy token to be received. Any surplus goes to Lender contract
     amount_received: uint256  # the amount of buy token already received toward the maximum amount
-    starting_price: uint256  # the amount to start the auction at, unscaled "lot size" in buy token
-    minimum_price: uint256  # the minimum price per token for the auction, scaled to WAD
+    starting_price: uint256  # the amount to start the auction at, WAD scaled "lot size" in buy token
+    minimum_price: uint256  # the minimum price per token for the auction, WAD scaled in buy token
     receiver: address  # the address that will receive the auction proceeds
     surplus_receiver: address  # the address that will receive any surplus proceeds above maximum_amount
     is_liquidation: bool  # whether this auction is selling liquidated collateral
@@ -317,7 +317,7 @@ def amount_received(auction_id: uint256) -> uint256:
 def starting_price(auction_id: uint256) -> uint256:
     """
     @notice Get the starting price for the auction
-    @dev The starting price is an unscaled "lot size" in buy token
+    @dev The starting price is WAD scaled "lot size" in buy token
     @param auction_id The identifier for the auction
     @return The starting price for the auction
     """
@@ -329,7 +329,7 @@ def starting_price(auction_id: uint256) -> uint256:
 def minimum_price(auction_id: uint256) -> uint256:
     """
     @notice Get the minimum price for the auction
-    @dev The minimum price is per token and is scaled to WAD
+    @dev The minimum price is per token and is WAD scaled in buy token
     @param auction_id The identifier for the auction
     @return The minimum price for the auction
     """
@@ -392,8 +392,8 @@ def kick(
     @param auction_id The identifier for the auction
     @param kick_amount The amount of sell token to kick the auction with
     @param maximum_amount The maximum amount of buy token to be received
-    @param starting_price The starting price for the auction, unscaled "lot size" in buy token
-    @param minimum_price The minimum price for the auction, scaled to WAD
+    @param starting_price The starting price for the auction, WAD scaled "lot size" in buy token
+    @param minimum_price The minimum price for the auction, WAD scaled in buy token
     @param receiver The address that will receive the auction proceeds
     @param surplus_receiver The address that will receive any surplus proceeds above maximum_amount
     @param is_liquidation Whether this auction is selling liquidated collateral
@@ -458,8 +458,8 @@ def re_kick(
     @dev Only callable by Papi
     @dev An auction may need to be re-kicked if its price has fallen below its minimum price
     @param auction_id The identifier for the auction
-    @param starting_price The new starting price for the auction, unscaled "lot size" in buy token
-    @param minimum_price The new minimum price for the auction, scaled to WAD
+    @param starting_price The new starting price for the auction, WAD scaled "lot size" in buy token
+    @param minimum_price The new minimum price for the auction, WAD scaled in buy token
     """
     # Make sure caller is Papi
     assert msg.sender == self.papi, "!papi"
@@ -669,7 +669,7 @@ def _get_price(auction: AuctionInfo, at_timestamp: uint256 = block.timestamp) ->
     decay_multiplier: uint256 = self._rpow(ray_multiplier, steps)
 
     # Calculate initial price per token
-    initial_price: uint256 = self._wdiv(auction.starting_price * _WAD, initial_amount)
+    initial_price: uint256 = self._wdiv(auction.starting_price, initial_amount)
 
     # Apply the decay to get the current price
     current_price: uint256 = self._rmul(initial_price, decay_multiplier)

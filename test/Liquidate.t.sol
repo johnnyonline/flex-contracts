@@ -124,7 +124,7 @@ contract LiquidateTests is Base {
 
         // Check auction starting price and minimum price
         {
-            uint256 _expectedStartingPrice = (_collateralNeeded - _collateralNeeded * liquidatorFeePercentage / WAD) * _priceDropToBelowMCR18 / 1e18
+            uint256 _expectedStartingPrice = (_collateralNeeded - _collateralNeeded * liquidatorFeePercentage / WAD) * _priceDropToBelowMCR18
                 * dutchDesk.starting_price_buffer_percentage() / 1e18 / COLLATERAL_TOKEN_PRECISION;
             assertEq(auction.starting_price(0), _expectedStartingPrice, "E27");
             uint256 _expectedMinimumPrice = _priceDropToBelowMCR18 * dutchDesk.minimum_price_buffer_percentage() / WAD;
@@ -332,12 +332,12 @@ contract LiquidateTests is Base {
         assertEq(collateralToken.balanceOf(liquidator), _collateralNeeded * 2 * liquidatorFeePercentage / WAD, "E53");
 
         // Check auction starting price and minimum price
-        // Starting price = available * price / 1e18 * STARTING_PRICE_BUFFER_PERCENTAGE / 1e18 / COLLATERAL_TOKEN_PRECISION
+        // Starting price = available * price * STARTING_PRICE_BUFFER_PERCENTAGE / 1e18 / COLLATERAL_TOKEN_PRECISION
         // Note: both troves liquidated in same tx, so collateral = _collateralNeeded * 2 - liquidator_fee
         {
             uint256 _collateralToSell = (_collateralNeeded * 2) - (_collateralNeeded * 2 * liquidatorFeePercentage / WAD);
             uint256 _expectedStartingPrice =
-                _collateralToSell * _priceDropToBelowMCR18 / 1e18 * dutchDesk.starting_price_buffer_percentage() / 1e18 / COLLATERAL_TOKEN_PRECISION;
+                _collateralToSell * _priceDropToBelowMCR18 * dutchDesk.starting_price_buffer_percentage() / 1e18 / COLLATERAL_TOKEN_PRECISION;
             assertEq(auction.starting_price(0), _expectedStartingPrice, "E54");
             uint256 _expectedMinimumPrice = _priceDropToBelowMCR18 * dutchDesk.minimum_price_buffer_percentage() / WAD;
             assertEq(auction.minimum_price(0), _expectedMinimumPrice, "E55");
@@ -526,8 +526,7 @@ contract LiquidateTests is Base {
             // Check auction starting price and minimum price after first liquidation
             assertEq(
                 auction.starting_price(0),
-                _collateralInAuction * _priceDropToBelowMCR18 / 1e18 * dutchDesk.starting_price_buffer_percentage() / 1e18
-                    / COLLATERAL_TOKEN_PRECISION,
+                _collateralInAuction * _priceDropToBelowMCR18 * dutchDesk.starting_price_buffer_percentage() / 1e18 / COLLATERAL_TOKEN_PRECISION,
                 "E13"
             );
             assertEq(auction.minimum_price(0), _priceDropToBelowMCR18 * dutchDesk.minimum_price_buffer_percentage() / WAD, "E14");

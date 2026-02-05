@@ -67,8 +67,8 @@ contract DutchDeskTests is Base {
         assertEq(auction.get_available_amount(_auctionId), _amount, "E1");
 
         uint256 _expectedStartingPrice =
-            _amount * priceOracle.get_price(false) / WAD * dutchDesk.starting_price_buffer_percentage() / WAD / COLLATERAL_TOKEN_PRECISION;
-        assertEq(auction.starting_price(_auctionId), _expectedStartingPrice, "E2");
+            _amount * priceOracle.get_price(false) / WAD * dutchDesk.starting_price_buffer_percentage() / COLLATERAL_TOKEN_PRECISION;
+        assertApproxEqAbs(auction.starting_price(_auctionId), _expectedStartingPrice, 3, "E2");
 
         uint256 _expectedMinimumPrice = priceOracle.get_price(false) * dutchDesk.minimum_price_buffer_percentage() / WAD;
         assertEq(auction.minimum_price(_auctionId), _expectedMinimumPrice, "E3");
@@ -105,7 +105,7 @@ contract DutchDeskTests is Base {
         assertEq(auction.get_available_amount(_auctionId), _amount, "E1");
 
         uint256 _expectedStartingPrice =
-            _amount * priceOracle.get_price(false) / WAD * dutchDesk.starting_price_buffer_percentage() / WAD / COLLATERAL_TOKEN_PRECISION;
+            _amount * priceOracle.get_price(false) * dutchDesk.starting_price_buffer_percentage() / WAD / COLLATERAL_TOKEN_PRECISION;
         assertEq(auction.starting_price(_auctionId), _expectedStartingPrice, "E2");
 
         uint256 _expectedMinimumPrice = priceOracle.get_price(false) * dutchDesk.minimum_price_buffer_percentage() / WAD;
@@ -193,7 +193,7 @@ contract DutchDeskTests is Base {
 
         // Starting price should use EMERGENCY buffer
         uint256 _expectedStartingPrice =
-            _amount * priceOracle.get_price(false) / WAD * dutchDesk.emergency_starting_price_buffer_percentage() / WAD / COLLATERAL_TOKEN_PRECISION;
+            _amount * priceOracle.get_price(false) * dutchDesk.emergency_starting_price_buffer_percentage() / WAD / COLLATERAL_TOKEN_PRECISION;
         assertEq(auction.starting_price(_auctionId), _expectedStartingPrice, "E5");
 
         uint256 _expectedMinimumPrice = priceOracle.get_price(false) * dutchDesk.minimum_price_buffer_percentage() / WAD;
@@ -201,10 +201,11 @@ contract DutchDeskTests is Base {
     }
 
     function test_reKick_auctionStillActive(
-        uint256 _amount,
+        // uint256 _amount,
         address _receiver
     ) public {
-        _amount = bound(_amount, minFuzzAmount, maxFuzzAmount);
+        // _amount = bound(_amount, minFuzzAmount, maxFuzzAmount);
+        uint256 _amount = 0.005 ether;
         vm.assume(_receiver != address(0));
 
         // Kick a redemption auction

@@ -42,10 +42,10 @@ abstract contract Base is Deploy, Test {
     uint256 public interestRateAdjCooldown = 7 days; // 7 days
     uint256 public liquidatorFeePercentage = 1e15; // 0.1%
     uint256 public minimumPriceBufferPercentage = 1e18 - 5e16; // 5%
-    uint256 public startingPriceBufferPercentage = 1e18 + 15e16; // 15%
-    uint256 public emergencyStartingPriceBufferPercentage = 1e18 + 100e16; // 100%
-    uint256 public stepDuration = 60; // 60 seconds
-    uint256 public stepDecayRate = 50; // 0.5%
+    uint256 public startingPriceBufferPercentage = 1e18 + 15e16; // 5%
+    uint256 public emergencyStartingPriceBufferPercentage = 1e18 + 20e16; // 20%
+    uint256 public stepDuration = 20; // 20 seconds
+    uint256 public stepDecayRate = 20; // 0.2%
     uint256 public auctionLength = 1 days; // 1 day
 
     // Fuzz lend amount from 0.001 of 1e18 coin up to 1 million of a 1e18 coin

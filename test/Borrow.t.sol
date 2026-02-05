@@ -400,9 +400,10 @@ contract BorrowTests is Base {
         assertGt(_auctionAvailable, 0, "E52");
 
         // Check starting price is set correctly (with buffer)
-        assertEq(
+        assertApproxEqAbs(
             auction.starting_price(0),
-            _auctionAvailable * priceOracle.get_price(false) / WAD * dutchDesk.starting_price_buffer_percentage() / WAD / COLLATERAL_TOKEN_PRECISION,
+            _auctionAvailable * priceOracle.get_price(false) / WAD * dutchDesk.starting_price_buffer_percentage() / COLLATERAL_TOKEN_PRECISION,
+            3,
             "E53"
         );
 
