@@ -201,11 +201,10 @@ contract DutchDeskTests is Base {
     }
 
     function test_reKick_auctionStillActive(
-        // uint256 _amount,
+        uint256 _amount,
         address _receiver
     ) public {
-        // _amount = bound(_amount, minFuzzAmount, maxFuzzAmount);
-        uint256 _amount = 0.005 ether;
+        _amount = bound(_amount, minFuzzAmount, maxFuzzAmount);
         vm.assume(_receiver != address(0));
 
         // Kick a redemption auction

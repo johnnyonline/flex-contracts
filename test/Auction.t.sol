@@ -520,7 +520,7 @@ contract AuctionTests is Base {
         assertFalse(auction.is_ongoing_liquidation_auction(), "E3");
     }
 
-    function test_priceDecay1(
+    function test_priceDecay(
         uint256 _auctionId,
         uint256 _kickAmount
     ) public {
