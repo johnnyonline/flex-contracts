@@ -633,3 +633,72 @@ contract LiquidateTests is Base {
     }
 
 }
+
+import {ICustomLiquidationFeeFactory} from "./interfaces/ICustomLiquidationFeeFactory.sol";
+
+contract LiquidateZeroFeeTests is Base {
+
+    function setUp() public override {
+        Base.setUp();
+
+        // Re-deploy market with 0% liquidator fee
+        vm.prank(management);
+        (address _troveManager, address _sortedTroves, address _dutchDesk, address _auction, address _lender) = ICustomLiquidationFeeFactory(
+                address(catFactory)
+            )
+            .deploy(
+                address(borrowToken),
+                address(collateralToken),
+                address(priceOracle),
+                management,
+                performanceFeeRecipient,
+                minimumDebt,
+                minimumCollateralRatio,
+                upfrontInterestPeriod,
+                interestRateAdjCooldown,
+                0 // 0% liquidator fee
+            );
+
+        troveManager = ITroveManager(_troveManager);
+        sortedTroves = ISortedTroves(_sortedTroves);
+        dutchDesk = IDutchDesk(_dutchDesk);
+        auction = IAuction(_auction);
+        lender = ILender(_lender);
+
+        vm.prank(management);
+        lender.acceptManagement();
+    }
+
+    function test_liquidateWithZeroFee() public {
+        uint256 _amount = troveManager.min_debt() * BORROW_TOKEN_PRECISION;
+
+        mintAndDepositIntoLender(userLender, _amount);
+
+        uint256 _collateralNeeded =
+            (_amount * DEFAULT_TARGET_COLLATERAL_RATIO / BORROW_TOKEN_PRECISION) * ORACLE_PRICE_SCALE / priceOracle.get_price();
+
+        uint256 _troveId = mintAndOpenTrove(userBorrower, _collateralNeeded, _amount, DEFAULT_ANNUAL_INTEREST_RATE);
+
+        // Drop price below MCR
+        ITroveManager.Trove memory _trove = troveManager.troves(_troveId);
+        uint256 _priceDropToBelowMCR =
+            troveManager.minimum_collateral_ratio() * _trove.debt * ORACLE_PRICE_SCALE * 99 / (100 * _trove.collateral * BORROW_TOKEN_PRECISION);
+        uint256 _priceDropToBelowMCR18 = _priceDropToBelowMCR * COLLATERAL_TOKEN_PRECISION * WAD / (ORACLE_PRICE_SCALE * BORROW_TOKEN_PRECISION);
+
+        vm.mockCall(address(priceOracle), abi.encodeWithSelector(IPriceOracleScaled.get_price.selector), abi.encode(_priceDropToBelowMCR));
+        vm.mockCall(address(priceOracle), abi.encodeWithSelector(IPriceOracleNotScaled.get_price.selector, false), abi.encode(_priceDropToBelowMCR18));
+
+        // Liquidate
+        vm.prank(liquidator);
+        uint256[MAX_ITERATIONS] memory _troveIds;
+        _troveIds[0] = _troveId;
+        troveManager.liquidate_troves(_troveIds);
+
+        // Liquidator should receive 0 fee
+        assertEq(collateralToken.balanceOf(liquidator), 0, "E0");
+
+        // All collateral should go to auction
+        assertEq(collateralToken.balanceOf(address(auction)), _collateralNeeded, "E1");
+    }
+
+}
