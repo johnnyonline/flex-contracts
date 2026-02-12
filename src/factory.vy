@@ -107,7 +107,7 @@ def __init__(
 # Deploy
 # ============================================================================================
 
-# @todo -- add more input params sanity check here
+
 @external
 def deploy(params: DeployParams) -> (address, address, address, address, address):
     """
