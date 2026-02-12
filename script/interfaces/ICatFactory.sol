@@ -17,9 +17,11 @@ interface ICatFactory {
         uint256 minimumCollateralRatio;
         uint256 upfrontInterestPeriod;
         uint256 interestRateAdjCooldown;
-        uint256 minimumPriceBufferPercentage;
-        uint256 startingPriceBufferPercentage;
-        uint256 emergencyStartingPriceBufferPercentage;
+        uint256 redemptionMinimumPriceBufferPercentage;
+        uint256 redemptionStartingPriceBufferPercentage;
+        uint256 redemptionReKickStartingPriceBufferPercentage;
+        uint256 liquidationMinimumPriceBufferPercentage;
+        uint256 liquidationStartingPriceBufferPercentage;
         uint256 stepDuration;
         uint256 stepDecayRate;
         uint256 auctionLength;

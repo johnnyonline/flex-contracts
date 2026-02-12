@@ -38,9 +38,11 @@ collateral_token: public(IERC20)
 
 # Parameters
 collateral_token_precision: public(uint256)
-minimum_price_buffer_percentage: public(uint256)
-starting_price_buffer_percentage: public(uint256)
-emergency_starting_price_buffer_percentage: public(uint256)
+redemption_minimum_price_buffer_percentage: public(uint256)
+redemption_starting_price_buffer_percentage: public(uint256)
+redemption_re_kick_starting_price_buffer_percentage: public(uint256)
+liquidation_minimum_price_buffer_percentage: public(uint256)
+liquidation_starting_price_buffer_percentage: public(uint256)
 
 # Accounting
 nonce: public(uint256)
@@ -58,9 +60,11 @@ struct InitializeParams:
     auction: address
     borrow_token: address
     collateral_token: address
-    minimum_price_buffer_percentage: uint256
-    starting_price_buffer_percentage: uint256
-    emergency_starting_price_buffer_percentage: uint256
+    redemption_minimum_price_buffer_percentage: uint256
+    redemption_starting_price_buffer_percentage: uint256
+    redemption_re_kick_starting_price_buffer_percentage: uint256
+    liquidation_minimum_price_buffer_percentage: uint256
+    liquidation_starting_price_buffer_percentage: uint256
 
 
 # ============================================================================================
@@ -87,9 +91,11 @@ def initialize(params: InitializeParams):
     self.collateral_token = IERC20(params.collateral_token)
 
     # Set parameters
-    self.minimum_price_buffer_percentage = params.minimum_price_buffer_percentage
-    self.starting_price_buffer_percentage = params.starting_price_buffer_percentage
-    self.emergency_starting_price_buffer_percentage = params.emergency_starting_price_buffer_percentage
+    self.redemption_minimum_price_buffer_percentage = params.redemption_minimum_price_buffer_percentage
+    self.redemption_starting_price_buffer_percentage = params.redemption_starting_price_buffer_percentage
+    self.redemption_re_kick_starting_price_buffer_percentage = params.redemption_re_kick_starting_price_buffer_percentage
+    self.liquidation_minimum_price_buffer_percentage = params.liquidation_minimum_price_buffer_percentage
+    self.liquidation_starting_price_buffer_percentage = params.liquidation_starting_price_buffer_percentage
 
     # Get collateral token decimals
     collateral_token_decimals: uint256 = convert(staticcall IERC20Detailed(params.collateral_token).decimals(), uint256)
@@ -133,10 +139,7 @@ def kick(
     # Get the starting and minimum prices
     starting_price: uint256 = 0
     minimum_price: uint256 = 0
-    starting_price, minimum_price = self._get_prices(
-        kick_amount,
-        self.starting_price_buffer_percentage,
-    )
+    starting_price, minimum_price = self._get_prices(kick_amount, is_liquidation)
 
     # Use the nonce as auction identifier
     auction_id: uint256 = self.nonce
@@ -173,12 +176,16 @@ def re_kick(auction_id: uint256):
     # Cache the Auction contract
     auction: IAuction = self.auction
 
+    # Check if this is a liquidation or redemption auction
+    is_liquidation: bool = staticcall auction.is_liquidation(auction_id)
+
     # Get new starting and minimum prices
     starting_price: uint256 = 0
     minimum_price: uint256 = 0
     starting_price, minimum_price = self._get_prices(
         staticcall auction.current_amount(auction_id),
-        self.emergency_starting_price_buffer_percentage,
+        is_liquidation,
+        True,  # is_rekick
     )
 
     # Re-kick with new prices
@@ -194,15 +201,30 @@ def re_kick(auction_id: uint256):
 @view
 def _get_prices(
     kick_amount: uint256,
-    starting_price_buffer_pct: uint256,
+    is_liquidation: bool,
+    is_rekick: bool = False,
 ) -> (uint256, uint256):
     """
     @notice Gets the starting and minimum prices for an auction
     @param kick_amount Amount of collateral tokens to auction
-    @param starting_price_buffer_pct Buffer percentage to apply to the collateral price for the starting price
+    @param is_liquidation Whether this is a liquidation or redemption auction
+    @param is_rekick Whether this is a re-kick of an existing auction
     @return starting_price The calculated starting price
     @return minimum_price The calculated minimum price
     """
+    # Determine the minimum and starting price buffer percentages
+    minimum_price_buffer_pct: uint256 = 0
+    starting_price_buffer_pct: uint256 = 0
+    if is_liquidation:
+        minimum_price_buffer_pct = self.liquidation_minimum_price_buffer_percentage
+        starting_price_buffer_pct = self.liquidation_starting_price_buffer_percentage
+    else:
+        minimum_price_buffer_pct = self.redemption_minimum_price_buffer_percentage
+        if is_rekick:
+            starting_price_buffer_pct = self.redemption_re_kick_starting_price_buffer_percentage
+        else:
+            starting_price_buffer_pct = self.redemption_starting_price_buffer_percentage
+
     # Get the collateral price
     collateral_price: uint256 = staticcall self.price_oracle.get_price(False)  # price in WAD format
 
@@ -212,6 +234,6 @@ def _get_prices(
 
     # Calculate the minimum price with buffer to the collateral price
     # Minimum price is per token and is scaled to WAD
-    minimum_price: uint256 = collateral_price * self.minimum_price_buffer_percentage // _WAD
+    minimum_price: uint256 = collateral_price * minimum_price_buffer_pct // _WAD
 
     return starting_price, minimum_price

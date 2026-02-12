@@ -31,7 +31,7 @@ contract AuctionPriceSimulationTests is Base {
         uint256 marketPrice = 1000e18;
 
         // Starting price with buffer (e.g., 15% above market)
-        uint256 auctionStartingPrice = (marketPrice * startingPriceBufferPercentage) / WAD;
+        uint256 auctionStartingPrice = (marketPrice * redemptionStartingPriceBufferPercentage) / WAD;
 
         uint256 price = auctionStartingPrice;
         uint256 multiplier = 10000 - stepDecayRate;
@@ -40,7 +40,7 @@ contract AuctionPriceSimulationTests is Base {
         console2.log("");
         console2.log("=== Time to Reach Market Price ===");
         console2.log("Market Price: %s", marketPrice / 1e18);
-        console2.log("Starting Price Buffer: %s%%", startingPriceBufferPercentage / 1e16);
+        console2.log("Starting Price Buffer: %s%%", redemptionStartingPriceBufferPercentage / 1e16);
         console2.log("Auction Starting Price: %s", auctionStartingPrice / 1e18);
         console2.log("Step Duration: %s seconds", stepDuration);
         console2.log("Step Decay Rate: %s basis points", stepDecayRate);

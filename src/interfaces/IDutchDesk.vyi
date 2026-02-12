@@ -13,9 +13,11 @@ struct InitializeParams:
     auction: address
     borrow_token: address
     collateral_token: address
-    minimum_price_buffer_percentage: uint256
-    starting_price_buffer_percentage: uint256
-    emergency_starting_price_buffer_percentage: uint256
+    redemption_minimum_price_buffer_percentage: uint256
+    redemption_starting_price_buffer_percentage: uint256
+    redemption_re_kick_starting_price_buffer_percentage: uint256
+    liquidation_minimum_price_buffer_percentage: uint256
+    liquidation_starting_price_buffer_percentage: uint256
 
 
 # ============================================================================================

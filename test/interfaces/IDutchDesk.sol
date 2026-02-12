@@ -14,9 +14,11 @@ interface IDutchDesk {
         address auction;
         address borrowToken;
         address collateralToken;
-        uint256 minimumPriceBufferPercentage;
-        uint256 startingPriceBufferPercentage;
-        uint256 emergencyStartingPriceBufferPercentage;
+        uint256 redemptionMinimumPriceBufferPercentage;
+        uint256 redemptionStartingPriceBufferPercentage;
+        uint256 redemptionReKickStartingPriceBufferPercentage;
+        uint256 liquidationMinimumPriceBufferPercentage;
+        uint256 liquidationStartingPriceBufferPercentage;
     }
 
     // ============================================================================================
@@ -34,9 +36,11 @@ interface IDutchDesk {
 
     // Parameters
     function collateral_token_precision() external view returns (uint256);
-    function minimum_price_buffer_percentage() external view returns (uint256);
-    function starting_price_buffer_percentage() external view returns (uint256);
-    function emergency_starting_price_buffer_percentage() external view returns (uint256);
+    function redemption_minimum_price_buffer_percentage() external view returns (uint256);
+    function redemption_starting_price_buffer_percentage() external view returns (uint256);
+    function redemption_re_kick_starting_price_buffer_percentage() external view returns (uint256);
+    function liquidation_minimum_price_buffer_percentage() external view returns (uint256);
+    function liquidation_starting_price_buffer_percentage() external view returns (uint256);
 
     // Accounting
     function nonce() external view returns (uint256);

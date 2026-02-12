@@ -40,9 +40,11 @@ abstract contract Base is Deploy, Test {
     uint256 public minimumCollateralRatio = 110; // 110%
     uint256 public upfrontInterestPeriod = 7 days; // 7 days
     uint256 public interestRateAdjCooldown = 7 days; // 7 days
-    uint256 public minimumPriceBufferPercentage = 1e18 - 5e16; // 5%
-    uint256 public startingPriceBufferPercentage = 1e18 + 1e16; // 1%
-    uint256 public emergencyStartingPriceBufferPercentage = 1e18 + 20e16; // 20%
+    uint256 public redemptionMinimumPriceBufferPercentage = 1e18 - 5e16; // 95%
+    uint256 public redemptionStartingPriceBufferPercentage = 1e18 + 1e16; // 101%
+    uint256 public redemptionReKickStartingPriceBufferPercentage = 1e18 + 20e16; // 120%
+    uint256 public liquidationMinimumPriceBufferPercentage = 1e18 - 10e16; // 90%
+    uint256 public liquidationStartingPriceBufferPercentage = 1e18 - 1e16; // 99%
     uint256 public stepDuration = 20; // 20 seconds
     uint256 public stepDecayRate = 20; // 0.2%
     uint256 public auctionLength = 1 days; // 1 day
@@ -86,9 +88,11 @@ abstract contract Base is Deploy, Test {
                 minimumCollateralRatio: minimumCollateralRatio,
                 upfrontInterestPeriod: upfrontInterestPeriod,
                 interestRateAdjCooldown: interestRateAdjCooldown,
-                minimumPriceBufferPercentage: minimumPriceBufferPercentage,
-                startingPriceBufferPercentage: startingPriceBufferPercentage,
-                emergencyStartingPriceBufferPercentage: emergencyStartingPriceBufferPercentage,
+                redemptionMinimumPriceBufferPercentage: redemptionMinimumPriceBufferPercentage,
+                redemptionStartingPriceBufferPercentage: redemptionStartingPriceBufferPercentage,
+                redemptionReKickStartingPriceBufferPercentage: redemptionReKickStartingPriceBufferPercentage,
+                liquidationMinimumPriceBufferPercentage: liquidationMinimumPriceBufferPercentage,
+                liquidationStartingPriceBufferPercentage: liquidationStartingPriceBufferPercentage,
                 stepDuration: stepDuration,
                 stepDecayRate: stepDecayRate,
                 auctionLength: auctionLength
