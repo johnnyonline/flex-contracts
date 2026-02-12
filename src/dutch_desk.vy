@@ -35,9 +35,9 @@ auction: public(IAuction)
 
 # Collateral token
 collateral_token: public(IERC20)
+collateral_token_precision: public(uint256)
 
 # Parameters
-collateral_token_precision: public(uint256)
 redemption_minimum_price_buffer_percentage: public(uint256)
 redemption_starting_price_buffer_percentage: public(uint256)
 redemption_re_kick_starting_price_buffer_percentage: public(uint256)
@@ -176,7 +176,7 @@ def re_kick(auction_id: uint256):
     # Cache the Auction contract
     auction: IAuction = self.auction
 
-    # Check if this is a liquidation or redemption auction
+    # Check if this is a liquidation auction
     is_liquidation: bool = staticcall auction.is_liquidation(auction_id)
 
     # Get new starting and minimum prices
@@ -207,7 +207,7 @@ def _get_prices(
     """
     @notice Gets the starting and minimum prices for an auction
     @param kick_amount Amount of collateral tokens to auction
-    @param is_liquidation Whether this is a liquidation or redemption auction
+    @param is_liquidation Whether this is a liquidation auction
     @param is_rekick Whether this is a re-kick of an existing auction
     @return starting_price The calculated starting price
     @return minimum_price The calculated minimum price
