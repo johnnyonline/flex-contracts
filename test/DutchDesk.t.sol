@@ -35,15 +35,17 @@ contract DutchDeskTests is Base {
     function test_initialize_revertsIfAlreadyInitialized() public {
         vm.expectRevert("initialized");
         dutchDesk.initialize(
-            address(troveManager),
-            address(lender),
-            address(priceOracle),
-            address(auction),
-            address(borrowToken),
-            address(collateralToken),
-            minimumPriceBufferPercentage,
-            startingPriceBufferPercentage,
-            emergencyStartingPriceBufferPercentage
+            IDutchDesk.InitializeParams({
+                troveManager: address(troveManager),
+                lender: address(lender),
+                priceOracle: address(priceOracle),
+                auction: address(auction),
+                borrowToken: address(borrowToken),
+                collateralToken: address(collateralToken),
+                minimumPriceBufferPercentage: minimumPriceBufferPercentage,
+                startingPriceBufferPercentage: startingPriceBufferPercentage,
+                emergencyStartingPriceBufferPercentage: emergencyStartingPriceBufferPercentage
+            })
         );
     }
 

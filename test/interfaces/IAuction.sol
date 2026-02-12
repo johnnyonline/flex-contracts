@@ -4,6 +4,19 @@ pragma solidity 0.8.23;
 interface IAuction {
 
     // ============================================================================================
+    // Structs
+    // ============================================================================================
+
+    struct InitializeParams {
+        address papi;
+        address buyToken;
+        address sellToken;
+        uint256 stepDuration;
+        uint256 stepDecayRate;
+        uint256 auctionLength;
+    }
+
+    // ============================================================================================
     // Storage
     // ============================================================================================
 
@@ -29,12 +42,7 @@ interface IAuction {
     // ============================================================================================
 
     function initialize(
-        address papi,
-        address buy_token,
-        address sell_token,
-        uint256 step_duration,
-        uint256 step_decay_rate,
-        uint256 auction_length
+        InitializeParams calldata params
     ) external;
 
     // ============================================================================================

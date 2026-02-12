@@ -34,17 +34,18 @@ contract TroveManagerTests is Base {
     function test_initialize_revertsIfAlreadyInitialized() public {
         vm.expectRevert("initialized");
         troveManager.initialize(
-            address(lender),
-            address(dutchDesk),
-            address(priceOracle),
-            address(sortedTroves),
-            address(borrowToken),
-            address(collateralToken),
-            minimumDebt,
-            minimumCollateralRatio,
-            upfrontInterestPeriod,
-            interestRateAdjCooldown,
-            liquidatorFeePercentage
+            ITroveManager.InitializeParams({
+                lender: address(lender),
+                dutchDesk: address(dutchDesk),
+                priceOracle: address(priceOracle),
+                sortedTroves: address(sortedTroves),
+                borrowToken: address(borrowToken),
+                collateralToken: address(collateralToken),
+                minimumDebt: minimumDebt,
+                minimumCollateralRatio: minimumCollateralRatio,
+                upfrontInterestPeriod: upfrontInterestPeriod,
+                interestRateAdjCooldown: interestRateAdjCooldown
+            })
         );
     }
 

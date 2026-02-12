@@ -4,6 +4,22 @@ pragma solidity 0.8.23;
 interface IDutchDesk {
 
     // ============================================================================================
+    // Structs
+    // ============================================================================================
+
+    struct InitializeParams {
+        address troveManager;
+        address lender;
+        address priceOracle;
+        address auction;
+        address borrowToken;
+        address collateralToken;
+        uint256 minimumPriceBufferPercentage;
+        uint256 startingPriceBufferPercentage;
+        uint256 emergencyStartingPriceBufferPercentage;
+    }
+
+    // ============================================================================================
     // Storage
     // ============================================================================================
 
@@ -30,15 +46,7 @@ interface IDutchDesk {
     // ============================================================================================
 
     function initialize(
-        address trove_manager,
-        address lender,
-        address price_oracle,
-        address auction,
-        address borrow_token,
-        address collateral_token,
-        uint256 minimum_price_buffer_percentage,
-        uint256 starting_price_buffer_percentage,
-        uint256 emergency_starting_price_buffer_percentage
+        InitializeParams calldata params
     ) external;
 
     // ============================================================================================
