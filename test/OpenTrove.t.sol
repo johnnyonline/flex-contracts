@@ -183,13 +183,14 @@ contract OpenTroveTests is Base {
         // Check starting price is set correctly (with buffer)
         assertApproxEqAbs(
             auction.starting_price(_auctionId),
-            _auctionAvailable * priceOracle.get_price(false) / WAD * dutchDesk.starting_price_buffer_percentage() / COLLATERAL_TOKEN_PRECISION,
+            _auctionAvailable * priceOracle.get_price(false) / WAD * dutchDesk.redemption_starting_price_buffer_percentage()
+                / COLLATERAL_TOKEN_PRECISION,
             3,
             "E3"
         );
 
         // Check minimum price is set correctly (with buffer)
-        assertEq(auction.minimum_price(_auctionId), priceOracle.get_price(false) * dutchDesk.minimum_price_buffer_percentage() / WAD, "E4");
+        assertEq(auction.minimum_price(_auctionId), priceOracle.get_price(false) * dutchDesk.redemption_minimum_price_buffer_percentage() / WAD, "E4");
 
         // Take the auction
         takeAuction(_auctionId);
@@ -310,13 +311,14 @@ contract OpenTroveTests is Base {
         // Check starting price is set correctly (with buffer)
         assertApproxEqAbs(
             auction.starting_price(0),
-            _auctionAvailable * priceOracle.get_price(false) / WAD * dutchDesk.starting_price_buffer_percentage() / COLLATERAL_TOKEN_PRECISION,
+            _auctionAvailable * priceOracle.get_price(false) / WAD * dutchDesk.redemption_starting_price_buffer_percentage()
+                / COLLATERAL_TOKEN_PRECISION,
             3,
             "E3"
         );
 
         // Check minimum price is set correctly (with buffer)
-        assertEq(auction.minimum_price(0), priceOracle.get_price(false) * dutchDesk.minimum_price_buffer_percentage() / WAD, "E4");
+        assertEq(auction.minimum_price(0), priceOracle.get_price(false) * dutchDesk.redemption_minimum_price_buffer_percentage() / WAD, "E4");
 
         // Take the auction
         takeAuction(0);
@@ -447,13 +449,14 @@ contract OpenTroveTests is Base {
         // Check starting price is set correctly (with buffer)
         assertApproxEqAbs(
             auction.starting_price(0),
-            _auctionAvailable * priceOracle.get_price(false) / WAD * dutchDesk.starting_price_buffer_percentage() / COLLATERAL_TOKEN_PRECISION,
+            _auctionAvailable * priceOracle.get_price(false) / WAD * dutchDesk.redemption_starting_price_buffer_percentage()
+                / COLLATERAL_TOKEN_PRECISION,
             3,
             "E3"
         );
 
         // Check minimum price is set correctly (with buffer)
-        assertEq(auction.minimum_price(0), priceOracle.get_price(false) * dutchDesk.minimum_price_buffer_percentage() / WAD, "E4");
+        assertEq(auction.minimum_price(0), priceOracle.get_price(false) * dutchDesk.redemption_minimum_price_buffer_percentage() / WAD, "E4");
 
         // Take the auction
         takeAuction(0);

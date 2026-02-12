@@ -44,16 +44,25 @@ event AuctionTake:
 
 
 struct AuctionInfo:
-    kick_timestamp: uint256  # the timestamp the auction was kicked
-    initial_amount: uint256  # the initial amount of sell token available
-    current_amount: uint256  # the current amount of sell token available
-    maximum_amount: uint256  # the maximum amount of buy token to be received. Any surplus goes to Lender contract
-    amount_received: uint256  # the amount of buy token already received toward the maximum amount
-    starting_price: uint256  # the amount to start the auction at, WAD scaled "lot size" in buy token
-    minimum_price: uint256  # the minimum price per token for the auction, WAD scaled in buy token
-    receiver: address  # the address that will receive the auction proceeds
-    surplus_receiver: address  # the address that will receive any surplus proceeds above maximum_amount
-    is_liquidation: bool  # whether this auction is selling liquidated collateral
+    kick_timestamp: uint256
+    initial_amount: uint256
+    current_amount: uint256
+    maximum_amount: uint256
+    amount_received: uint256
+    starting_price: uint256
+    minimum_price: uint256
+    receiver: address
+    surplus_receiver: address
+    is_liquidation: bool
+
+
+struct InitializeParams:
+    papi: address
+    buy_token: address
+    sell_token: address
+    step_duration: uint256
+    step_decay_rate: uint256
+    auction_length: uint256
 
 
 # ============================================================================================
@@ -83,9 +92,9 @@ sell_token: public(IERC20)
 sell_token_scaler: public(uint256)
 
 # Auction parameters
-step_duration: public(uint256)  # e.g., 60 for price change every minute
-step_decay_rate: public(uint256)  # e.g., 50 for 0.5% decrease per step
-auction_length: public(uint256)  # in seconds, e.g., 86400 for 1 day
+step_duration: public(uint256)
+step_decay_rate: public(uint256)
+auction_length: public(uint256)
 
 # Accounting
 liquidation_auctions: public(uint256)  # count of active liquidation auctions
@@ -98,47 +107,35 @@ _auctions: HashMap[uint256, AuctionInfo]  # auction ID --> AuctionInfo
 
 
 @external
-def initialize(
-    papi: address,
-    buy_token: address,
-    sell_token: address,
-    step_duration: uint256,
-    step_decay_rate: uint256,
-    auction_length: uint256,
-):
+def initialize(params: InitializeParams):
     """
     @notice Initialize the contract
-    @param papi Address allowed to kick auctions
-    @param buy_token Address of the token being bought
-    @param sell_token Address of the token being sold
-    @param step_duration Duration of each price step
-    @param step_decay_rate Decay rate per step
-    @param auction_length Total auction duration
+    @param params Initialization parameters struct
     """
     # Make sure the contract is not already initialized
     assert self.papi == empty(address), "initialized"
 
     # Set papi address
-    self.papi = papi
+    self.papi = params.papi
 
     # Get buy token decimals
-    buy_token_decimals: uint256 = convert(staticcall IERC20Detailed(buy_token).decimals(), uint256)
+    buy_token_decimals: uint256 = convert(staticcall IERC20Detailed(params.buy_token).decimals(), uint256)
 
     # Set buy token info
-    self.buy_token = IERC20(buy_token)
+    self.buy_token = IERC20(params.buy_token)
     self.buy_token_scaler = _WAD // 10 ** buy_token_decimals
 
     # Get sell token decimals
-    sell_token_decimals: uint256 = convert(staticcall IERC20Detailed(sell_token).decimals(), uint256)
+    sell_token_decimals: uint256 = convert(staticcall IERC20Detailed(params.sell_token).decimals(), uint256)
 
     # Set sell token info
-    self.sell_token = IERC20(sell_token)
+    self.sell_token = IERC20(params.sell_token)
     self.sell_token_scaler = _WAD // 10 ** sell_token_decimals
 
     # Set auction parameters
-    self.step_duration = step_duration
-    self.step_decay_rate = step_decay_rate
-    self.auction_length = auction_length
+    self.step_duration = params.step_duration
+    self.step_decay_rate = params.step_decay_rate
+    self.auction_length = params.auction_length
 
 
 # ============================================================================================

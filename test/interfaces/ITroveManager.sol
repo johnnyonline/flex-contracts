@@ -35,6 +35,19 @@ interface ITroveManager {
         Status status;
     }
 
+    struct InitializeParams {
+        address lender;
+        address dutchDesk;
+        address priceOracle;
+        address sortedTroves;
+        address borrowToken;
+        address collateralToken;
+        uint256 minimumDebt;
+        uint256 minimumCollateralRatio;
+        uint256 upfrontInterestPeriod;
+        uint256 interestRateAdjCooldown;
+    }
+
     // ============================================================================================
     // Storage
     // ============================================================================================
@@ -56,7 +69,6 @@ interface ITroveManager {
     function minimum_collateral_ratio() external view returns (uint256);
     function upfront_interest_period() external view returns (uint256);
     function interest_rate_adj_cooldown() external view returns (uint256);
-    function liquidator_fee_percentage() external view returns (uint256);
     function min_annual_interest_rate() external view returns (uint256);
     function max_annual_interest_rate() external view returns (uint256);
 
@@ -75,17 +87,7 @@ interface ITroveManager {
     // ============================================================================================
 
     function initialize(
-        address lender,
-        address dutch_desk,
-        address price_oracle,
-        address sorted_troves,
-        address borrow_token,
-        address collateral_token,
-        uint256 minimum_debt,
-        uint256 minimum_collateral_ratio,
-        uint256 upfront_interest_period,
-        uint256 interest_rate_adj_cooldown,
-        uint256 liquidator_fee_percentage
+        InitializeParams calldata params
     ) external;
 
     // ============================================================================================

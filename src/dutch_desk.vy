@@ -35,15 +35,36 @@ auction: public(IAuction)
 
 # Collateral token
 collateral_token: public(IERC20)
+collateral_token_precision: public(uint256)
 
 # Parameters
-collateral_token_precision: public(uint256)
-minimum_price_buffer_percentage: public(uint256)  # e.g. `_WAD - 5 * 10 ** 16` for 5%
-starting_price_buffer_percentage: public(uint256)  # e.g. `_WAD + 15 * 10 ** 16` for 15%
-emergency_starting_price_buffer_percentage: public(uint256)  # e.g. `_WAD + 100 * 10 ** 16` for 100%
+redemption_minimum_price_buffer_percentage: public(uint256)
+redemption_starting_price_buffer_percentage: public(uint256)
+redemption_re_kick_starting_price_buffer_percentage: public(uint256)
+liquidation_minimum_price_buffer_percentage: public(uint256)
+liquidation_starting_price_buffer_percentage: public(uint256)
 
 # Accounting
 nonce: public(uint256)
+
+
+# ============================================================================================
+# Structs
+# ============================================================================================
+
+
+struct InitializeParams:
+    trove_manager: address
+    lender: address
+    price_oracle: address
+    auction: address
+    borrow_token: address
+    collateral_token: address
+    redemption_minimum_price_buffer_percentage: uint256
+    redemption_starting_price_buffer_percentage: uint256
+    redemption_re_kick_starting_price_buffer_percentage: uint256
+    liquidation_minimum_price_buffer_percentage: uint256
+    liquidation_starting_price_buffer_percentage: uint256
 
 
 # ============================================================================================
@@ -52,57 +73,38 @@ nonce: public(uint256)
 
 
 @external
-def initialize(
-    trove_manager: address,
-    lender: address,
-    price_oracle: address,
-    auction: address,
-    borrow_token: address,
-    collateral_token: address,
-    minimum_price_buffer_percentage: uint256,
-    starting_price_buffer_percentage: uint256,
-    emergency_starting_price_buffer_percentage: uint256,
-):
+def initialize(params: InitializeParams):
     """
     @notice Initialize the contract
-    @dev `starting_price_buffer_percentage` must be >= max oracle deviation from market price
-         to ensure the starting auction price is always above market price, preventing value
-         extraction from oracle lag
-    @param trove_manager Address of the Trove Manager contract
-    @param lender Address of the Lender contract
-    @param price_oracle Address of the Price Oracle contract
-    @param auction Address of the Auction contract
-    @param borrow_token Address of the borrow token
-    @param collateral_token Address of the collateral token
-    @param minimum_price_buffer_percentage Minimum auction price buffer
-    @param starting_price_buffer_percentage Starting auction price buffer
-    @param emergency_starting_price_buffer_percentage Emergency starting auction price buffer
+    @param params Initialization parameters struct
     """
     # Make sure the contract is not already initialized
     assert self.trove_manager == empty(address), "initialized"
 
     # Set contract addresses
-    self.trove_manager = trove_manager
-    self.lender = lender
-    self.price_oracle = IPriceOracle(price_oracle)
-    self.auction = IAuction(auction)
+    self.trove_manager = params.trove_manager
+    self.lender = params.lender
+    self.price_oracle = IPriceOracle(params.price_oracle)
+    self.auction = IAuction(params.auction)
 
     # Set collateral token addresses
-    self.collateral_token = IERC20(collateral_token)
+    self.collateral_token = IERC20(params.collateral_token)
 
     # Set parameters
-    self.minimum_price_buffer_percentage = minimum_price_buffer_percentage
-    self.starting_price_buffer_percentage = starting_price_buffer_percentage
-    self.emergency_starting_price_buffer_percentage = emergency_starting_price_buffer_percentage
+    self.redemption_minimum_price_buffer_percentage = params.redemption_minimum_price_buffer_percentage
+    self.redemption_starting_price_buffer_percentage = params.redemption_starting_price_buffer_percentage
+    self.redemption_re_kick_starting_price_buffer_percentage = params.redemption_re_kick_starting_price_buffer_percentage
+    self.liquidation_minimum_price_buffer_percentage = params.liquidation_minimum_price_buffer_percentage
+    self.liquidation_starting_price_buffer_percentage = params.liquidation_starting_price_buffer_percentage
 
     # Get collateral token decimals
-    collateral_token_decimals: uint256 = convert(staticcall IERC20Detailed(collateral_token).decimals(), uint256)
+    collateral_token_decimals: uint256 = convert(staticcall IERC20Detailed(params.collateral_token).decimals(), uint256)
 
     # Set collateral token precision
     self.collateral_token_precision = 10 ** collateral_token_decimals
 
     # Max approve the collateral token to the Auction
-    assert extcall IERC20(collateral_token).approve(auction, max_value(uint256), default_return_value=True)
+    assert extcall IERC20(params.collateral_token).approve(params.auction, max_value(uint256), default_return_value=True)
 
 
 # ============================================================================================
@@ -137,10 +139,7 @@ def kick(
     # Get the starting and minimum prices
     starting_price: uint256 = 0
     minimum_price: uint256 = 0
-    starting_price, minimum_price = self._get_prices(
-        kick_amount,
-        self.starting_price_buffer_percentage,
-    )
+    starting_price, minimum_price = self._get_prices(kick_amount, is_liquidation)
 
     # Use the nonce as auction identifier
     auction_id: uint256 = self.nonce
@@ -177,12 +176,16 @@ def re_kick(auction_id: uint256):
     # Cache the Auction contract
     auction: IAuction = self.auction
 
+    # Check if this is a liquidation auction
+    is_liquidation: bool = staticcall auction.is_liquidation(auction_id)
+
     # Get new starting and minimum prices
     starting_price: uint256 = 0
     minimum_price: uint256 = 0
     starting_price, minimum_price = self._get_prices(
         staticcall auction.current_amount(auction_id),
-        self.emergency_starting_price_buffer_percentage,
+        is_liquidation,
+        True,  # is_rekick
     )
 
     # Re-kick with new prices
@@ -198,15 +201,30 @@ def re_kick(auction_id: uint256):
 @view
 def _get_prices(
     kick_amount: uint256,
-    starting_price_buffer_pct: uint256,
+    is_liquidation: bool,
+    is_rekick: bool = False,
 ) -> (uint256, uint256):
     """
     @notice Gets the starting and minimum prices for an auction
     @param kick_amount Amount of collateral tokens to auction
-    @param starting_price_buffer_pct Buffer percentage to apply to the collateral price for the starting price
+    @param is_liquidation Whether this is a liquidation auction
+    @param is_rekick Whether this is a re-kick of an existing auction
     @return starting_price The calculated starting price
     @return minimum_price The calculated minimum price
     """
+    # Determine the minimum and starting price buffer percentages
+    minimum_price_buffer_pct: uint256 = 0
+    starting_price_buffer_pct: uint256 = 0
+    if is_liquidation:
+        minimum_price_buffer_pct = self.liquidation_minimum_price_buffer_percentage
+        starting_price_buffer_pct = self.liquidation_starting_price_buffer_percentage
+    else:
+        minimum_price_buffer_pct = self.redemption_minimum_price_buffer_percentage
+        if is_rekick:
+            starting_price_buffer_pct = self.redemption_re_kick_starting_price_buffer_percentage
+        else:
+            starting_price_buffer_pct = self.redemption_starting_price_buffer_percentage
+
     # Get the collateral price
     collateral_price: uint256 = staticcall self.price_oracle.get_price(False)  # price in WAD format
 
@@ -216,6 +234,6 @@ def _get_prices(
 
     # Calculate the minimum price with buffer to the collateral price
     # Minimum price is per token and is scaled to WAD
-    minimum_price: uint256 = collateral_price * self.minimum_price_buffer_percentage // _WAD
+    minimum_price: uint256 = collateral_price * minimum_price_buffer_pct // _WAD
 
     return starting_price, minimum_price

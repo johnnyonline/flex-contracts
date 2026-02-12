@@ -119,15 +119,15 @@ contract LiquidateTests is Base {
             vm.stopPrank();
         }
 
-        // Check liquidator received 0.1% fee immediately
-        assertEq(collateralToken.balanceOf(liquidator), _collateralNeeded * liquidatorFeePercentage / WAD, "E26a");
+        // Check liquidator received no fee (all collateral goes to auction)
+        assertEq(collateralToken.balanceOf(liquidator), 0, "E26a");
 
         // Check auction starting price and minimum price
         {
-            uint256 _expectedStartingPrice = (_collateralNeeded - _collateralNeeded * liquidatorFeePercentage / WAD) * _priceDropToBelowMCR18
-                * dutchDesk.starting_price_buffer_percentage() / 1e18 / COLLATERAL_TOKEN_PRECISION;
+            uint256 _expectedStartingPrice = _collateralNeeded * _priceDropToBelowMCR18 * dutchDesk.liquidation_starting_price_buffer_percentage()
+                / 1e18 / COLLATERAL_TOKEN_PRECISION;
             assertEq(auction.starting_price(0), _expectedStartingPrice, "E27");
-            uint256 _expectedMinimumPrice = _priceDropToBelowMCR18 * dutchDesk.minimum_price_buffer_percentage() / WAD;
+            uint256 _expectedMinimumPrice = _priceDropToBelowMCR18 * dutchDesk.liquidation_minimum_price_buffer_percentage() / WAD;
             assertEq(auction.minimum_price(0), _expectedMinimumPrice, "E28");
         }
 
@@ -328,18 +328,18 @@ contract LiquidateTests is Base {
             vm.stopPrank();
         }
 
-        // Check liquidator received 0.1% fee immediately (from both troves)
-        assertEq(collateralToken.balanceOf(liquidator), _collateralNeeded * 2 * liquidatorFeePercentage / WAD, "E53");
+        // Check liquidator received no fee (all collateral goes to auction)
+        assertEq(collateralToken.balanceOf(liquidator), 0, "E53");
 
         // Check auction starting price and minimum price
         // Starting price = available * price * STARTING_PRICE_BUFFER_PERCENTAGE / 1e18 / COLLATERAL_TOKEN_PRECISION
-        // Note: both troves liquidated in same tx, so collateral = _collateralNeeded * 2 - liquidator_fee
+        // Note: both troves liquidated in same tx, so all collateral goes to auction
         {
-            uint256 _collateralToSell = (_collateralNeeded * 2) - (_collateralNeeded * 2 * liquidatorFeePercentage / WAD);
-            uint256 _expectedStartingPrice =
-                _collateralToSell * _priceDropToBelowMCR18 * dutchDesk.starting_price_buffer_percentage() / 1e18 / COLLATERAL_TOKEN_PRECISION;
+            uint256 _collateralToSell = _collateralNeeded * 2;
+            uint256 _expectedStartingPrice = _collateralToSell * _priceDropToBelowMCR18 * dutchDesk.liquidation_starting_price_buffer_percentage()
+                / 1e18 / COLLATERAL_TOKEN_PRECISION;
             assertEq(auction.starting_price(0), _expectedStartingPrice, "E54");
-            uint256 _expectedMinimumPrice = _priceDropToBelowMCR18 * dutchDesk.minimum_price_buffer_percentage() / WAD;
+            uint256 _expectedMinimumPrice = _priceDropToBelowMCR18 * dutchDesk.liquidation_minimum_price_buffer_percentage() / WAD;
             assertEq(auction.minimum_price(0), _expectedMinimumPrice, "E55");
         }
 
@@ -512,13 +512,13 @@ contract LiquidateTests is Base {
         troveManager.liquidate_troves(_troveIdsToLiquidate);
         vm.stopPrank();
 
-        // Check liquidator received 0.1% fee from first liquidation
-        assertEq(collateralToken.balanceOf(liquidator), _collateralNeeded * liquidatorFeePercentage / WAD, "E9");
+        // Check liquidator received no fee (all collateral goes to auction)
+        assertEq(collateralToken.balanceOf(liquidator), 0, "E9");
 
-        // Check auction 0 has collateral from first trove (minus liquidator fee)
+        // Check auction 0 has all collateral from first trove
         // uint256 _auctionId0 = 0;
         {
-            uint256 _collateralInAuction = _collateralNeeded - _collateralNeeded * liquidatorFeePercentage / WAD;
+            uint256 _collateralInAuction = _collateralNeeded;
             assertTrue(auction.is_active(0), "E10");
             assertEq(auction.get_available_amount(0), _collateralInAuction, "E11");
             assertEq(collateralToken.balanceOf(address(auction)), _collateralInAuction, "E12");
@@ -526,10 +526,11 @@ contract LiquidateTests is Base {
             // Check auction starting price and minimum price after first liquidation
             assertEq(
                 auction.starting_price(0),
-                _collateralInAuction * _priceDropToBelowMCR18 * dutchDesk.starting_price_buffer_percentage() / 1e18 / COLLATERAL_TOKEN_PRECISION,
+                _collateralInAuction * _priceDropToBelowMCR18 * dutchDesk.liquidation_starting_price_buffer_percentage() / 1e18
+                    / COLLATERAL_TOKEN_PRECISION,
                 "E13"
             );
-            assertEq(auction.minimum_price(0), _priceDropToBelowMCR18 * dutchDesk.minimum_price_buffer_percentage() / WAD, "E14");
+            assertEq(auction.minimum_price(0), _priceDropToBelowMCR18 * dutchDesk.liquidation_minimum_price_buffer_percentage() / WAD, "E14");
         }
 
         // Check first trove is liquidated
@@ -547,17 +548,17 @@ contract LiquidateTests is Base {
         troveManager.liquidate_troves(_troveIdsToLiquidate);
         vm.stopPrank();
 
-        // Check liquidator received fees from both liquidations (0.1% from each)
-        assertEq(collateralToken.balanceOf(liquidator), _collateralNeeded * liquidatorFeePercentage / WAD * 2, "E17");
+        // Check liquidator received no fees (all collateral goes to auction)
+        assertEq(collateralToken.balanceOf(liquidator), 0, "E17");
 
         // Check second trove is now liquidated
         _trove2 = troveManager.troves(_troveId2);
         assertEq(uint256(_trove2.status), uint256(ITroveManager.Status.liquidated), "E18");
 
-        // Check auction 1 has collateral from second trove (separate auction, minus liquidator fee)
+        // Check auction 1 has all collateral from second trove (separate auction)
         // uint256 _auctionId1 = 1;
         {
-            uint256 _collateralInAuction = _collateralNeeded - _collateralNeeded * liquidatorFeePercentage / WAD;
+            uint256 _collateralInAuction = _collateralNeeded;
             assertTrue(auction.is_active(1), "E19");
             assertEq(auction.get_available_amount(1), _collateralInAuction, "E20");
             assertEq(collateralToken.balanceOf(address(auction)), _collateralInAuction * 2, "E21");
@@ -632,44 +633,7 @@ contract LiquidateTests is Base {
         troveManager.liquidate_troves(_troveIdsToLiquidate);
     }
 
-}
-
-import {ICustomLiquidationFeeFactory} from "./interfaces/ICustomLiquidationFeeFactory.sol";
-
-contract LiquidateZeroFeeTests is Base {
-
-    function setUp() public override {
-        Base.setUp();
-
-        // Re-deploy market with 0% liquidator fee
-        vm.prank(management);
-        (address _troveManager, address _sortedTroves, address _dutchDesk, address _auction, address _lender) = ICustomLiquidationFeeFactory(
-                address(catFactory)
-            )
-            .deploy(
-                address(borrowToken),
-                address(collateralToken),
-                address(priceOracle),
-                management,
-                performanceFeeRecipient,
-                minimumDebt,
-                minimumCollateralRatio,
-                upfrontInterestPeriod,
-                interestRateAdjCooldown,
-                0 // 0% liquidator fee
-            );
-
-        troveManager = ITroveManager(_troveManager);
-        sortedTroves = ISortedTroves(_sortedTroves);
-        dutchDesk = IDutchDesk(_dutchDesk);
-        auction = IAuction(_auction);
-        lender = ILender(_lender);
-
-        vm.prank(management);
-        lender.acceptManagement();
-    }
-
-    function test_liquidateWithZeroFee() public {
+    function test_liquidateGas() public {
         uint256 _amount = troveManager.min_debt() * BORROW_TOKEN_PRECISION;
 
         mintAndDepositIntoLender(userLender, _amount);
@@ -688,17 +652,15 @@ contract LiquidateZeroFeeTests is Base {
         vm.mockCall(address(priceOracle), abi.encodeWithSelector(IPriceOracleScaled.get_price.selector), abi.encode(_priceDropToBelowMCR));
         vm.mockCall(address(priceOracle), abi.encodeWithSelector(IPriceOracleNotScaled.get_price.selector, false), abi.encode(_priceDropToBelowMCR18));
 
-        // Liquidate
-        vm.prank(liquidator);
         uint256[MAX_ITERATIONS] memory _troveIds;
         _troveIds[0] = _troveId;
+
+        uint256 _gasBefore = gasleft();
+        vm.prank(liquidator);
         troveManager.liquidate_troves(_troveIds);
+        uint256 _gasUsed = _gasBefore - gasleft();
 
-        // Liquidator should receive 0 fee
-        assertEq(collateralToken.balanceOf(liquidator), 0, "E0");
-
-        // All collateral should go to auction
-        assertEq(collateralToken.balanceOf(address(auction)), _collateralNeeded, "E1");
+        console2.log("Gas used to liquidate 1 trove:", _gasUsed);
     }
 
 }

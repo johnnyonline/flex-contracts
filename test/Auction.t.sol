@@ -33,7 +33,16 @@ contract AuctionTests is Base {
 
     function test_initialize_revertsIfAlreadyInitialized() public {
         vm.expectRevert("initialized");
-        auction.initialize(address(dutchDesk), address(borrowToken), address(collateralToken), stepDuration, stepDecayRate, auctionLength);
+        auction.initialize(
+            IAuction.InitializeParams({
+                papi: address(dutchDesk),
+                buyToken: address(borrowToken),
+                sellToken: address(collateralToken),
+                stepDuration: stepDuration,
+                stepDecayRate: stepDecayRate,
+                auctionLength: auctionLength
+            })
+        );
     }
 
     function test_kick(

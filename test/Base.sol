@@ -40,10 +40,11 @@ abstract contract Base is Deploy, Test {
     uint256 public minimumCollateralRatio = 110; // 110%
     uint256 public upfrontInterestPeriod = 7 days; // 7 days
     uint256 public interestRateAdjCooldown = 7 days; // 7 days
-    uint256 public liquidatorFeePercentage = 1e15; // 0.1%
-    uint256 public minimumPriceBufferPercentage = 1e18 - 5e16; // 5%
-    uint256 public startingPriceBufferPercentage = 1e18 + 1e16; // 1%
-    uint256 public emergencyStartingPriceBufferPercentage = 1e18 + 20e16; // 20%
+    uint256 public redemptionMinimumPriceBufferPercentage = 1e18 - 5e16; // 95%
+    uint256 public redemptionStartingPriceBufferPercentage = 1e18 + 1e16; // 101%
+    uint256 public redemptionReKickStartingPriceBufferPercentage = 1e18 + 20e16; // 120%
+    uint256 public liquidationMinimumPriceBufferPercentage = 1e18 - 10e16; // 90%
+    uint256 public liquidationStartingPriceBufferPercentage = 1e18 - 1e16; // 99%
     uint256 public stepDuration = 20; // 20 seconds
     uint256 public stepDecayRate = 20; // 0.2%
     uint256 public auctionLength = 1 days; // 1 day
@@ -76,8 +77,27 @@ abstract contract Base is Deploy, Test {
         priceOracle = IPriceOracle(deployCode("yvweth2_to_usdc_oracle"));
 
         // Deploy market
-        (address _troveManager, address _sortedTroves, address _dutchDesk, address _auction, address _lender) =
-            catFactory.deploy(address(borrowToken), address(collateralToken), address(priceOracle), management, performanceFeeRecipient);
+        (address _troveManager, address _sortedTroves, address _dutchDesk, address _auction, address _lender) = catFactory.deploy(
+            ICatFactory.DeployParams({
+                borrowToken: address(borrowToken),
+                collateralToken: address(collateralToken),
+                priceOracle: address(priceOracle),
+                management: management,
+                performanceFeeRecipient: performanceFeeRecipient,
+                minimumDebt: minimumDebt,
+                minimumCollateralRatio: minimumCollateralRatio,
+                upfrontInterestPeriod: upfrontInterestPeriod,
+                interestRateAdjCooldown: interestRateAdjCooldown,
+                redemptionMinimumPriceBufferPercentage: redemptionMinimumPriceBufferPercentage,
+                redemptionStartingPriceBufferPercentage: redemptionStartingPriceBufferPercentage,
+                redemptionReKickStartingPriceBufferPercentage: redemptionReKickStartingPriceBufferPercentage,
+                liquidationMinimumPriceBufferPercentage: liquidationMinimumPriceBufferPercentage,
+                liquidationStartingPriceBufferPercentage: liquidationStartingPriceBufferPercentage,
+                stepDuration: stepDuration,
+                stepDecayRate: stepDecayRate,
+                auctionLength: auctionLength
+            })
+        );
 
         // Set contract instances
         troveManager = ITroveManager(_troveManager);

@@ -4,6 +4,24 @@ pragma solidity 0.8.23;
 interface IDutchDesk {
 
     // ============================================================================================
+    // Structs
+    // ============================================================================================
+
+    struct InitializeParams {
+        address troveManager;
+        address lender;
+        address priceOracle;
+        address auction;
+        address borrowToken;
+        address collateralToken;
+        uint256 redemptionMinimumPriceBufferPercentage;
+        uint256 redemptionStartingPriceBufferPercentage;
+        uint256 redemptionReKickStartingPriceBufferPercentage;
+        uint256 liquidationMinimumPriceBufferPercentage;
+        uint256 liquidationStartingPriceBufferPercentage;
+    }
+
+    // ============================================================================================
     // Storage
     // ============================================================================================
 
@@ -18,9 +36,11 @@ interface IDutchDesk {
 
     // Parameters
     function collateral_token_precision() external view returns (uint256);
-    function minimum_price_buffer_percentage() external view returns (uint256);
-    function starting_price_buffer_percentage() external view returns (uint256);
-    function emergency_starting_price_buffer_percentage() external view returns (uint256);
+    function redemption_minimum_price_buffer_percentage() external view returns (uint256);
+    function redemption_starting_price_buffer_percentage() external view returns (uint256);
+    function redemption_re_kick_starting_price_buffer_percentage() external view returns (uint256);
+    function liquidation_minimum_price_buffer_percentage() external view returns (uint256);
+    function liquidation_starting_price_buffer_percentage() external view returns (uint256);
 
     // Accounting
     function nonce() external view returns (uint256);
@@ -30,15 +50,7 @@ interface IDutchDesk {
     // ============================================================================================
 
     function initialize(
-        address trove_manager,
-        address lender,
-        address price_oracle,
-        address auction,
-        address borrow_token,
-        address collateral_token,
-        uint256 minimum_price_buffer_percentage,
-        uint256 starting_price_buffer_percentage,
-        uint256 emergency_starting_price_buffer_percentage
+        InitializeParams calldata params
     ) external;
 
     // ============================================================================================
