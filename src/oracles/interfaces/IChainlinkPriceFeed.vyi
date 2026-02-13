@@ -1,0 +1,13 @@
+# @version 0.4.3
+
+
+@external
+@view
+def decimals() -> uint8:
+    ...
+
+
+@external
+@view
+def latestAnswer() -> int256:
+    ...
