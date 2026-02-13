@@ -48,6 +48,7 @@ contract Deploy is Script {
     // IERC20 public collateralToken = IERC20(0x18084fbA666a33d37592fA2633fD49a74DD93a88); // tBTC
     // IERC20 public collateralToken = IERC20(0x2260FAC5E5542a773Aa44fBCfeDf7C193bc2C599); // WBTC
     IERC20 public collateralToken = IERC20(0xAc37729B76db6438CE62042AE1270ee574CA7571); // yvWETH-2
+    // IERC20 public collateralToken = IERC20(0xBF319dDC2Edc1Eb6FDf9910E39b37Be221C8805F); // yvcrvUSD-2
 
     // CREATE2 salt
     bytes32 public constant SALT = bytes32(uint256(420));

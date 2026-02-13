@@ -361,7 +361,8 @@ contract AdjustRateTests is Base {
         assertEq(_trove.pending_owner, address(0), "E42");
         assertEq(uint256(_trove.status), uint256(ITroveManager.Status.active), "E43");
         assertLt(
-            (_trove.collateral * priceOracle.get_price() / ORACLE_PRICE_SCALE) * BORROW_TOKEN_PRECISION / _trove.debt,
+            (_trove.collateral * priceOracle.get_price() / ORACLE_PRICE_SCALE) * BORROW_TOKEN_PRECISION
+                / troveManager.get_trove_debt_after_interest(_troveId),
             DEFAULT_TARGET_COLLATERAL_RATIO,
             "E44"
         ); // increased debt --> lower CR
