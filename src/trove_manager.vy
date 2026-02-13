@@ -149,7 +149,8 @@ struct InitializeParams:
 
 _PRICE_ORACLE_PRECISION: constant(uint256) = 10 ** 36
 _WAD: constant(uint256) = 10 ** 18
-_MAX_ITERATIONS: constant(uint256) = 700
+_MAX_LIQUIDATIONS: constant(uint256) = 20
+_MAX_REDEMPTIONS: constant(uint256) = 1000
 _ONE_YEAR: constant(uint256) = 365 * 60 * 60 * 24
 _REDEMPTION_AUCTION: constant(bool) = False
 
@@ -942,7 +943,7 @@ def close_zombie_trove(trove_id: uint256):
 
 
 @external
-def liquidate_troves(trove_ids: uint256[_MAX_ITERATIONS]):
+def liquidate_troves(trove_ids: uint256[_MAX_LIQUIDATIONS]):
     """
     @notice Liquidate a list of unhealthy Troves
     @dev Uses the Dutch Desk contract to auction off the collateral tokens
@@ -1130,7 +1131,7 @@ def _redeem(
     total_weighted_debt_decrease: uint256 = 0
 
     # Loop through as many Troves as we're allowed or until we redeem all the debt we need
-    for _: uint256 in range(_MAX_ITERATIONS):
+    for _: uint256 in range(_MAX_REDEMPTIONS):
         # Cache the Trove to redeem info
         trove: Trove = self.troves[trove_to_redeem]
 
