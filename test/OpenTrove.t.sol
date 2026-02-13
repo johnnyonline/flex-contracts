@@ -190,7 +190,11 @@ contract OpenTroveTests is Base {
         );
 
         // Check minimum price is set correctly (with buffer)
-        assertEq(auction.auctions(_auctionId).minimumPrice, priceOracle.get_price(false) * dutchDesk.redemption_minimum_price_buffer_percentage() / WAD, "E4");
+        assertEq(
+            auction.auctions(_auctionId).minimumPrice,
+            priceOracle.get_price(false) * dutchDesk.redemption_minimum_price_buffer_percentage() / WAD,
+            "E4"
+        );
 
         // Take the auction
         takeAuction(_auctionId);

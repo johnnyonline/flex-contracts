@@ -49,7 +49,9 @@ interface IAuction {
 
     // Accounting
     function liquidation_auctions() external view returns (uint256);
-    function auctions(uint256 auctionId) external view returns (AuctionInfo memory);
+    function auctions(
+        uint256 auctionId
+    ) external view returns (AuctionInfo memory);
 
     // ============================================================================================
     // Initialize

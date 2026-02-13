@@ -963,15 +963,16 @@ def liquidate_troves(trove_ids: uint256[_MAX_LIQUIDATIONS]):
     total_debt_to_decrease: uint256 = 0
     total_weighted_debt_to_decrease: uint256 = 0
 
+    # Initialize variables to capture individual trove liquidation results
+    # Initializing outside of the loop to save gas on memory expansion
+    collateral_to_decrease: uint256 = 0
+    debt_to_decrease: uint256 = 0
+    weighted_debt_decrease: uint256 = 0
+
     # Iterate over the Troves and liquidate them one by one
     for trove_id: uint256 in trove_ids:
         if trove_id == 0:
             break
-
-        # Initialize variables to capture individual trove liquidation results
-        collateral_to_decrease: uint256 = 0
-        debt_to_decrease: uint256 = 0
-        weighted_debt_decrease: uint256 = 0
 
         # Liquidate the Trove and get the changes
         (
@@ -1124,7 +1125,7 @@ def _redeem(
     # Cache the amount of debt we need to free
     remaining_debt_to_free: uint256 = debt_amount
 
-    # Cache the total changes we're making so that later we can update the accounting
+    # Initialize variables to track total changes
     total_debt_decrease: uint256 = 0
     total_collateral_decrease: uint256 = 0
     total_weighted_debt_increase: uint256 = 0
@@ -1235,7 +1236,7 @@ def _redeem(
     # Update the contract's recorded collateral balance
     self.collateral_balance -= total_collateral_decrease
 
-    # Kick the auction.
+    # Kick the auction
     # Proceeds up to `total_debt_decrease` will be sent to the `receiver`, any surplus will be sent to the Lender contract
     extcall self.dutch_desk.kick(total_collateral_decrease, total_debt_decrease, receiver, _REDEMPTION_AUCTION)  # pulls collateral tokens
 
