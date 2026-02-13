@@ -98,7 +98,7 @@ auction_length: public(uint256)
 
 # Accounting
 liquidation_auctions: public(uint256)  # count of active liquidation auctions
-_auctions: HashMap[uint256, AuctionInfo]  # auction ID --> AuctionInfo
+auctions: public(HashMap[uint256, AuctionInfo])  # auction ID --> AuctionInfo
 
 
 # ============================================================================================
@@ -152,7 +152,7 @@ def get_available_amount(auction_id: uint256) -> uint256:
     @return The available amount that can be taken from an auction
     """
     # Bring auction info into memory
-    auction: AuctionInfo = self._auctions[auction_id]
+    auction: AuctionInfo = self.auctions[auction_id]
 
     # If auction is not active, nothing is available
     if not self._is_active(auction):
@@ -171,7 +171,7 @@ def get_kickable_amount(auction_id: uint256) -> uint256:
     @return The amount that can be kicked from the auction
     """
     # Bring auction info into memory
-    auction: AuctionInfo = self._auctions[auction_id]
+    auction: AuctionInfo = self.auctions[auction_id]
 
     # If auction is still active, nothing is kickable
     if self._is_active(auction):
@@ -197,7 +197,7 @@ def get_needed_amount(
     @return The amount of buy token needed
     """
     # Bring auction info into memory
-    auction: AuctionInfo = self._auctions[auction_id]
+    auction: AuctionInfo = self.auctions[auction_id]
 
     # Determine amount to take
     take_amount: uint256 = min(auction.current_amount, max_take_amount)
@@ -217,7 +217,7 @@ def get_price(auction_id: uint256, at_timestamp: uint256 = block.timestamp) -> u
     @return The price per token in the auction in WAD
     """
     # Bring auction info into memory
-    auction: AuctionInfo = self._auctions[auction_id]
+    auction: AuctionInfo = self.auctions[auction_id]
 
     # Return the price
     return self._get_price(auction, at_timestamp)
@@ -233,7 +233,7 @@ def is_active(auction_id: uint256) -> bool:
     @return Whether the auction is active
     """
     # Bring auction info into memory
-    auction: AuctionInfo = self._auctions[auction_id]
+    auction: AuctionInfo = self.auctions[auction_id]
 
     # Return true if auction is active, false otherwise
     return self._is_active(auction)
@@ -247,123 +247,6 @@ def is_ongoing_liquidation_auction() -> bool:
     @return Whether there's at least one ongoing liquidation auction
     """
     return self.liquidation_auctions > 0
-
-
-# ============================================================================================
-# Storage read functions
-# ============================================================================================
-
-
-@external
-@view
-def kick_timestamp(auction_id: uint256) -> uint256:
-    """
-    @notice Get the timestamp the auction was kicked
-    @param auction_id The identifier for the auction
-    @return The timestamp the auction was kicked
-    """
-    return self._auctions[auction_id].kick_timestamp
-
-
-@external
-@view
-def initial_amount(auction_id: uint256) -> uint256:
-    """
-    @notice Get the initial amount of sell token available
-    @param auction_id The identifier for the auction
-    @return The initial amount of sell token available
-    """
-    return self._auctions[auction_id].initial_amount
-
-
-@external
-@view
-def current_amount(auction_id: uint256) -> uint256:
-    """
-    @notice Get the current amount of sell token available
-    @param auction_id The identifier for the auction
-    @return The current amount of sell token available
-    """
-    return self._auctions[auction_id].current_amount
-
-
-@external
-@view
-def maximum_amount(auction_id: uint256) -> uint256:
-    """
-    @notice Get the maximum amount of buy token to be received
-    @param auction_id The identifier for the auction
-    @return The maximum amount of buy token to be received
-    """
-    return self._auctions[auction_id].maximum_amount
-
-
-@external
-@view
-def amount_received(auction_id: uint256) -> uint256:
-    """
-    @notice Get the amount of buy token already received toward the maximum amount
-    @param auction_id The identifier for the auction
-    @return The amount of buy token already received toward the maximum amount
-    """
-    return self._auctions[auction_id].amount_received
-
-
-@external
-@view
-def starting_price(auction_id: uint256) -> uint256:
-    """
-    @notice Get the starting price for the auction
-    @dev The starting price is WAD scaled "lot size" in buy token
-    @param auction_id The identifier for the auction
-    @return The starting price for the auction
-    """
-    return self._auctions[auction_id].starting_price
-
-
-@external
-@view
-def minimum_price(auction_id: uint256) -> uint256:
-    """
-    @notice Get the minimum price for the auction
-    @dev The minimum price is per token and is WAD scaled in buy token
-    @param auction_id The identifier for the auction
-    @return The minimum price for the auction
-    """
-    return self._auctions[auction_id].minimum_price
-
-
-@external
-@view
-def receiver(auction_id: uint256) -> address:
-    """
-    @notice Get the receiver address for the auction
-    @param auction_id The identifier for the auction
-    @return The receiver address for the auction
-    """
-    return self._auctions[auction_id].receiver
-
-
-@external
-@view
-def surplus_receiver(auction_id: uint256) -> address:
-    """
-    @notice Get the surplus receiver address for the auction
-    @param auction_id The identifier for the auction
-    @return The surplus receiver address for the auction
-    """
-    return self._auctions[auction_id].surplus_receiver
-
-
-@external
-@view
-def is_liquidation(auction_id: uint256) -> bool:
-    """
-    @notice Check if the auction is selling liquidated collateral
-    @param auction_id The identifier for the auction
-    @return Whether the auction is selling liquidated collateral
-    """
-    return self._auctions[auction_id].is_liquidation
 
 
 # ============================================================================================
@@ -414,7 +297,7 @@ def kick(
     assert surplus_receiver != empty(address), "!surplus_receiver"
 
     # Bring auction info into memory
-    auction: AuctionInfo = self._auctions[auction_id]
+    auction: AuctionInfo = self.auctions[auction_id]
 
     # Make sure auction is not already active
     assert not self._is_active(auction), "active"
@@ -424,7 +307,7 @@ def kick(
         self.liquidation_auctions += 1
 
     # Update storage
-    self._auctions[auction_id] = AuctionInfo(
+    self.auctions[auction_id] = AuctionInfo(
         kick_timestamp=block.timestamp,
         initial_amount=kick_amount,
         current_amount=kick_amount,
@@ -468,7 +351,7 @@ def re_kick(
     assert minimum_price != 0, "!minimum_price"
 
     # Bring auction info into memory
-    auction: AuctionInfo = self._auctions[auction_id]
+    auction: AuctionInfo = self.auctions[auction_id]
 
     # Make sure auction is not already active
     assert not self._is_active(auction), "active"
@@ -482,7 +365,7 @@ def re_kick(
     auction.minimum_price = minimum_price
 
     # Update storage
-    self._auctions[auction_id] = auction
+    self.auctions[auction_id] = auction
 
     # Emit event
     log AuctionReKick(auction_id=auction_id, kick_amount=auction.current_amount)
@@ -512,7 +395,7 @@ def take(
     @return The amount taken
     """
     # Bring auction info into memory
-    auction: AuctionInfo = self._auctions[auction_id]
+    auction: AuctionInfo = self.auctions[auction_id]
 
     # Make sure auction is active
     assert self._is_active(auction), "!active"
@@ -583,7 +466,7 @@ def take(
             assert extcall buy_token.transferFrom(msg.sender, auction.surplus_receiver, surplus, default_return_value=True)
 
     # Update storage. No need to worry about re-entrancy since non-reentrant pragma is enabled
-    self._auctions[auction_id] = auction
+    self.auctions[auction_id] = auction
 
     # Emit event
     log AuctionTake(

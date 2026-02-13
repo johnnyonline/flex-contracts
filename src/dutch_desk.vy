@@ -176,15 +176,15 @@ def re_kick(auction_id: uint256):
     # Cache the Auction contract
     auction: IAuction = self.auction
 
-    # Check if this is a liquidation auction
-    is_liquidation: bool = staticcall auction.is_liquidation(auction_id)
+    # Cache the auction info
+    auction_info: IAuction.AuctionInfo = staticcall auction.auctions(auction_id)
 
     # Get new starting and minimum prices
     starting_price: uint256 = 0
     minimum_price: uint256 = 0
     starting_price, minimum_price = self._get_prices(
-        staticcall auction.current_amount(auction_id),
-        is_liquidation,
+        auction_info.currentAmount,
+        auction_info.isLiquidation,
         True,  # is_rekick
     )
 

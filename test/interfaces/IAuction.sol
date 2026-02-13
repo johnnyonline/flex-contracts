@@ -7,6 +7,19 @@ interface IAuction {
     // Structs
     // ============================================================================================
 
+    struct AuctionInfo {
+        uint256 kickTimestamp;
+        uint256 initialAmount;
+        uint256 currentAmount;
+        uint256 maximumAmount;
+        uint256 amountReceived;
+        uint256 startingPrice;
+        uint256 minimumPrice;
+        address receiver;
+        address surplusReceiver;
+        bool isLiquidation;
+    }
+
     struct InitializeParams {
         address papi;
         address buyToken;
@@ -36,6 +49,7 @@ interface IAuction {
 
     // Accounting
     function liquidation_auctions() external view returns (uint256);
+    function auctions(uint256 auctionId) external view returns (AuctionInfo memory);
 
     // ============================================================================================
     // Initialize
@@ -68,41 +82,6 @@ interface IAuction {
         uint256 auction_id
     ) external view returns (bool);
     function is_ongoing_liquidation_auction() external view returns (bool);
-
-    // ============================================================================================
-    // Storage read functions
-    // ============================================================================================
-
-    function kick_timestamp(
-        uint256 auction_id
-    ) external view returns (uint256);
-    function initial_amount(
-        uint256 auction_id
-    ) external view returns (uint256);
-    function current_amount(
-        uint256 auction_id
-    ) external view returns (uint256);
-    function maximum_amount(
-        uint256 auction_id
-    ) external view returns (uint256);
-    function amount_received(
-        uint256 auction_id
-    ) external view returns (uint256);
-    function starting_price(
-        uint256 auction_id
-    ) external view returns (uint256);
-    function minimum_price(
-        uint256 auction_id
-    ) external view returns (uint256);
-    function receiver(
-        uint256 auction_id
-    ) external view returns (address);
-    function surplus_receiver(
-        uint256 auction_id
-    ) external view returns (address);
-    function is_liquidation(
-        uint256 auction_id
-    ) external view returns (bool);
 
     // ============================================================================================
     // Kick

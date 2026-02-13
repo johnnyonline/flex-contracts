@@ -72,20 +72,21 @@ contract DutchDeskTests is Base {
         assertTrue(auction.is_active(_auctionId), "E0");
         assertEq(auction.get_available_amount(_auctionId), _amount, "E1");
 
+        IAuction.AuctionInfo memory auctionInfo = auction.auctions(_auctionId);
         uint256 _expectedStartingPrice =
             _amount * priceOracle.get_price(false) / WAD * dutchDesk.liquidation_starting_price_buffer_percentage() / COLLATERAL_TOKEN_PRECISION;
-        assertApproxEqAbs(auction.starting_price(_auctionId), _expectedStartingPrice, 3, "E2");
+        assertApproxEqAbs(auctionInfo.startingPrice, _expectedStartingPrice, 3, "E2");
 
         uint256 _expectedMinimumPrice = priceOracle.get_price(false) * dutchDesk.liquidation_minimum_price_buffer_percentage() / WAD;
-        assertEq(auction.minimum_price(_auctionId), _expectedMinimumPrice, "E3");
+        assertEq(auctionInfo.minimumPrice, _expectedMinimumPrice, "E3");
 
-        assertEq(auction.receiver(_auctionId), address(lender), "E4");
-        assertEq(auction.surplus_receiver(_auctionId), address(lender), "E5");
-        assertTrue(auction.is_liquidation(_auctionId), "E6");
+        assertEq(auctionInfo.receiver, address(lender), "E4");
+        assertEq(auctionInfo.surplusReceiver, address(lender), "E5");
+        assertTrue(auctionInfo.isLiquidation, "E6");
         assertEq(dutchDesk.nonce(), _nonceBefore + 1, "E7");
         assertTrue(auction.is_ongoing_liquidation_auction(), "E8");
         assertEq(auction.liquidation_auctions(), 1, "E9");
-        assertEq(auction.maximum_amount(_auctionId), 0, "E10");
+        assertEq(auctionInfo.maximumAmount, 0, "E10");
     }
 
     function test_kick_redemption(
@@ -110,20 +111,21 @@ contract DutchDeskTests is Base {
         assertTrue(auction.is_active(_auctionId), "E0");
         assertEq(auction.get_available_amount(_auctionId), _amount, "E1");
 
+        IAuction.AuctionInfo memory auctionInfo = auction.auctions(_auctionId);
         uint256 _expectedStartingPrice =
             _amount * priceOracle.get_price(false) * dutchDesk.redemption_starting_price_buffer_percentage() / WAD / COLLATERAL_TOKEN_PRECISION;
-        assertEq(auction.starting_price(_auctionId), _expectedStartingPrice, "E2");
+        assertEq(auctionInfo.startingPrice, _expectedStartingPrice, "E2");
 
         uint256 _expectedMinimumPrice = priceOracle.get_price(false) * dutchDesk.redemption_minimum_price_buffer_percentage() / WAD;
-        assertEq(auction.minimum_price(_auctionId), _expectedMinimumPrice, "E3");
+        assertEq(auctionInfo.minimumPrice, _expectedMinimumPrice, "E3");
 
-        assertEq(auction.receiver(_auctionId), _receiver, "E4");
-        assertEq(auction.surplus_receiver(_auctionId), address(lender), "E5");
-        assertFalse(auction.is_liquidation(_auctionId), "E6");
+        assertEq(auctionInfo.receiver, _receiver, "E4");
+        assertEq(auctionInfo.surplusReceiver, address(lender), "E5");
+        assertFalse(auctionInfo.isLiquidation, "E6");
         assertEq(dutchDesk.nonce(), _nonceBefore + 1, "E7");
         assertFalse(auction.is_ongoing_liquidation_auction(), "E8");
         assertEq(auction.liquidation_auctions(), 0, "E9");
-        assertEq(auction.maximum_amount(_auctionId), _maximumAmount, "E10");
+        assertEq(auctionInfo.maximumAmount, _maximumAmount, "E10");
     }
 
     function test_kick_zeroAmount(
@@ -198,12 +200,13 @@ contract DutchDeskTests is Base {
         assertEq(auction.get_available_amount(_auctionId), _amount, "E4");
 
         // Starting price should use EMERGENCY buffer
+        IAuction.AuctionInfo memory auctionInfo = auction.auctions(_auctionId);
         uint256 _expectedStartingPrice = _amount * priceOracle.get_price(false) * dutchDesk.redemption_re_kick_starting_price_buffer_percentage()
             / WAD / COLLATERAL_TOKEN_PRECISION;
-        assertEq(auction.starting_price(_auctionId), _expectedStartingPrice, "E5");
+        assertEq(auctionInfo.startingPrice, _expectedStartingPrice, "E5");
 
         uint256 _expectedMinimumPrice = priceOracle.get_price(false) * dutchDesk.redemption_minimum_price_buffer_percentage() / WAD;
-        assertEq(auction.minimum_price(_auctionId), _expectedMinimumPrice, "E6");
+        assertEq(auctionInfo.minimumPrice, _expectedMinimumPrice, "E6");
     }
 
     function test_reKick_auctionStillActive(

@@ -126,9 +126,9 @@ contract LiquidateTests is Base {
         {
             uint256 _expectedStartingPrice = _collateralNeeded * _priceDropToBelowMCR18 * dutchDesk.liquidation_starting_price_buffer_percentage()
                 / 1e18 / COLLATERAL_TOKEN_PRECISION;
-            assertEq(auction.starting_price(0), _expectedStartingPrice, "E27");
+            assertEq(auction.auctions(0).startingPrice, _expectedStartingPrice, "E27");
             uint256 _expectedMinimumPrice = _priceDropToBelowMCR18 * dutchDesk.liquidation_minimum_price_buffer_percentage() / WAD;
-            assertEq(auction.minimum_price(0), _expectedMinimumPrice, "E28");
+            assertEq(auction.auctions(0).minimumPrice, _expectedMinimumPrice, "E28");
         }
 
         // Take the auction
@@ -338,9 +338,9 @@ contract LiquidateTests is Base {
             uint256 _collateralToSell = _collateralNeeded * 2;
             uint256 _expectedStartingPrice = _collateralToSell * _priceDropToBelowMCR18 * dutchDesk.liquidation_starting_price_buffer_percentage()
                 / 1e18 / COLLATERAL_TOKEN_PRECISION;
-            assertEq(auction.starting_price(0), _expectedStartingPrice, "E54");
+            assertEq(auction.auctions(0).startingPrice, _expectedStartingPrice, "E54");
             uint256 _expectedMinimumPrice = _priceDropToBelowMCR18 * dutchDesk.liquidation_minimum_price_buffer_percentage() / WAD;
-            assertEq(auction.minimum_price(0), _expectedMinimumPrice, "E55");
+            assertEq(auction.auctions(0).minimumPrice, _expectedMinimumPrice, "E55");
         }
 
         // Take the auction
@@ -525,12 +525,12 @@ contract LiquidateTests is Base {
 
             // Check auction starting price and minimum price after first liquidation
             assertEq(
-                auction.starting_price(0),
+                auction.auctions(0).startingPrice,
                 _collateralInAuction * _priceDropToBelowMCR18 * dutchDesk.liquidation_starting_price_buffer_percentage() / 1e18
                     / COLLATERAL_TOKEN_PRECISION,
                 "E13"
             );
-            assertEq(auction.minimum_price(0), _priceDropToBelowMCR18 * dutchDesk.liquidation_minimum_price_buffer_percentage() / WAD, "E14");
+            assertEq(auction.auctions(0).minimumPrice, _priceDropToBelowMCR18 * dutchDesk.liquidation_minimum_price_buffer_percentage() / WAD, "E14");
         }
 
         // Check first trove is liquidated

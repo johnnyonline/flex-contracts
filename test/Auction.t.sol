@@ -66,16 +66,17 @@ contract AuctionTests is Base {
 
         // Check auction state
         assertTrue(auction.is_active(_auctionId), "E0");
-        assertEq(auction.kick_timestamp(_auctionId), block.timestamp, "E1");
-        assertEq(auction.initial_amount(_auctionId), _kickAmount, "E2");
-        assertEq(auction.current_amount(_auctionId), _kickAmount, "E3");
-        assertEq(auction.maximum_amount(_auctionId), _maximumAmount, "E4");
-        assertEq(auction.amount_received(_auctionId), 0, "E5");
-        assertEq(auction.starting_price(_auctionId), _startingPrice, "E6");
-        assertEq(auction.minimum_price(_auctionId), _minimumPrice, "E7");
-        assertEq(auction.receiver(_auctionId), userLender, "E8");
-        assertEq(auction.surplus_receiver(_auctionId), address(lender), "E9");
-        assertFalse(auction.is_liquidation(_auctionId), "E10");
+        IAuction.AuctionInfo memory auctionInfo = auction.auctions(_auctionId);
+        assertEq(auctionInfo.kickTimestamp, block.timestamp, "E1");
+        assertEq(auctionInfo.initialAmount, _kickAmount, "E2");
+        assertEq(auctionInfo.currentAmount, _kickAmount, "E3");
+        assertEq(auctionInfo.maximumAmount, _maximumAmount, "E4");
+        assertEq(auctionInfo.amountReceived, 0, "E5");
+        assertEq(auctionInfo.startingPrice, _startingPrice, "E6");
+        assertEq(auctionInfo.minimumPrice, _minimumPrice, "E7");
+        assertEq(auctionInfo.receiver, userLender, "E8");
+        assertEq(auctionInfo.surplusReceiver, address(lender), "E9");
+        assertFalse(auctionInfo.isLiquidation, "E10");
         assertFalse(auction.is_ongoing_liquidation_auction(), "E11");
         assertEq(auction.liquidation_auctions(), 0, "E12");
         assertEq(collateralToken.balanceOf(address(auction)), _kickAmount, "E13");
@@ -100,10 +101,10 @@ contract AuctionTests is Base {
 
         // Check liquidation state
         assertTrue(auction.is_active(_auctionId), "E0");
-        assertTrue(auction.is_liquidation(_auctionId), "E1");
+        assertTrue(auction.auctions(_auctionId).isLiquidation, "E1");
         assertTrue(auction.is_ongoing_liquidation_auction(), "E2");
         assertEq(auction.liquidation_auctions(), 1, "E3");
-        assertEq(auction.receiver(_auctionId), address(lender), "E4");
+        assertEq(auction.auctions(_auctionId).receiver, address(lender), "E4");
     }
 
     function test_kick_notPapi(
@@ -227,10 +228,11 @@ contract AuctionTests is Base {
 
         // Verify auction is active again with updated prices
         assertTrue(auction.is_active(_auctionId), "E2");
-        assertEq(auction.current_amount(_auctionId), _kickAmount, "E3");
-        assertEq(auction.kick_timestamp(_auctionId), block.timestamp, "E4");
-        assertEq(auction.starting_price(_auctionId), _kickAmount * 1e18, "E5");
-        assertEq(auction.minimum_price(_auctionId), 1e17, "E6");
+        IAuction.AuctionInfo memory auctionInfo = auction.auctions(_auctionId);
+        assertEq(auctionInfo.currentAmount, _kickAmount, "E3");
+        assertEq(auctionInfo.kickTimestamp, block.timestamp, "E4");
+        assertEq(auctionInfo.startingPrice, _kickAmount * 1e18, "E5");
+        assertEq(auctionInfo.minimumPrice, 1e17, "E6");
     }
 
     function test_reKick_notPapi(
@@ -333,13 +335,14 @@ contract AuctionTests is Base {
 
         // Verify auction is complete
         assertFalse(auction.is_active(_auctionId), "E0");
-        assertEq(auction.current_amount(_auctionId), 0, "E1");
-        assertEq(auction.kick_timestamp(_auctionId), 0, "E2");
+        IAuction.AuctionInfo memory auctionInfo = auction.auctions(_auctionId);
+        assertEq(auctionInfo.currentAmount, 0, "E1");
+        assertEq(auctionInfo.kickTimestamp, 0, "E2");
 
         // Verify token transfers - all goes to receiver since neededAmount <= maximum_amount
         assertEq(collateralToken.balanceOf(liquidator), _kickAmount, "E3");
         assertEq(borrowToken.balanceOf(userLender), _neededAmount, "E4");
-        assertEq(auction.amount_received(_auctionId), _neededAmount, "E5");
+        assertEq(auctionInfo.amountReceived, _neededAmount, "E5");
     }
 
     function test_take_surplusToLender(
@@ -375,7 +378,7 @@ contract AuctionTests is Base {
         uint256 _surplus = _neededAmount > _maximumAmount ? _neededAmount - _maximumAmount : 0;
         assertEq(borrowToken.balanceOf(address(lender)) - _surplusReceiverBalanceBefore, _surplus, "E0");
         assertEq(borrowToken.balanceOf(userLender), _maximumAmount, "E1");
-        assertEq(auction.amount_received(_auctionId), _maximumAmount, "E2");
+        assertEq(auction.auctions(_auctionId).amountReceived, _maximumAmount, "E2");
     }
 
     function test_take_liquidationAllToReceiver(
@@ -433,9 +436,10 @@ contract AuctionTests is Base {
 
         // Verify auction is still active with remaining amount
         assertTrue(auction.is_active(_auctionId), "E0");
-        assertEq(auction.current_amount(_auctionId), _kickAmount - _takeAmount, "E1");
+        IAuction.AuctionInfo memory auctionInfo = auction.auctions(_auctionId);
+        assertEq(auctionInfo.currentAmount, _kickAmount - _takeAmount, "E1");
         assertEq(collateralToken.balanceOf(liquidator), _takeAmount, "E2");
-        assertEq(auction.amount_received(_auctionId), _neededAmount, "E3");
+        assertEq(auctionInfo.amountReceived, _neededAmount, "E3");
     }
 
     function test_take_multipleTakes_receiverCoveredFirst(
@@ -461,11 +465,11 @@ contract AuctionTests is Base {
         vm.stopPrank();
 
         // Second take: remaining
-        uint256 _needed2 = auction.get_needed_amount(0, auction.current_amount(0), block.timestamp);
+        uint256 _needed2 = auction.get_needed_amount(0, auction.auctions(0).currentAmount, block.timestamp);
         airdrop(address(borrowToken), liquidator, _needed2);
         vm.startPrank(liquidator);
         borrowToken.approve(address(auction), _needed2);
-        auction.take(0, auction.current_amount(0), liquidator, "");
+        auction.take(0, auction.auctions(0).currentAmount, liquidator, "");
         vm.stopPrank();
 
         // Receiver capped at maximum_amount, surplus to surplus_receiver

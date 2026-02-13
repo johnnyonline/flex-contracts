@@ -6,6 +6,19 @@
 # ============================================================================================
 
 
+struct AuctionInfo:
+    kickTimestamp: uint256
+    initialAmount: uint256
+    currentAmount: uint256
+    maximumAmount: uint256
+    amountReceived: uint256
+    startingPrice: uint256
+    minimumPrice: uint256
+    receiver: address
+    surplusReceiver: address
+    isLiquidation: bool
+
+
 struct InitializeParams:
     papi: address
     buy_token: address
@@ -16,19 +29,13 @@ struct InitializeParams:
 
 
 # ============================================================================================
-# Storage read functions
+# Storage
 # ============================================================================================
 
 
 @external
 @view
-def current_amount(auction_id: uint256) -> uint256:
-    ...
-
-
-@external
-@view
-def is_liquidation(auction_id: uint256) -> bool:
+def auctions(auction_id: uint256) -> AuctionInfo:
     ...
 
 

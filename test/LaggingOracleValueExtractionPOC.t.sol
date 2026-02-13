@@ -58,10 +58,10 @@ contract LaggingOracleValueExtractionPOC is Base {
         uint256 _attackerTroveId = mintAndOpenTrove(userBorrower, _attackerCollateral, _attackerBorrowAmount, DEFAULT_ANNUAL_INTEREST_RATE * 2);
 
         // Verify auction created with attacker as receiver
-        assertEq(auction.receiver(0), userBorrower, "E0");
+        assertEq(auction.auctions(0).receiver, userBorrower, "E0");
 
         uint256 _auctionCollateral = auction.get_available_amount(0);
-        uint256 _maximumAmount = auction.maximum_amount(0);
+        uint256 _maximumAmount = auction.auctions(0).maximumAmount;
 
         // Track lender balance before auction take
         uint256 _lenderBalanceBefore = borrowToken.balanceOf(address(lender));
