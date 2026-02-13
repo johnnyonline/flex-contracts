@@ -36,7 +36,7 @@ struct Trove:
 
 _ROOT_TROVE_ID: constant(uint256) = 0
 _BAD_HINT: constant(uint256) = 0
-_MAX_TROVES: constant(uint256) = 1000
+_MAX_TROVES: constant(uint256) = 10000
 
 
 # ============================================================================================
@@ -365,9 +365,9 @@ def _descend_list(annual_interest_rate: uint256, start_id: uint256) -> (uint256,
     for i: uint256 in range(_MAX_TROVES):
         found, prev_id, next_id = self._descend_one(annual_interest_rate, prev_id, next_id)
         if found:
-            break
+            return prev_id, next_id
 
-    return prev_id, next_id
+    raise "need better hints"
 
 
 @internal
@@ -408,9 +408,9 @@ def _ascend_list(annual_interest_rate: uint256, start_id: uint256) -> (uint256, 
     for i: uint256 in range(_MAX_TROVES):
         found, prev_id, next_id = self._ascend_one(annual_interest_rate, prev_id, next_id)
         if found:
-            break
+            return prev_id, next_id
 
-    return prev_id, next_id
+    raise "need better hints"
 
 
 @internal
@@ -460,7 +460,7 @@ def _descend_and_ascend_list(annual_interest_rate: uint256, descent_start_id: ui
         if found:
             return ascent_prev, ascent_next
 
-    raise "rekt"  # this should not happen
+    raise "need better hints"
 
 
 @internal
