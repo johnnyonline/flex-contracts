@@ -67,7 +67,7 @@ abstract contract Base is Deploy, Test {
         isTest = true;
 
         // Create fork
-        uint256 _blockNumber = 23_513_850; // cache state for faster tests
+        uint256 _blockNumber = 24_449_313; // cache state for faster tests
         vm.selectFork(vm.createFork(vm.envString("ETH_RPC_URL"), _blockNumber));
 
         // Deploy factories
