@@ -92,7 +92,7 @@ contract GasTests is Base {
     function test_gas_liquidateTroves() public {
         uint256 _minDebt = troveManager.min_debt();
         uint256 _rate = DEFAULT_ANNUAL_INTEREST_RATE;
-        uint256 _numTroves = MAX_ITERATIONS;
+        uint256 _numTroves = MAX_LIQUIDATIONS;
 
         uint256 _lenderDeposit = _minDebt * _numTroves;
 
@@ -100,7 +100,7 @@ contract GasTests is Base {
         mintAndDepositIntoLender(userLender, _lenderDeposit);
 
         // Create troves and store their IDs
-        uint256[MAX_ITERATIONS] memory _troveIds;
+        uint256[MAX_LIQUIDATIONS] memory _troveIds;
         for (uint256 i = 0; i < _numTroves; i++) {
             uint256 _collateralNeeded =
                 (_minDebt * DEFAULT_TARGET_COLLATERAL_RATIO / BORROW_TOKEN_PRECISION) * ORACLE_PRICE_SCALE / priceOracle.get_price();

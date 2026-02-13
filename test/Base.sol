@@ -58,7 +58,7 @@ abstract contract Base is Deploy, Test {
     uint256 public DEFAULT_ANNUAL_INTEREST_RATE;
     uint256 public DEFAULT_TARGET_COLLATERAL_RATIO;
 
-    uint256 public constant MAX_ITERATIONS = 700;
+    uint256 public constant MAX_LIQUIDATIONS = 20;
     uint256 public constant ORACLE_PRICE_SCALE = 1e36;
     uint256 public constant WAD = 1e18;
 

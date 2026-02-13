@@ -488,7 +488,7 @@ contract LendTests is Base {
         vm.mockCall(address(priceOracle), abi.encodeWithSelector(IPriceOracleNotScaled.get_price.selector, false), abi.encode(_priceDropToBelowMCR18));
 
         // Liquidate the trove
-        uint256[MAX_ITERATIONS] memory _troveIdsToLiquidate;
+        uint256[MAX_LIQUIDATIONS] memory _troveIdsToLiquidate;
         _troveIdsToLiquidate[0] = _troveId;
         troveManager.liquidate_troves(_troveIdsToLiquidate);
 
@@ -583,7 +583,7 @@ contract LendTests is Base {
         vm.mockCall(address(priceOracle), abi.encodeWithSelector(IPriceOracleNotScaled.get_price.selector, false), abi.encode(_priceDropToBelowMCR18));
 
         // Liquidate the trove
-        uint256[MAX_ITERATIONS] memory _troveIdsToLiquidate;
+        uint256[MAX_LIQUIDATIONS] memory _troveIdsToLiquidate;
         _troveIdsToLiquidate[0] = _troveId;
         troveManager.liquidate_troves(_troveIdsToLiquidate);
 
