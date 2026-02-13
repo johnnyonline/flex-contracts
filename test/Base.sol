@@ -95,7 +95,8 @@ abstract contract Base is Deploy, Test {
                 liquidationStartingPriceBufferPercentage: liquidationStartingPriceBufferPercentage,
                 stepDuration: stepDuration,
                 stepDecayRate: stepDecayRate,
-                auctionLength: auctionLength
+                auctionLength: auctionLength,
+                salt: SALT
             })
         );
 

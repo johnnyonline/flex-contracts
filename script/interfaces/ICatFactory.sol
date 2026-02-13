@@ -25,6 +25,7 @@ interface ICatFactory {
         uint256 stepDuration;
         uint256 stepDecayRate;
         uint256 auctionLength;
+        bytes32 salt;
     }
 
     // ============================================================================================

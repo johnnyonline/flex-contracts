@@ -53,6 +53,7 @@ struct DeployParams:
     step_duration: uint256  # duration of each price step, e.g., `60` for price change every minute
     step_decay_rate: uint256  # decay rate per step, e.g., `50` for 0.5% decrease per step
     auction_length: uint256  # total auction duration in seconds, e.g., `86400` for 1 day
+    salt: bytes32  # salt for deterministic deployment
 
 
 # ============================================================================================
@@ -131,7 +132,7 @@ def deploy(params: DeployParams) -> (address, address, address, address, address
     assert collateral_token_decimals <= _MAX_TOKEN_DECIMALS, "!collateral_token_decimals"
 
     # Compute the salt value
-    salt: bytes32 = keccak256(abi_encode(msg.sender, params.collateral_token, params.borrow_token))
+    salt: bytes32 = keccak256(abi_encode(msg.sender, params.salt, params.collateral_token, params.borrow_token))
 
     # Clone a new version of the Trove Manager contract
     trove_manager: address = create_minimal_proxy_to(TROVE_MANAGER, salt=salt)
