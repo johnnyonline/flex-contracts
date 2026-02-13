@@ -24,10 +24,7 @@ from interfaces import ITaker
 event AuctionKick:
     auction_id: indexed(uint256)
     kick_amount: uint256
-
-event AuctionReKick:
-    auction_id: indexed(uint256)
-    kick_amount: uint256
+    is_re_kick: indexed(bool)
 
 event AuctionTake:
     auction_id: indexed(uint256)
@@ -324,7 +321,7 @@ def kick(
     assert extcall self.sell_token.transferFrom(self.papi, self, kick_amount, default_return_value=True)
 
     # Emit event
-    log AuctionKick(auction_id=auction_id, kick_amount=kick_amount)
+    log AuctionKick(auction_id=auction_id, kick_amount=kick_amount, is_re_kick=False)
 
 
 @external
@@ -368,7 +365,7 @@ def re_kick(
     self.auctions[auction_id] = auction
 
     # Emit event
-    log AuctionReKick(auction_id=auction_id, kick_amount=auction.current_amount)
+    log AuctionKick(auction_id=auction_id, kick_amount=auction.current_amount, is_re_kick=True)
 
 
 # ============================================================================================
