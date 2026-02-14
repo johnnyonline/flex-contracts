@@ -967,7 +967,7 @@ def liquidate_trove(
     # Cache the Trove info
     trove: Trove = self.troves[trove_id]
 
-    # Cache if the Trove is active
+    # Check if the Trove is active and cache the result
     is_active: bool = trove.status == Status.ACTIVE
 
     # Make sure the Trove is active or zombie
