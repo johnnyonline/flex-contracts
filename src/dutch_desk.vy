@@ -166,7 +166,7 @@ def re_kick(auction_id: uint256):
     auction: IAuction = self.auction
 
     # Get the auction info
-    auction_info: IAuction.AuctionInfo = staticcall self.auction.auctions(auction_id)
+    auction_info: IAuction.AuctionInfo = staticcall auction.auctions(auction_id)
 
     # Get new starting and minimum prices
     starting_price: uint256 = 0
