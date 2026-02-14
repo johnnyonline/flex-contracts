@@ -50,7 +50,6 @@ struct AuctionInfo:
     minimum_price: uint256
     receiver: address
     surplus_receiver: address
-    is_liquidation: bool
 
 
 struct InitializeParams:
@@ -94,7 +93,6 @@ step_decay_rate: public(uint256)
 auction_length: public(uint256)
 
 # Accounting
-liquidation_auctions: public(uint256)  # count of active liquidation auctions
 auctions: public(HashMap[uint256, AuctionInfo])  # auction ID --> AuctionInfo
 
 
@@ -236,16 +234,6 @@ def is_active(auction_id: uint256) -> bool:
     return self._is_active(auction)
 
 
-@external
-@view
-def is_ongoing_liquidation_auction() -> bool:
-    """
-    @notice Check if there's at least one ongoing liquidation auction
-    @return Whether there's at least one ongoing liquidation auction
-    """
-    return self.liquidation_auctions > 0
-
-
 # ============================================================================================
 # Kick
 # ============================================================================================
@@ -260,7 +248,6 @@ def kick(
     minimum_price: uint256,
     receiver: address,
     surplus_receiver: address,
-    is_liquidation: bool,
 ):
     """
     @notice Kick off an auction
@@ -273,7 +260,6 @@ def kick(
     @param minimum_price The minimum price for the auction, WAD scaled in buy token
     @param receiver The address that will receive the auction proceeds
     @param surplus_receiver The address that will receive any surplus proceeds above maximum_amount
-    @param is_liquidation Whether this auction is selling liquidated collateral
     """
     # Make sure caller is Papi
     assert msg.sender == self.papi, "!papi"
@@ -299,10 +285,6 @@ def kick(
     # Make sure auction is not already active
     assert not self._is_active(auction), "active"
 
-    # If liquidation auction, increment counter
-    if is_liquidation:
-        self.liquidation_auctions += 1
-
     # Update storage
     self.auctions[auction_id] = AuctionInfo(
         kick_timestamp=block.timestamp,
@@ -314,7 +296,6 @@ def kick(
         minimum_price=minimum_price,
         receiver=receiver,
         surplus_receiver=surplus_receiver,
-        is_liquidation=is_liquidation,
     )
 
     # Pull the tokens from Papi
@@ -417,16 +398,12 @@ def take(
         # Reset kick timestamp to mark auction as inactive
         auction.kick_timestamp = 0
 
-        # If it was a liquidation auction, decrement counter
-        if auction.is_liquidation:
-            self.liquidation_auctions -= 1
-
     # Send the token being sold to the take receiver
     assert extcall self.sell_token.transfer(receiver, take_amount, default_return_value=True)
 
     # If the caller provided data, perform the callback
     if len(data) != 0:
-        extcall ITaker(receiver).auctionTakeCallback(
+        extcall ITaker(receiver).takeCallback(
             auction_id,
             msg.sender,
             take_amount,
@@ -437,30 +414,24 @@ def take(
     # Cache the buy token contract
     buy_token: IERC20 = self.buy_token
 
-    # If liquidation auction, all proceeds goes to the Lender contract.
-    # Otherwise, make sure the receiver does not get more than the maximum and transfer the surplus to the surplus receiver
-    if auction.is_liquidation:
-        # Liquidation: all to the Lender contract
+    # How much the receiver still needs
+    receiver_remaining: uint256 = auction.maximum_amount - auction.amount_received
+
+    # If the bought amount is less than the receiver's maximum amount, transfer him all of it.
+    # Otherwise, cover the receiver first, then transfer the surplus to the surplus receiver
+    if needed_amount <= receiver_remaining:
+        # Entire amount to the receiver
+        auction.amount_received += needed_amount
         assert extcall buy_token.transferFrom(msg.sender, auction.receiver, needed_amount, default_return_value=True)
     else:
-        # How much the receiver still needs
-        receiver_remaining: uint256 = auction.maximum_amount - auction.amount_received
+        # Cover the receiver first
+        if receiver_remaining > 0:
+            auction.amount_received = auction.maximum_amount
+            assert extcall buy_token.transferFrom(msg.sender, auction.receiver, receiver_remaining, default_return_value=True)
 
-        # If the bought amount is less than the receiver's maximum amount, transfer him all of it.
-        # Otherwise, cover the receiver first, then transfer the surplus to the surplus receiver
-        if needed_amount <= receiver_remaining:
-            # Entire amount to the receiver
-            auction.amount_received += needed_amount
-            assert extcall buy_token.transferFrom(msg.sender, auction.receiver, needed_amount, default_return_value=True)
-        else:
-            # Cover the receiver first
-            if receiver_remaining > 0:
-                auction.amount_received = auction.maximum_amount
-                assert extcall buy_token.transferFrom(msg.sender, auction.receiver, receiver_remaining, default_return_value=True)
-
-            # Transfer the surplus to the Lender contract
-            surplus: uint256 = needed_amount - receiver_remaining
-            assert extcall buy_token.transferFrom(msg.sender, auction.surplus_receiver, surplus, default_return_value=True)
+        # Transfer the surplus to the surplus receiver
+        surplus: uint256 = needed_amount - receiver_remaining
+        assert extcall buy_token.transferFrom(msg.sender, auction.surplus_receiver, surplus, default_return_value=True)
 
     # Update storage. No need to worry about re-entrancy since non-reentrant pragma is enabled
     self.auctions[auction_id] = auction

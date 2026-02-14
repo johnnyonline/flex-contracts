@@ -36,15 +36,15 @@ contract TroveManagerTests is Base {
         troveManager.initialize(
             ITroveManager.InitializeParams({
                 lender: address(lender),
-                dutchDesk: address(dutchDesk),
-                priceOracle: address(priceOracle),
-                sortedTroves: address(sortedTroves),
-                borrowToken: address(borrowToken),
-                collateralToken: address(collateralToken),
-                minimumDebt: minimumDebt,
-                minimumCollateralRatio: minimumCollateralRatio,
-                upfrontInterestPeriod: upfrontInterestPeriod,
-                interestRateAdjCooldown: interestRateAdjCooldown
+                dutch_desk: address(dutchDesk),
+                price_oracle: address(priceOracle),
+                sorted_troves: address(sortedTroves),
+                borrow_token: address(borrowToken),
+                collateral_token: address(collateralToken),
+                minimum_debt: minimumDebt,
+                minimum_collateral_ratio: minimumCollateralRatio,
+                upfront_interest_period: upfrontInterestPeriod,
+                interest_rate_adj_cooldown: interestRateAdjCooldown
             })
         );
     }

@@ -40,11 +40,9 @@ abstract contract Base is Deploy, Test {
     uint256 public minimumCollateralRatio = 110; // 110%
     uint256 public upfrontInterestPeriod = 7 days; // 7 days
     uint256 public interestRateAdjCooldown = 7 days; // 7 days
-    uint256 public redemptionMinimumPriceBufferPercentage = 1e18 - 5e16; // 95%
-    uint256 public redemptionStartingPriceBufferPercentage = 1e18 + 1e16; // 101%
-    uint256 public redemptionReKickStartingPriceBufferPercentage = 1e18 + 20e16; // 120%
-    uint256 public liquidationMinimumPriceBufferPercentage = 1e18 - 10e16; // 90%
-    uint256 public liquidationStartingPriceBufferPercentage = 1e18 - 1e16; // 99%
+    uint256 public minimumPriceBufferPercentage = 1e18 - 5e16; // 95%
+    uint256 public startingPriceBufferPercentage = 1e18 + 1e16; // 101%
+    uint256 public reKickStartingPriceBufferPercentage = 1e18 + 10e16; // 110%
     uint256 public stepDuration = 20; // 20 seconds
     uint256 public stepDecayRate = 20; // 0.2%
     uint256 public auctionLength = 1 days; // 1 day
@@ -79,23 +77,21 @@ abstract contract Base is Deploy, Test {
         // Deploy market
         (address _troveManager, address _sortedTroves, address _dutchDesk, address _auction, address _lender) = catFactory.deploy(
             ICatFactory.DeployParams({
-                borrowToken: address(borrowToken),
-                collateralToken: address(collateralToken),
-                priceOracle: address(priceOracle),
+                borrow_token: address(borrowToken),
+                collateral_token: address(collateralToken),
+                price_oracle: address(priceOracle),
                 management: management,
-                performanceFeeRecipient: performanceFeeRecipient,
-                minimumDebt: minimumDebt,
-                minimumCollateralRatio: minimumCollateralRatio,
-                upfrontInterestPeriod: upfrontInterestPeriod,
-                interestRateAdjCooldown: interestRateAdjCooldown,
-                redemptionMinimumPriceBufferPercentage: redemptionMinimumPriceBufferPercentage,
-                redemptionStartingPriceBufferPercentage: redemptionStartingPriceBufferPercentage,
-                redemptionReKickStartingPriceBufferPercentage: redemptionReKickStartingPriceBufferPercentage,
-                liquidationMinimumPriceBufferPercentage: liquidationMinimumPriceBufferPercentage,
-                liquidationStartingPriceBufferPercentage: liquidationStartingPriceBufferPercentage,
-                stepDuration: stepDuration,
-                stepDecayRate: stepDecayRate,
-                auctionLength: auctionLength,
+                performance_fee_recipient: performanceFeeRecipient,
+                minimum_debt: minimumDebt,
+                minimum_collateral_ratio: minimumCollateralRatio,
+                upfront_interest_period: upfrontInterestPeriod,
+                interest_rate_adj_cooldown: interestRateAdjCooldown,
+                minimum_price_buffer_percentage: minimumPriceBufferPercentage,
+                starting_price_buffer_percentage: startingPriceBufferPercentage,
+                re_kick_starting_price_buffer_percentage: reKickStartingPriceBufferPercentage,
+                step_duration: stepDuration,
+                step_decay_rate: stepDecayRate,
+                auction_length: auctionLength,
                 salt: SALT
             })
         );

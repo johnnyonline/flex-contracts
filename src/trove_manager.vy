@@ -14,6 +14,7 @@ from ethereum.ercs import IERC20Detailed
 
 from snekmate.utils import math
 
+from interfaces import ITaker
 from interfaces import IDutchDesk
 from interfaces import IPriceOracle
 from interfaces import ISortedTroves
@@ -147,12 +148,11 @@ struct InitializeParams:
 # ============================================================================================
 
 
+_MAX_CALLBACK_DATA_SIZE: constant(uint256) = 10**5
 _PRICE_ORACLE_PRECISION: constant(uint256) = 10 ** 36
 _WAD: constant(uint256) = 10 ** 18
-_MAX_LIQUIDATIONS: constant(uint256) = 20
 _MAX_REDEMPTIONS: constant(uint256) = 1000
 _ONE_YEAR: constant(uint256) = 365 * 60 * 60 * 24
-_REDEMPTION_AUCTION: constant(bool) = False
 
 
 # ============================================================================================
@@ -943,81 +943,35 @@ def close_zombie_trove(trove_id: uint256):
 
 
 @external
-def liquidate_troves(trove_ids: uint256[_MAX_LIQUIDATIONS]):
+def liquidate_trove(
+    trove_id: uint256,
+    max_amount: uint256 = max_value(uint256),
+    receiver: address = msg.sender,
+    data: Bytes[_MAX_CALLBACK_DATA_SIZE] = empty(Bytes[_MAX_CALLBACK_DATA_SIZE])
+) -> uint256:
     """
-    @notice Liquidate a list of unhealthy Troves
+    @notice Liquidate a single unhealthy Trove
     @dev Uses the Dutch Desk contract to auction off the collateral tokens
-    @param trove_ids List of unique identifiers of the unhealthy Troves
+    @param trove_id Unique identifier of the unhealthy Trove
+    @param max_amount The maximum amount of debt to liquidate. Defaults to max uint256
+    @param receiver The address that will receive the collateral tokens being sold. Defaults to msg.sender
+    @param data The data to pass to the `receiver` callback. Defaults to empty
+    @return collateral_taken The amount of liquidated collateral tokens
     """
-    # Make sure that first trove id is non-zero
-    assert trove_ids[0] != 0, "!trove_ids"
-
-    # Cache the current zombie trove id to avoid multiple SLOADs inside `_liquidate_single_trove`
-    current_zombie_trove_id: uint256 = self.zombie_trove_id
+    # Make sure the trove ID is non-zero
+    assert trove_id != 0, "!trove_id"
 
     # Get the collateral price
     collateral_price: uint256 = staticcall self.price_oracle.get_price()
 
-    # Initialize variables to track total changes
-    total_collateral_to_decrease: uint256 = 0
-    total_debt_to_decrease: uint256 = 0
-    total_weighted_debt_to_decrease: uint256 = 0
-
-    # Initialize variables to capture individual trove liquidation results
-    # Initializing outside of the loop to save gas on memory expansion
-    collateral_to_decrease: uint256 = 0
-    debt_to_decrease: uint256 = 0
-    weighted_debt_decrease: uint256 = 0
-
-    # Iterate over the Troves and liquidate them one by one
-    for trove_id: uint256 in trove_ids:
-        if trove_id == 0:
-            break
-
-        # Liquidate the Trove and get the changes
-        (
-            collateral_to_decrease,
-            debt_to_decrease,
-            weighted_debt_decrease
-        ) = self._liquidate_single_trove(trove_id, current_zombie_trove_id, collateral_price)
-
-        # Accumulate the total changes
-        total_collateral_to_decrease += collateral_to_decrease
-        total_debt_to_decrease += debt_to_decrease
-        total_weighted_debt_to_decrease += weighted_debt_decrease
-
-    # Update the contract's recorded collateral balance
-    self.collateral_balance -= total_collateral_to_decrease
-
-    # Accrue interest on the total debt and update accounting
-    self._accrue_interest_and_account_for_trove_change(
-        0, # debt_increase
-        total_debt_to_decrease, # debt_decrease
-        0, # weighted_debt_increase
-        total_weighted_debt_to_decrease, # weighted_debt_decrease
-    )
-
-    # Kick the auction. Proceeds will be sent to the Lender contract
-    extcall self.dutch_desk.kick(total_collateral_to_decrease)  # pulls collateral tokens
-
-
-@internal
-def _liquidate_single_trove(trove_id: uint256, current_zombie_trove_id: uint256, collateral_price: uint256) -> (uint256, uint256, uint256):
-    """
-    @notice Internal function to liquidate a single unhealthy Trove
-    @dev Does not update global accounting or handle token transfers
-    @param trove_id Unique identifier of the Trove
-    @param current_zombie_trove_id Current zombie trove id
-    @param collateral_price Current collateral price
-    @return collateral_to_decrease Amount of collateral to subtract from the total collateral
-    @return debt_to_decrease Amount of debt to subtract from the total debt
-    @return weighted_debt_decrease Amount of weighted debt to subtract from the total weighted debt
-    """
-    # Cache Trove info
+    # Cache the Trove info
     trove: Trove = self.troves[trove_id]
 
+    # Cache if the Trove is active
+    is_active: bool = trove.status == Status.ACTIVE
+
     # Make sure the Trove is active or zombie
-    assert trove.status == Status.ACTIVE or trove.status == Status.ZOMBIE, "!active or zombie"
+    assert is_active or trove.status == Status.ZOMBIE, "!active or zombie"
 
     # Get the Trove's debt after accruing interest
     trove_debt_after_interest: uint256 = self._get_trove_debt_after_interest(trove)
@@ -1030,8 +984,11 @@ def _liquidate_single_trove(trove_id: uint256, current_zombie_trove_id: uint256,
     # Make sure the collateral ratio is below the minimum collateral ratio
     assert collateral_ratio < self.minimum_collateral_ratio, "!collateral_ratio"
 
-    # Cache the Trove's old info for global accounting
-    old_trove: Trove = trove
+    # Cache the Trove's info before changing it
+    trove_owner: address = trove.owner
+    collateral_to_decrease: uint256 = trove.collateral
+    debt_to_decrease: uint256 = trove_debt_after_interest
+    weighted_debt_to_decrease: uint256 = trove.debt * trove.annual_interest_rate
 
     # Delete all Trove info and mark it as liquidated
     trove = empty(Trove)
@@ -1041,27 +998,51 @@ def _liquidate_single_trove(trove_id: uint256, current_zombie_trove_id: uint256,
     self.troves[trove_id] = trove
 
     # If Trove is the current zombie trove, reset the `zombie_trove_id` variable
-    if current_zombie_trove_id == trove_id:
+    if self.zombie_trove_id == trove_id:
         self.zombie_trove_id = 0
 
-    # Remove from sorted list if it was active
-    if old_trove.status == Status.ACTIVE:
+    # Update the contract's recorded collateral balance
+    self.collateral_balance -= collateral_to_decrease
+
+    # Accrue interest on the total debt and update accounting
+    self._accrue_interest_and_account_for_trove_change(
+        0, # debt_increase
+        debt_to_decrease, # debt_decrease
+        0, # weighted_debt_increase
+        weighted_debt_to_decrease, # weighted_debt_decrease
+    )
+
+    # Remove from sorted list if Trove was active
+    if is_active:
         extcall self.sorted_troves.remove(trove_id)
+
+    # Send the collateral tokens to the `receiver`
+    assert extcall self.collateral_token.transfer(receiver, collateral_to_decrease, default_return_value=True)
+
+    # If the caller provided data, perform the callback
+    if len(data) != 0:
+        extcall ITaker(receiver).takeCallback(
+            trove_id,
+            msg.sender,
+            collateral_to_decrease,  # amount_taken
+            debt_to_decrease,  # needed_amount
+            data,
+        )
+
+    # Pull the borrow tokens from caller and transfer them to the Lender contract
+    assert extcall self.borrow_token.transferFrom(msg.sender, self.lender, debt_to_decrease, default_return_value=True)
 
     # Emit event
     log LiquidateTrove(
         trove_id=trove_id,
-        trove_owner=old_trove.owner,
+        trove_owner=trove_owner,
         liquidator=msg.sender,
-        collateral_amount=old_trove.collateral,
-        debt_amount=trove_debt_after_interest,
+        collateral_amount=collateral_to_decrease,
+        debt_amount=debt_to_decrease,
     )
 
-    return (
-        old_trove.collateral,  # collateral_to_decrease
-        trove_debt_after_interest,  # debt_to_decrease
-        old_trove.debt * old_trove.annual_interest_rate  # weighted_debt_decrease
-    )
+    # Return the amount of liquidated collateral tokens
+    return collateral_to_decrease
 
 
 # ============================================================================================
@@ -1238,7 +1219,7 @@ def _redeem(
 
     # Kick the auction
     # Proceeds up to `total_debt_decrease` will be sent to the `receiver`, any surplus will be sent to the Lender contract
-    extcall self.dutch_desk.kick(total_collateral_decrease, total_debt_decrease, receiver, _REDEMPTION_AUCTION)  # pulls collateral tokens
+    extcall self.dutch_desk.kick(total_collateral_decrease, total_debt_decrease, receiver)  # pulls collateral tokens
 
     # Emit event
     log Redeem(

@@ -37,15 +37,15 @@ interface ITroveManager {
 
     struct InitializeParams {
         address lender;
-        address dutchDesk;
-        address priceOracle;
-        address sortedTroves;
-        address borrowToken;
-        address collateralToken;
-        uint256 minimumDebt;
-        uint256 minimumCollateralRatio;
-        uint256 upfrontInterestPeriod;
-        uint256 interestRateAdjCooldown;
+        address dutch_desk;
+        address price_oracle;
+        address sorted_troves;
+        address borrow_token;
+        address collateral_token;
+        uint256 minimum_debt;
+        uint256 minimum_collateral_ratio;
+        uint256 upfront_interest_period;
+        uint256 interest_rate_adj_cooldown;
     }
 
     // ============================================================================================
@@ -182,9 +182,12 @@ interface ITroveManager {
     // Liquidate trove
     // ============================================================================================
 
-    function liquidate_troves(
-        uint256[20] calldata trove_ids
-    ) external;
+    function liquidate_trove(
+        uint256 trove_id,
+        uint256 max_amount,
+        address receiver,
+        bytes calldata data
+    ) external returns (uint256);
 
     // ============================================================================================
     // Redeem

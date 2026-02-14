@@ -45,11 +45,9 @@ struct DeployParams:
     minimum_collateral_ratio: uint256  # minimum CR to avoid liquidation, e.g., `110 * one_pct` for 110%
     upfront_interest_period: uint256  # duration for upfront interest charges, e.g., `7 * 24 * 60 * 60` for 7 days
     interest_rate_adj_cooldown: uint256  # cooldown between rate adjustments, e.g., `7 * 24 * 60 * 60` for 7 days
-    redemption_minimum_price_buffer_percentage: uint256  # redemption auction minimum price buffer, e.g. `WAD - 5 * 10 ** 16` for 5% below oracle price
-    redemption_starting_price_buffer_percentage: uint256  # redemption auction starting price buffer, e.g. `WAD + 1 * 10 ** 16` for 1% above oracle price. must be >= max oracle deviation from market price to ensure the starting auction price is always above market price, preventing value extraction from oracle lag
-    redemption_re_kick_starting_price_buffer_percentage: uint256  # redemption auction re-kick price buffer, e.g. `WAD + 5 * 10 ** 16` for 5% above oracle price
-    liquidation_minimum_price_buffer_percentage: uint256  # liquidation auction minimum price buffer, e.g. `WAD - 10 * 10 ** 16` for 10% below oracle price
-    liquidation_starting_price_buffer_percentage: uint256  # liquidation auction starting price buffer, e.g., `WAD - 1 * 10 ** 16` for 1% below oracle price
+    minimum_price_buffer_percentage: uint256  # auction minimum price buffer, e.g. `WAD - 5 * 10 ** 16` for 5% below oracle price
+    starting_price_buffer_percentage: uint256  # auction starting price buffer, e.g. `WAD + 1 * 10 ** 16` for 1% above oracle price. must be >= max oracle deviation from market price to ensure the starting auction price is always above market price, preventing value extraction from oracle lag
+    re_kick_starting_price_buffer_percentage: uint256  # auction re-kick price buffer, e.g. `WAD + 5 * 10 ** 16` for 5% above oracle price
     step_duration: uint256  # duration of each price step, e.g., `60` for price change every minute
     step_decay_rate: uint256  # decay rate per step, e.g., `50` for 0.5% decrease per step
     auction_length: uint256  # total auction duration in seconds, e.g., `86400` for 1 day
@@ -154,7 +152,6 @@ def deploy(params: DeployParams) -> (address, address, address, address, address
     # Deploy the Lender contract via the Lender Factory
     lender: address = extcall LENDER_FACTORY.deploy(
         params.borrow_token,
-        auction,
         trove_manager,
         params.management,
         params.performance_fee_recipient,
@@ -186,11 +183,9 @@ def deploy(params: DeployParams) -> (address, address, address, address, address
         auction=auction,
         borrow_token=params.borrow_token,
         collateral_token=params.collateral_token,
-        redemption_minimum_price_buffer_percentage=params.redemption_minimum_price_buffer_percentage,
-        redemption_starting_price_buffer_percentage=params.redemption_starting_price_buffer_percentage,
-        redemption_re_kick_starting_price_buffer_percentage=params.redemption_re_kick_starting_price_buffer_percentage,
-        liquidation_minimum_price_buffer_percentage=params.liquidation_minimum_price_buffer_percentage,
-        liquidation_starting_price_buffer_percentage=params.liquidation_starting_price_buffer_percentage,
+        minimum_price_buffer_percentage=params.minimum_price_buffer_percentage,
+        starting_price_buffer_percentage=params.starting_price_buffer_percentage,
+        re_kick_starting_price_buffer_percentage=params.re_kick_starting_price_buffer_percentage,
     ))
 
     # Initialize the Auction contract
