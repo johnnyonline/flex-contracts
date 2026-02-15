@@ -154,9 +154,9 @@ struct InitializeParams:
 
 _MAX_CALLBACK_DATA_SIZE: constant(uint256) = 10**5
 _PRICE_ORACLE_PRECISION: constant(uint256) = 10 ** 36
-_LIQUIDATION_FEE_PRECISION: constant(uint256) = 10000
+_LIQUIDATION_FEE_PRECISION: constant(uint256) = 10_000
 _WAD: constant(uint256) = 10 ** 18
-_MAX_REDEMPTIONS: constant(uint256) = 1000
+_MAX_REDEMPTIONS: constant(uint256) = 1_000
 _ONE_YEAR: constant(uint256) = 365 * 60 * 60 * 24
 
 
