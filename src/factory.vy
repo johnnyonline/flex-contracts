@@ -42,7 +42,10 @@ struct DeployParams:
     management: address  # address of the management
     performance_fee_recipient: address  # address of the performance fee recipient
     minimum_debt: uint256  # minimum borrowable amount, e.g., `500 * borrow_token_precision` for 500 tokens
-    minimum_collateral_ratio: uint256  # minimum CR to avoid liquidation, e.g., `110 * one_pct` for 110%
+    minimum_collateral_ratio: uint256  # minimum CR to avoid liquidation, e.g., `110` for 110%
+    max_penalty_collateral_ratio: uint256  # CR at which max liquidation fee applies, e.g., `105` for 105%
+    min_liquidation_fee: uint256  # minimum liquidation fee in hundredths of a percent, e.g., `50` for 0.5%
+    max_liquidation_fee: uint256  # maximum liquidation fee in hundredths of a percent, e.g., `500` for 5%
     upfront_interest_period: uint256  # duration for upfront interest charges, e.g., `7 * 24 * 60 * 60` for 7 days
     interest_rate_adj_cooldown: uint256  # cooldown between rate adjustments, e.g., `7 * 24 * 60 * 60` for 7 days
     minimum_price_buffer_percentage: uint256  # auction minimum price buffer, e.g. `WAD - 5 * 10 ** 16` for 5% below oracle price
@@ -68,10 +71,6 @@ LENDER_FACTORY: public(immutable(ILenderFactory))
 
 # Version
 VERSION: public(constant(String[28])) = "1.0.0"
-
-# Utils
-_WAD: constant(uint256) = 10 ** 18
-_MAX_TOKEN_DECIMALS: constant(uint256) = 18
 
 
 # ============================================================================================
@@ -118,17 +117,6 @@ def deploy(params: DeployParams) -> (address, address, address, address, address
     @return auction Address of the deployed Auction contract
     @return lender Address of the deployed Lender contract
     """
-    # Make sure borrow and collateral tokens are different
-    assert params.borrow_token != params.collateral_token, "!tokens"
-
-    # Borrow token cannot have more than 18 decimals
-    borrow_token_decimals: uint256 = convert(staticcall IERC20Detailed(params.borrow_token).decimals(), uint256)
-    assert borrow_token_decimals <= _MAX_TOKEN_DECIMALS, "!borrow_token_decimals"
-
-    # Collateral token cannot have more than 18 decimals
-    collateral_token_decimals: uint256 = convert(staticcall IERC20Detailed(params.collateral_token).decimals(), uint256)
-    assert collateral_token_decimals <= _MAX_TOKEN_DECIMALS, "!collateral_token_decimals"
-
     # Compute the salt value
     salt: bytes32 = keccak256(abi_encode(msg.sender, params.salt, params.collateral_token, params.borrow_token))
 
@@ -168,6 +156,9 @@ def deploy(params: DeployParams) -> (address, address, address, address, address
         collateral_token=params.collateral_token,
         minimum_debt=params.minimum_debt,
         minimum_collateral_ratio=params.minimum_collateral_ratio,
+        max_penalty_collateral_ratio=params.max_penalty_collateral_ratio,
+        min_liquidation_fee=params.min_liquidation_fee,
+        max_liquidation_fee=params.max_liquidation_fee,
         upfront_interest_period=params.upfront_interest_period,
         interest_rate_adj_cooldown=params.interest_rate_adj_cooldown,
     ))

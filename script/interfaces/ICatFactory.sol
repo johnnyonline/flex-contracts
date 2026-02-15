@@ -15,6 +15,9 @@ interface ICatFactory {
         address performance_fee_recipient;
         uint256 minimum_debt;
         uint256 minimum_collateral_ratio;
+        uint256 max_penalty_collateral_ratio;
+        uint256 min_liquidation_fee;
+        uint256 max_liquidation_fee;
         uint256 upfront_interest_period;
         uint256 interest_rate_adj_cooldown;
         uint256 minimum_price_buffer_percentage;
