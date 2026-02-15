@@ -23,7 +23,6 @@ contract LenderFactory {
 
     /// @notice Deploy a new Lender contract
     /// @param _asset The address of the borrow token
-    /// @param _auction The address of the Auction contract
     /// @param _troveManager The address of the Trove Manager contract
     /// @param _management The address of the management
     /// @param _performanceFeeRecipient The address of the performance fee recipient
@@ -31,14 +30,13 @@ contract LenderFactory {
     /// @return The address of the newly deployed Lender contract
     function deploy(
         address _asset,
-        address _auction,
         address _troveManager,
         address _management,
         address _performanceFeeRecipient,
         string calldata _name
     ) external returns (address) {
         // Deploy the Lender contract
-        ILender _lender = ILender(address(new Lender(_asset, _auction, _troveManager, _name)));
+        ILender _lender = ILender(address(new Lender(_asset, _troveManager, _name)));
 
         // Set initial parameters
         _lender.setKeeper(KEEPER);

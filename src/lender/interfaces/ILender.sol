@@ -9,7 +9,6 @@ interface ILender is IStrategy {
     // Constants
     // ============================================================================================
 
-    function AUCTION() external view returns (address);
     function TROVE_MANAGER() external view returns (address);
 
     // ============================================================================================

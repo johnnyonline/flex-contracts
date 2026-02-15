@@ -8,17 +8,15 @@ interface IDutchDesk {
     // ============================================================================================
 
     struct InitializeParams {
-        address troveManager;
+        address trove_manager;
         address lender;
-        address priceOracle;
+        address price_oracle;
         address auction;
-        address borrowToken;
-        address collateralToken;
-        uint256 redemptionMinimumPriceBufferPercentage;
-        uint256 redemptionStartingPriceBufferPercentage;
-        uint256 redemptionReKickStartingPriceBufferPercentage;
-        uint256 liquidationMinimumPriceBufferPercentage;
-        uint256 liquidationStartingPriceBufferPercentage;
+        address borrow_token;
+        address collateral_token;
+        uint256 minimum_price_buffer_percentage;
+        uint256 starting_price_buffer_percentage;
+        uint256 re_kick_starting_price_buffer_percentage;
     }
 
     // ============================================================================================
@@ -36,11 +34,9 @@ interface IDutchDesk {
 
     // Parameters
     function collateral_token_precision() external view returns (uint256);
-    function redemption_minimum_price_buffer_percentage() external view returns (uint256);
-    function redemption_starting_price_buffer_percentage() external view returns (uint256);
-    function redemption_re_kick_starting_price_buffer_percentage() external view returns (uint256);
-    function liquidation_minimum_price_buffer_percentage() external view returns (uint256);
-    function liquidation_starting_price_buffer_percentage() external view returns (uint256);
+    function minimum_price_buffer_percentage() external view returns (uint256);
+    function starting_price_buffer_percentage() external view returns (uint256);
+    function re_kick_starting_price_buffer_percentage() external view returns (uint256);
 
     // Accounting
     function nonce() external view returns (uint256);
@@ -60,8 +56,7 @@ interface IDutchDesk {
     function kick(
         uint256 kick_amount,
         uint256 maximum_amount,
-        address receiver,
-        bool is_liquidation
+        address receiver
     ) external;
 
     function re_kick(

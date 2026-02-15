@@ -7,16 +7,15 @@
 
 
 struct AuctionInfo:
-    kickTimestamp: uint256
-    initialAmount: uint256
-    currentAmount: uint256
-    maximumAmount: uint256
-    amountReceived: uint256
-    startingPrice: uint256
-    minimumPrice: uint256
+    kick_timestamp: uint256
+    initial_amount: uint256
+    current_amount: uint256
+    maximum_amount: uint256
+    amount_received: uint256
+    starting_price: uint256
+    minimum_price: uint256
     receiver: address
-    surplusReceiver: address
-    isLiquidation: bool
+    surplus_receiver: address
 
 
 struct InitializeParams:
@@ -63,7 +62,6 @@ def kick(
     minimum_price: uint256,
     receiver: address,
     surplus_receiver: address,
-    is_liquidation: bool,
 ):
     ...
 

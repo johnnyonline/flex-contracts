@@ -89,42 +89,4 @@ contract GasTests is Base {
         assertLt(gasUsed, MAX_GAS, "Exceeded 7M gas limit");
     }
 
-    function test_gas_liquidateTroves() public {
-        uint256 _minDebt = troveManager.min_debt();
-        uint256 _rate = DEFAULT_ANNUAL_INTEREST_RATE;
-        uint256 _numTroves = MAX_LIQUIDATIONS;
-
-        uint256 _lenderDeposit = _minDebt * _numTroves;
-
-        // Fund lender
-        mintAndDepositIntoLender(userLender, _lenderDeposit);
-
-        // Create troves and store their IDs
-        uint256[MAX_LIQUIDATIONS] memory _troveIds;
-        for (uint256 i = 0; i < _numTroves; i++) {
-            uint256 _collateralNeeded =
-                (_minDebt * DEFAULT_TARGET_COLLATERAL_RATIO / BORROW_TOKEN_PRECISION) * ORACLE_PRICE_SCALE / priceOracle.get_price();
-
-            address _user = address(uint160(i + 1000));
-            _troveIds[i] = mintAndOpenTrove(_user, _collateralNeeded, _minDebt, _rate);
-        }
-
-        // Drop price to make all troves liquidatable
-        uint256 _priceDropToBelowMCR = priceOracle.get_price() * 80 / 100; // 20% drop
-        uint256 _priceDropToBelowMCR18 = priceOracle.get_price(false) * 80 / 100; // 20% drop
-        vm.mockCall(address(priceOracle), abi.encodeWithSelector(IPriceOracleScaled.get_price.selector), abi.encode(_priceDropToBelowMCR));
-        vm.mockCall(address(priceOracle), abi.encodeWithSelector(IPriceOracleNotScaled.get_price.selector, false), abi.encode(_priceDropToBelowMCR18));
-
-        // Liquidate all troves
-        uint256 _gasBefore = gasleft();
-        troveManager.liquidate_troves(_troveIds);
-        uint256 _gasUsed = _gasBefore - gasleft();
-
-        emit log_named_uint("Troves liquidated", _numTroves);
-        emit log_named_uint("Gas used", _gasUsed);
-        emit log_named_uint("Cost in ETH (wei)", _gasUsed * GAS_PRICE);
-
-        assertLt(_gasUsed, MAX_GAS + 1_000_000, "Exceeded 8M gas limit");
-    }
-
 }

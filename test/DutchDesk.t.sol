@@ -26,70 +26,30 @@ contract DutchDeskTests is Base {
         assertEq(dutchDesk.auction(), address(auction), "E3");
         assertEq(dutchDesk.collateral_token(), address(collateralToken), "E4");
         assertEq(dutchDesk.collateral_token_precision(), COLLATERAL_TOKEN_PRECISION, "E5");
-        assertEq(dutchDesk.redemption_minimum_price_buffer_percentage(), redemptionMinimumPriceBufferPercentage, "E6");
-        assertEq(dutchDesk.redemption_starting_price_buffer_percentage(), redemptionStartingPriceBufferPercentage, "E7");
-        assertEq(dutchDesk.redemption_re_kick_starting_price_buffer_percentage(), redemptionReKickStartingPriceBufferPercentage, "E8");
-        assertEq(dutchDesk.liquidation_minimum_price_buffer_percentage(), liquidationMinimumPriceBufferPercentage, "E9");
-        assertEq(dutchDesk.liquidation_starting_price_buffer_percentage(), liquidationStartingPriceBufferPercentage, "E10");
-        assertEq(dutchDesk.nonce(), 0, "E11");
+        assertEq(dutchDesk.minimum_price_buffer_percentage(), minimumPriceBufferPercentage, "E6");
+        assertEq(dutchDesk.starting_price_buffer_percentage(), startingPriceBufferPercentage, "E7");
+        assertEq(dutchDesk.re_kick_starting_price_buffer_percentage(), reKickStartingPriceBufferPercentage, "E8");
+        assertEq(dutchDesk.nonce(), 0, "E9");
     }
 
     function test_initialize_revertsIfAlreadyInitialized() public {
         vm.expectRevert("initialized");
         dutchDesk.initialize(
             IDutchDesk.InitializeParams({
-                troveManager: address(troveManager),
+                trove_manager: address(troveManager),
                 lender: address(lender),
-                priceOracle: address(priceOracle),
+                price_oracle: address(priceOracle),
                 auction: address(auction),
-                borrowToken: address(borrowToken),
-                collateralToken: address(collateralToken),
-                redemptionMinimumPriceBufferPercentage: redemptionMinimumPriceBufferPercentage,
-                redemptionStartingPriceBufferPercentage: redemptionStartingPriceBufferPercentage,
-                redemptionReKickStartingPriceBufferPercentage: redemptionReKickStartingPriceBufferPercentage,
-                liquidationMinimumPriceBufferPercentage: liquidationMinimumPriceBufferPercentage,
-                liquidationStartingPriceBufferPercentage: liquidationStartingPriceBufferPercentage
+                borrow_token: address(borrowToken),
+                collateral_token: address(collateralToken),
+                minimum_price_buffer_percentage: minimumPriceBufferPercentage,
+                starting_price_buffer_percentage: startingPriceBufferPercentage,
+                re_kick_starting_price_buffer_percentage: reKickStartingPriceBufferPercentage
             })
         );
     }
 
-    function test_kick_liquidation(
-        uint256 _amount
-    ) public {
-        _amount = bound(_amount, minFuzzAmount, maxFuzzAmount);
-
-        // Collateral is transferred from troveManager via kick
-        airdrop(address(collateralToken), address(troveManager), _amount);
-
-        uint256 _nonceBefore = dutchDesk.nonce();
-
-        // Liquidations: receiver=LENDER, maximum_amount=0, is_liquidation=true
-        vm.prank(address(troveManager));
-        dutchDesk.kick(_amount, 0, address(lender), true);
-
-        uint256 _auctionId = _nonceBefore;
-
-        assertTrue(auction.is_active(_auctionId), "E0");
-        assertEq(auction.get_available_amount(_auctionId), _amount, "E1");
-
-        IAuction.AuctionInfo memory auctionInfo = auction.auctions(_auctionId);
-        uint256 _expectedStartingPrice =
-            _amount * priceOracle.get_price(false) / WAD * dutchDesk.liquidation_starting_price_buffer_percentage() / COLLATERAL_TOKEN_PRECISION;
-        assertApproxEqAbs(auctionInfo.startingPrice, _expectedStartingPrice, 3, "E2");
-
-        uint256 _expectedMinimumPrice = priceOracle.get_price(false) * dutchDesk.liquidation_minimum_price_buffer_percentage() / WAD;
-        assertEq(auctionInfo.minimumPrice, _expectedMinimumPrice, "E3");
-
-        assertEq(auctionInfo.receiver, address(lender), "E4");
-        assertEq(auctionInfo.surplusReceiver, address(lender), "E5");
-        assertTrue(auctionInfo.isLiquidation, "E6");
-        assertEq(dutchDesk.nonce(), _nonceBefore + 1, "E7");
-        assertTrue(auction.is_ongoing_liquidation_auction(), "E8");
-        assertEq(auction.liquidation_auctions(), 1, "E9");
-        assertEq(auctionInfo.maximumAmount, 0, "E10");
-    }
-
-    function test_kick_redemption(
+    function test_kick(
         uint256 _amount,
         uint256 _maximumAmount,
         address _receiver
@@ -104,7 +64,7 @@ contract DutchDeskTests is Base {
         uint256 _nonceBefore = dutchDesk.nonce();
 
         vm.prank(address(troveManager));
-        dutchDesk.kick(_amount, _maximumAmount, _receiver, false);
+        dutchDesk.kick(_amount, _maximumAmount, _receiver);
 
         uint256 _auctionId = _nonceBefore;
 
@@ -113,55 +73,51 @@ contract DutchDeskTests is Base {
 
         IAuction.AuctionInfo memory auctionInfo = auction.auctions(_auctionId);
         uint256 _expectedStartingPrice =
-            _amount * priceOracle.get_price(false) * dutchDesk.redemption_starting_price_buffer_percentage() / WAD / COLLATERAL_TOKEN_PRECISION;
-        assertEq(auctionInfo.startingPrice, _expectedStartingPrice, "E2");
+            _amount * priceOracle.get_price(false) * dutchDesk.starting_price_buffer_percentage() / WAD / COLLATERAL_TOKEN_PRECISION;
+        assertEq(auctionInfo.starting_price, _expectedStartingPrice, "E2");
 
-        uint256 _expectedMinimumPrice = priceOracle.get_price(false) * dutchDesk.redemption_minimum_price_buffer_percentage() / WAD;
-        assertEq(auctionInfo.minimumPrice, _expectedMinimumPrice, "E3");
+        uint256 _expectedMinimumPrice = priceOracle.get_price(false) * dutchDesk.minimum_price_buffer_percentage() / WAD;
+        assertEq(auctionInfo.minimum_price, _expectedMinimumPrice, "E3");
 
         assertEq(auctionInfo.receiver, _receiver, "E4");
-        assertEq(auctionInfo.surplusReceiver, address(lender), "E5");
-        assertFalse(auctionInfo.isLiquidation, "E6");
-        assertEq(dutchDesk.nonce(), _nonceBefore + 1, "E7");
-        assertFalse(auction.is_ongoing_liquidation_auction(), "E8");
-        assertEq(auction.liquidation_auctions(), 0, "E9");
-        assertEq(auctionInfo.maximumAmount, _maximumAmount, "E10");
+        assertEq(auctionInfo.surplus_receiver, address(lender), "E5");
+        assertEq(dutchDesk.nonce(), _nonceBefore + 1, "E6");
+        assertEq(auctionInfo.maximum_amount, _maximumAmount, "E7");
     }
 
     function test_kick_zeroAmount(
-        address _receiver,
-        bool _isLiquidation
+        address _receiver
     ) public {
         uint256 _nonceBefore = dutchDesk.nonce();
 
         vm.prank(address(troveManager));
-        dutchDesk.kick(0, 0, _receiver, _isLiquidation);
+        dutchDesk.kick(0, 0, _receiver);
 
         // Nothing should happen - nonce unchanged, no active auction
         assertEq(dutchDesk.nonce(), _nonceBefore, "E0");
         assertFalse(auction.is_active(_nonceBefore), "E1");
     }
 
-    function test_kick_multipleAuctions(
+    function test_multiple_kicks(
         uint256 _amount1,
         uint256 _amount2
     ) public {
         _amount1 = bound(_amount1, minFuzzAmount, maxFuzzAmount / 2);
         _amount2 = bound(_amount2, minFuzzAmount, maxFuzzAmount / 2);
 
-        // First kick (liquidation)
+        // First kick (redemption)
         airdrop(address(collateralToken), address(troveManager), _amount1);
         vm.prank(address(troveManager));
-        dutchDesk.kick(_amount1, 0, address(lender), true);
+        dutchDesk.kick(_amount1, type(uint256).max, address(userLender));
 
         assertTrue(auction.is_active(0), "E0");
         assertEq(auction.get_available_amount(0), _amount1, "E1");
         assertEq(dutchDesk.nonce(), 1, "E2");
 
-        // Second kick creates a new auction with nonce 1 (liquidation)
+        // Second kick creates a new auction with nonce 1 (redemption)
         airdrop(address(collateralToken), address(troveManager), _amount2);
         vm.prank(address(troveManager));
-        dutchDesk.kick(_amount2, 0, address(lender), true);
+        dutchDesk.kick(_amount2, type(uint256).max, address(userLender));
 
         assertTrue(auction.is_active(1), "E3");
         assertEq(auction.get_available_amount(1), _amount2, "E4");
@@ -169,7 +125,6 @@ contract DutchDeskTests is Base {
 
         // First auction is still active
         assertTrue(auction.is_active(0), "E6");
-        assertEq(auction.liquidation_auctions(), 2, "E7");
     }
 
     function test_reKick(
@@ -182,7 +137,7 @@ contract DutchDeskTests is Base {
         // Kick a redemption auction
         airdrop(address(collateralToken), address(troveManager), _amount);
         vm.prank(address(troveManager));
-        dutchDesk.kick(_amount, type(uint256).max, _receiver, false);
+        dutchDesk.kick(_amount, type(uint256).max, _receiver);
 
         uint256 _auctionId = 0;
         assertTrue(auction.is_active(_auctionId), "E0");
@@ -199,14 +154,14 @@ contract DutchDeskTests is Base {
         assertTrue(auction.is_active(_auctionId), "E3");
         assertEq(auction.get_available_amount(_auctionId), _amount, "E4");
 
-        // Starting price should use EMERGENCY buffer
+        // Starting price should use re-kick buffer
         IAuction.AuctionInfo memory auctionInfo = auction.auctions(_auctionId);
-        uint256 _expectedStartingPrice = _amount * priceOracle.get_price(false) * dutchDesk.redemption_re_kick_starting_price_buffer_percentage()
-            / WAD / COLLATERAL_TOKEN_PRECISION;
-        assertEq(auctionInfo.startingPrice, _expectedStartingPrice, "E5");
+        uint256 _expectedStartingPrice =
+            _amount * priceOracle.get_price(false) * dutchDesk.re_kick_starting_price_buffer_percentage() / WAD / COLLATERAL_TOKEN_PRECISION;
+        assertEq(auctionInfo.starting_price, _expectedStartingPrice, "E5");
 
-        uint256 _expectedMinimumPrice = priceOracle.get_price(false) * dutchDesk.redemption_minimum_price_buffer_percentage() / WAD;
-        assertEq(auctionInfo.minimumPrice, _expectedMinimumPrice, "E6");
+        uint256 _expectedMinimumPrice = priceOracle.get_price(false) * dutchDesk.minimum_price_buffer_percentage() / WAD;
+        assertEq(auctionInfo.minimum_price, _expectedMinimumPrice, "E6");
     }
 
     function test_reKick_auctionStillActive(
@@ -219,7 +174,7 @@ contract DutchDeskTests is Base {
         // Kick a redemption auction
         airdrop(address(collateralToken), address(troveManager), _amount);
         vm.prank(address(troveManager));
-        dutchDesk.kick(_amount, type(uint256).max, _receiver, false);
+        dutchDesk.kick(_amount, type(uint256).max, _receiver);
 
         assertTrue(auction.is_active(0), "E0");
 
