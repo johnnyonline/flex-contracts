@@ -42,6 +42,7 @@ struct DeployParams:
     management: address  # address of the management
     performance_fee_recipient: address  # address of the performance fee recipient
     minimum_debt: uint256  # minimum borrowable amount, e.g., `500 * borrow_token_precision` for 500 tokens
+    safe_collateral_ratio: uint256  # target CR after partial liquidation, e.g., `115` for 115%. must be greater than `100% + max_liquidation_fee` to avoid underflow in the safe CR calculation
     minimum_collateral_ratio: uint256  # minimum CR to avoid liquidation, e.g., `110` for 110%
     max_penalty_collateral_ratio: uint256  # CR at which max liquidation fee applies, e.g., `105` for 105%
     min_liquidation_fee: uint256  # minimum liquidation fee in hundredths of a percent, e.g., `50` for 0.5%
@@ -155,6 +156,7 @@ def deploy(params: DeployParams) -> (address, address, address, address, address
         borrow_token=params.borrow_token,
         collateral_token=params.collateral_token,
         minimum_debt=params.minimum_debt,
+        safe_collateral_ratio=params.safe_collateral_ratio,
         minimum_collateral_ratio=params.minimum_collateral_ratio,
         max_penalty_collateral_ratio=params.max_penalty_collateral_ratio,
         min_liquidation_fee=params.min_liquidation_fee,

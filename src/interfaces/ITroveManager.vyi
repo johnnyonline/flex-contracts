@@ -37,6 +37,7 @@ struct InitializeParams:
     borrow_token: address
     collateral_token: address
     minimum_debt: uint256
+    safe_collateral_ratio: uint256
     minimum_collateral_ratio: uint256
     max_penalty_collateral_ratio: uint256
     min_liquidation_fee: uint256

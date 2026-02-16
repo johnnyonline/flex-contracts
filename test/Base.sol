@@ -40,6 +40,7 @@ abstract contract Base is Deploy, Test {
 
     // Market parameters
     uint256 public minimumDebt = 500; // 500 tokens
+    uint256 public safeCollateralRatio = 115; // 115%
     uint256 public minimumCollateralRatio = 110; // 110%
     uint256 public maxPenaltyCollateralRatio = 105; // 105%
     uint256 public minLiquidationFee = 50; // 0.5%
@@ -88,6 +89,7 @@ abstract contract Base is Deploy, Test {
                 management: management,
                 performance_fee_recipient: performanceFeeRecipient,
                 minimum_debt: minimumDebt,
+                safe_collateral_ratio: safeCollateralRatio,
                 minimum_collateral_ratio: minimumCollateralRatio,
                 max_penalty_collateral_ratio: maxPenaltyCollateralRatio,
                 min_liquidation_fee: minLiquidationFee,

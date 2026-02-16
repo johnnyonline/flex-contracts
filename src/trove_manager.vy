@@ -139,6 +139,7 @@ struct InitializeParams:
     borrow_token: address
     collateral_token: address
     minimum_debt: uint256
+    safe_collateral_ratio: uint256
     minimum_collateral_ratio: uint256
     max_penalty_collateral_ratio: uint256
     min_liquidation_fee: uint256
@@ -179,6 +180,7 @@ collateral_token: public(IERC20)
 one_pct: public(uint256)
 borrow_token_precision: public(uint256)
 min_debt: public(uint256)
+safe_collateral_ratio: public(uint256)
 minimum_collateral_ratio: public(uint256)
 max_penalty_collateral_ratio: public(uint256)
 min_liquidation_fee: public(uint256)
@@ -232,6 +234,7 @@ def initialize(params: InitializeParams):
     self.one_pct = one_pct
     self.borrow_token_precision = borrow_token_precision
     self.min_debt = params.minimum_debt * borrow_token_precision
+    self.safe_collateral_ratio = params.safe_collateral_ratio * one_pct
     self.minimum_collateral_ratio = params.minimum_collateral_ratio * one_pct
     self.max_penalty_collateral_ratio = params.max_penalty_collateral_ratio * one_pct
     self.min_liquidation_fee = params.min_liquidation_fee * one_hundredth_pct
@@ -957,24 +960,26 @@ def close_zombie_trove(trove_id: uint256):
 @external
 def liquidate_trove(
     trove_id: uint256,
-    max_debt_to_decrease: uint256 = max_value(uint256),
+    max_debt_to_repay: uint256 = max_value(uint256),
     receiver: address = msg.sender,
     data: Bytes[_MAX_CALLBACK_DATA_SIZE] = empty(Bytes[_MAX_CALLBACK_DATA_SIZE])
 ) -> uint256:
     """
     @notice Liquidate a single unhealthy Trove (fully or partially)
-    @dev The liquidator repays debt and receives the equivalent collateral plus a dynamic bonus
+    @dev The liquidator repays debt and receives the equivalent collateral plus a dynamic fee
          that scales with the Trove's collateral ratio. If remaining debt would fall below
-         `min_debt`, the entire debt is liquidated. Full liquidations close the Trove and
-         return any excess collateral to the owner. Partial liquidations require the Trove
+         `min_debt`, the entire debt is repaid. Full liquidations close the Trove and
+         transfer any excess collateral to the owner. Partial liquidations require the Trove
          to end up above the minimum collateral ratio. Collateral is sent to the `receiver`
-         first, then, if `data` is non-empty, a `takeCallback` is then invoked on the `receiver`,
+         first, then, if `data` is non-empty, a `takeCallback` is invoked on the `receiver`,
          before debt is pulled
     @param trove_id Unique identifier of the unhealthy Trove
-    @param max_debt_to_decrease The maximum amount of debt to liquidate. Defaults to max uint256
+    @param max_debt_to_repay Upper bound on debt to repay. May be exceeded when remaining
+         debt would fall below `min_debt`, forcing full liquidation. Also capped by the
+         `safe_collateral_ratio` target. Defaults to max uint256
     @param receiver The address that will receive the collateral tokens. Defaults to msg.sender
     @param data The data to pass to the `receiver` callback. Defaults to empty
-    @return The amount of collateral tokens sent to the `receiver`
+    @return The amount of liquidated collateral tokens
     """
     # Make sure the trove ID is non-zero
     assert trove_id != 0, "!trove_id"
@@ -1005,24 +1010,66 @@ def liquidate_trove(
     # Make sure the collateral ratio is below the minimum collateral ratio
     assert collateral_ratio < minimum_collateral_ratio, "!collateral_ratio"
 
-    # Determine the debt amount to decrease:
-    # - Cap at `max_debt_to_decrease`
-    # - If remaining debt would fall below `min_debt`, decrease the entire debt
-    debt_to_decrease: uint256 = min(trove_debt_after_interest, max_debt_to_decrease)
-    if trove_debt_after_interest - debt_to_decrease < self.min_debt:
-        debt_to_decrease = trove_debt_after_interest
+    # Determine the liquidation fee percentage based on the collateral ratio:
+    # - At or above minimum collateral ratio --> minimum fee
+    # - At or below maximum penalty collateral ratio --> maximum fee
+    # - Between the two --> linear interpolation
+    liquidation_fee_pct: uint256 = 0
+    if collateral_ratio >= minimum_collateral_ratio:
+        liquidation_fee_pct = self.min_liquidation_fee
+    elif collateral_ratio <= self.max_penalty_collateral_ratio:
+        liquidation_fee_pct = self.max_liquidation_fee
+    else:
+        min_liquidation_fee: uint256 = self.min_liquidation_fee
+        collateral_ratio_range: uint256 = minimum_collateral_ratio - self.max_penalty_collateral_ratio
+        collateral_ratio_drop: uint256 = minimum_collateral_ratio - collateral_ratio
+        fee_range: uint256 = self.max_liquidation_fee - min_liquidation_fee
+        liquidation_fee_pct = min_liquidation_fee + (fee_range * collateral_ratio_drop // collateral_ratio_range)
 
-    # Calculate the collateral to send to the `receiver`, capped at the Trove's collateral
-    collateral_to_decrease: uint256 = min(
-        self._calculate_collateral_to_decrease(collateral_ratio, debt_to_decrease, collateral_price),
-        trove.collateral,
-    )
+    # Cache the borrow token precision
+    borrow_token_precision: uint256 = self.borrow_token_precision
+
+    # Convert the Trove's collateral to its equivalent in borrow tokens
+    trove_collateral_in_borrow: uint256 = trove.collateral * collateral_price // _PRICE_ORACLE_PRECISION
+
+    # Cache the safe collateral ratio
+    safe_collateral_ratio: uint256 = self.safe_collateral_ratio
+
+    # Calculate the maximum debt to repay to bring the Trove to `safe_collateral_ratio`.
+    #
+    # Derived from setting new_cr = safe_cr after reducing debt by `d` and collateral by `d * (1 + fee)`:
+    #   safe_cr = (cv - d * (1 + fee)) / (D - d)
+    # Solving for `d`:
+    #   d = (safe_cr * D - cv) / (safe_cr - 1 - fee)
+    #
+    # Where cv = trove_collateral_in_borrow, D = trove_debt_after_interest,
+    # and all values are scaled by borrow_token_precision
+    debt_to_repay_for_safe_collateral_ratio: uint256 = (
+        safe_collateral_ratio * trove_debt_after_interest - trove_collateral_in_borrow * borrow_token_precision
+        ) // (safe_collateral_ratio - borrow_token_precision - liquidation_fee_pct)
+
+    # Determine the debt amount to repay:
+    # - Cap at `max_debt_to_repay`
+    # - Cap at the amount that brings the Trove to `safe_collateral_ratio`
+    # - If remaining debt would fall below `min_debt`, repay the entire debt
+    debt_to_repay: uint256 = min(min(trove_debt_after_interest, max_debt_to_repay), debt_to_repay_for_safe_collateral_ratio)
+    if trove_debt_after_interest - debt_to_repay < self.min_debt:
+        debt_to_repay = trove_debt_after_interest
+
+    # Convert the debt to repay to its equivalent in collateral tokens
+    debt_to_repay_in_collateral: uint256 = debt_to_repay * _PRICE_ORACLE_PRECISION // collateral_price
+
+    # Apply the liquidation fee
+    collateral_with_fee: uint256 = debt_to_repay_in_collateral * (borrow_token_precision + liquidation_fee_pct) // borrow_token_precision
+
+    # Determine how much collateral to liquidate, cap at the Trove's collateral
+    collateral_to_liquidate: uint256 = min(collateral_with_fee, trove.collateral)
 
     # Cache the trove owner before the trove is potentially emptied
     trove_owner: address = trove.owner
 
     # Check if this is a full liquidation and cache the result
-    is_full_liquidation: bool = debt_to_decrease == trove_debt_after_interest
+    is_full_liquidation: bool = debt_to_repay == trove_debt_after_interest
 
     # Full liquidation: close the Trove and transfer any remaining collateral to the owner.
     # Partial liquidation: reduce the Trove's debt and collateral and keep it open.
@@ -1049,7 +1096,7 @@ def liquidate_trove(
         # Accrue interest on the total debt and update accounting
         self._accrue_interest_and_account_for_trove_change(
             0,  # debt_increase
-            debt_to_decrease,  # debt_decrease
+            debt_to_repay,  # debt_decrease
             0,  # weighted_debt_increase
             trove_weighted_debt,  # weighted_debt_decrease
         )
@@ -1058,21 +1105,21 @@ def liquidate_trove(
         if is_active:
             extcall self.sorted_troves.remove(trove_id)
 
-        # Calculate the remaining collateral to return to the trove owner (if any)
-        remaining_collateral: uint256 = trove_collateral - collateral_to_decrease
+        # Calculate the remaining collateral to transfer to the Trove owner (if any)
+        remaining_collateral: uint256 = trove_collateral - collateral_to_liquidate
 
-        # If needed, send the remaining collateral tokens to trove owner
+        # If needed, transfer the remaining collateral tokens to Trove owner
         if remaining_collateral > 0:
             assert extcall self.collateral_token.transfer(trove_owner, remaining_collateral, default_return_value=True)
     else:
         # Calculate the new debt amount
-        new_debt: uint256 = trove_debt_after_interest - debt_to_decrease
+        new_debt: uint256 = trove_debt_after_interest - debt_to_repay
 
         # Cache the Trove's old debt for global accounting
         old_debt: uint256 = trove.debt
 
         # Calculate the new collateral amount and collateral ratio
-        new_collateral: uint256 = trove.collateral - collateral_to_decrease
+        new_collateral: uint256 = trove.collateral - collateral_to_liquidate
         new_collateral_ratio: uint256 = self._calculate_collateral_ratio(new_collateral, new_debt, collateral_price)
 
         # Make sure the new collateral ratio is above the minimum collateral ratio
@@ -1087,44 +1134,44 @@ def liquidate_trove(
         self.troves[trove_id] = trove
 
         # Update the contract's recorded collateral balance
-        self.collateral_balance -= collateral_to_decrease
+        self.collateral_balance -= collateral_to_liquidate
 
         # Accrue interest on the total debt and update accounting
         self._accrue_interest_and_account_for_trove_change(
             0,  # debt_increase
-            debt_to_decrease,  # debt_decrease
+            debt_to_repay,  # debt_decrease
             new_debt * trove.annual_interest_rate,  # weighted_debt_increase
             old_debt * trove.annual_interest_rate,  # weighted_debt_decrease
         )
 
-    # Send the collateral tokens to the `receiver`
-    assert extcall self.collateral_token.transfer(receiver, collateral_to_decrease, default_return_value=True)
+    # Transfer the collateral tokens to the `receiver`
+    assert extcall self.collateral_token.transfer(receiver, collateral_to_liquidate, default_return_value=True)
 
     # If the caller provided data, perform the callback
     if len(data) != 0:
         extcall ITaker(receiver).takeCallback(
             trove_id,
             msg.sender,
-            collateral_to_decrease,  # amount_taken
-            debt_to_decrease,  # needed_amount
+            collateral_to_liquidate,  # amount_taken
+            debt_to_repay,  # needed_amount
             data,
         )
 
     # Pull the borrow tokens from caller and transfer them to the Lender contract
-    assert extcall self.borrow_token.transferFrom(msg.sender, self.lender, debt_to_decrease, default_return_value=True)
+    assert extcall self.borrow_token.transferFrom(msg.sender, self.lender, debt_to_repay, default_return_value=True)
 
     # Emit event
     log LiquidateTrove(
         trove_id=trove_id,
         trove_owner=trove_owner,
         liquidator=msg.sender,
-        collateral_amount=collateral_to_decrease,
-        debt_amount=debt_to_decrease,
+        collateral_amount=collateral_to_liquidate,
+        debt_amount=debt_to_repay,
         is_full_liquidation=is_full_liquidation,
     )
 
     # Return the amount of liquidated collateral tokens
-    return collateral_to_decrease
+    return collateral_to_liquidate
 
 
 # ============================================================================================
@@ -1351,51 +1398,6 @@ def _calculate_accrued_interest(weighted_debt: uint256, period: uint256) -> uint
     """
     return weighted_debt * period // _ONE_YEAR // self.borrow_token_precision
 
-
-@internal
-@view
-def _calculate_collateral_to_decrease(
-    collateral_ratio: uint256,
-    debt_to_decrease: uint256,
-    collateral_price: uint256,
-) -> uint256:
-    """
-    @notice Calculate the amount of collateral to decrease from a Trove on a liquidation
-    @dev The liquidator receives the debt-equivalent collateral plus a dynamic bonus.
-         The bonus percentage scales linearly from `min_liquidation_fee` (at minimum collateral ratio) to
-         `max_liquidation_fee` (at `max_penalty_collateral_ratio`), incentivizing
-         earlier liquidation of unhealthy troves.
-         Fee percentages are expressed in borrow token precision (same scale as collateral ratios)
-    @param collateral_ratio The Trove's current collateral ratio
-    @param debt_to_decrease The amount of debt being liquidated
-    @param collateral_price The current collateral price from the oracle
-    @return The amount of collateral tokens to decrease from the Trove (base + bonus)
-    """
-    # Determine the liquidation fee percentage based on the collateral ratio:
-    # - At or above minimum collateral ratio --> minimum fee
-    # - At or below maximum penalty collateral ratio --> maximum fee
-    # - Between the two --> linear interpolation
-    liquidation_fee_pct: uint256 = 0
-    minimum_collateral_ratio: uint256 = self.minimum_collateral_ratio
-    if collateral_ratio >= minimum_collateral_ratio:
-        liquidation_fee_pct = self.min_liquidation_fee
-    elif collateral_ratio <= self.max_penalty_collateral_ratio:
-        liquidation_fee_pct = self.max_liquidation_fee
-    else:
-        min_liquidation_fee: uint256 = self.min_liquidation_fee
-        collateral_ratio_range: uint256 = minimum_collateral_ratio - self.max_penalty_collateral_ratio
-        collateral_ratio_drop: uint256 = minimum_collateral_ratio - collateral_ratio
-        fee_range: uint256 = self.max_liquidation_fee - min_liquidation_fee
-        liquidation_fee_pct = min_liquidation_fee + (fee_range * collateral_ratio_drop // collateral_ratio_range)
-
-    # Cache borrow token precision, as `liquidation_fee_pct` is in the same scale
-    liquidation_fee_precision: uint256 = self.borrow_token_precision
-
-    # Convert the debt to its equivalent in collateral tokens
-    base_collateral: uint256 = debt_to_decrease * _PRICE_ORACLE_PRECISION // collateral_price
-
-    # Apply the liquidation bonus
-    return base_collateral * (liquidation_fee_precision + liquidation_fee_pct) // liquidation_fee_precision
 
 
 @internal

@@ -43,6 +43,7 @@ interface ITroveManager {
         address borrow_token;
         address collateral_token;
         uint256 minimum_debt;
+        uint256 safe_collateral_ratio;
         uint256 minimum_collateral_ratio;
         uint256 max_penalty_collateral_ratio;
         uint256 min_liquidation_fee;
@@ -69,6 +70,7 @@ interface ITroveManager {
     function one_pct() external view returns (uint256);
     function borrow_token_precision() external view returns (uint256);
     function min_debt() external view returns (uint256);
+    function safe_collateral_ratio() external view returns (uint256);
     function minimum_collateral_ratio() external view returns (uint256);
     function max_penalty_collateral_ratio() external view returns (uint256);
     function min_liquidation_fee() external view returns (uint256);
@@ -190,7 +192,7 @@ interface ITroveManager {
 
     function liquidate_trove(
         uint256 trove_id,
-        uint256 max_amount,
+        uint256 max_debt_to_repay,
         address receiver,
         bytes calldata data
     ) external returns (uint256);

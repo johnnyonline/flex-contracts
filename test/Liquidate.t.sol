@@ -26,7 +26,8 @@ contract LiquidateTests is Base {
     function test_liquidateTrove(
         uint256 _amount
     ) public {
-        _amount = bound(_amount, troveManager.min_debt(), maxFuzzAmount);
+        // Bound near min_debt to ensure safe CR cap + min_debt check forces full liquidation
+        _amount = bound(_amount, troveManager.min_debt(), troveManager.min_debt() * 13 / 10);
 
         // Lend some from lender
         mintAndDepositIntoLender(userLender, _amount);
@@ -171,7 +172,8 @@ contract LiquidateTests is Base {
     function test_liquidateTroves(
         uint256 _amount
     ) public {
-        _amount = bound(_amount, troveManager.min_debt() * 2, maxFuzzAmount);
+        // Bound near min_debt to ensure safe CR cap + min_debt check forces full liquidation per trove
+        _amount = bound(_amount, troveManager.min_debt() * 2, troveManager.min_debt() * 26 / 10);
 
         // Lend some from lender
         mintAndDepositIntoLender(userLender, _amount);
@@ -402,7 +404,8 @@ contract LiquidateTests is Base {
     function test_liquidateTroves_sequentialLiquidations(
         uint256 _amount
     ) public {
-        _amount = bound(_amount, troveManager.min_debt() * 2, maxFuzzAmount);
+        // Bound near min_debt to ensure safe CR cap + min_debt check forces full liquidation per trove
+        _amount = bound(_amount, troveManager.min_debt() * 2, troveManager.min_debt() * 26 / 10);
 
         // Lend some from lender
         mintAndDepositIntoLender(userLender, _amount);
@@ -664,7 +667,8 @@ contract LiquidateTests is Base {
     function test_liquidateTrove_partialBecomesFullBelowMinDebt(
         uint256 _amount
     ) public {
-        _amount = bound(_amount, troveManager.min_debt(), maxFuzzAmount);
+        // Bound near min_debt to ensure safe CR cap doesn't override the explicit partial amount
+        _amount = bound(_amount, troveManager.min_debt(), troveManager.min_debt() * 13 / 10);
 
         mintAndDepositIntoLender(userLender, _amount);
 
@@ -770,6 +774,217 @@ contract LiquidateTests is Base {
         uint256 _gasUsed = _gasBefore - gasleft();
 
         console2.log("Gas used to liquidate 1 trove:", _gasUsed);
+    }
+
+    // Passing max_debt_to_repay = type(uint256).max should cap the liquidation at safe CR
+    // --> trove stays open with CR ≈ safe_collateral_ratio
+    function test_liquidateTrove_capsAtSafeCR(
+        uint256 _amount
+    ) public {
+        _amount = bound(_amount, troveManager.min_debt() * 4, maxFuzzAmount);
+
+        mintAndDepositIntoLender(userLender, _amount);
+
+        uint256 _collateralNeeded =
+            (_amount * DEFAULT_TARGET_COLLATERAL_RATIO / BORROW_TOKEN_PRECISION) * ORACLE_PRICE_SCALE / priceOracle.get_price();
+
+        uint256 _troveId = mintAndOpenTrove(userBorrower, _collateralNeeded, _amount, DEFAULT_ANNUAL_INTEREST_RATE);
+
+        ITroveManager.Trove memory _trove = troveManager.troves(_troveId);
+
+        // Drop price to 1% below MCR
+        uint256 _price;
+        if (BORROW_TOKEN_PRECISION < COLLATERAL_TOKEN_PRECISION) {
+            _price =
+                troveManager.minimum_collateral_ratio() * _trove.debt * ORACLE_PRICE_SCALE * 99 / (100 * _trove.collateral * BORROW_TOKEN_PRECISION);
+        } else {
+            _price =
+                troveManager.minimum_collateral_ratio() * _trove.debt / (100 * _trove.collateral) * ORACLE_PRICE_SCALE / BORROW_TOKEN_PRECISION * 99;
+        }
+        vm.mockCall(address(priceOracle), abi.encodeWithSelector(IPriceOracleScaled.get_price.selector), abi.encode(_price));
+        vm.mockCall(
+            address(priceOracle),
+            abi.encodeWithSelector(IPriceOracleNotScaled.get_price.selector, false),
+            abi.encode(_price * COLLATERAL_TOKEN_PRECISION * WAD / (ORACLE_PRICE_SCALE * BORROW_TOKEN_PRECISION))
+        );
+
+        uint256 _crBefore = (_trove.collateral * _price / ORACLE_PRICE_SCALE) * BORROW_TOKEN_PRECISION / _trove.debt;
+        assertLt(_crBefore, troveManager.minimum_collateral_ratio(), "E0");
+
+        // Liquidate with max_debt = type(uint256).max --> should be capped at safe CR
+        liquidate(_troveId);
+
+        // Trove should still be active (partial liquidation, not full)
+        ITroveManager.Trove memory _troveAfter = troveManager.troves(_troveId);
+        assertEq(uint256(_troveAfter.status), uint256(ITroveManager.Status.active), "E1");
+        assertGt(_troveAfter.debt, 0, "E2");
+        assertGt(_troveAfter.collateral, 0, "E3");
+
+        // CR should have improved
+        uint256 _crAfter = (_troveAfter.collateral * _price / ORACLE_PRICE_SCALE) * BORROW_TOKEN_PRECISION / _troveAfter.debt;
+        assertGt(_crAfter, _crBefore, "E4");
+
+        // CR should be approximately equal to safe_collateral_ratio
+        assertApproxEqRel(_crAfter, troveManager.safe_collateral_ratio(), 1e16, "E5"); // 1% tolerance
+
+        // CR should be above MCR
+        assertGe(_crAfter, troveManager.minimum_collateral_ratio(), "E6");
+
+        // Trove still in sorted list
+        assertTrue(sortedTroves.contains(_troveId), "E7");
+
+        // Trove owner did not receive collateral (partial liquidation)
+        assertEq(collateralToken.balanceOf(userBorrower), 0, "E8");
+    }
+
+    // When max_debt_to_repay < safe CR cap, the smaller value is used
+    function test_liquidateTrove_maxDebtRespectedBelowSafeCRCap(
+        uint256 _amount
+    ) public {
+        _amount = bound(_amount, troveManager.min_debt() * 4, maxFuzzAmount);
+
+        mintAndDepositIntoLender(userLender, _amount);
+
+        uint256 _collateralNeeded =
+            (_amount * DEFAULT_TARGET_COLLATERAL_RATIO / BORROW_TOKEN_PRECISION) * ORACLE_PRICE_SCALE / priceOracle.get_price();
+
+        uint256 _troveId = mintAndOpenTrove(userBorrower, _collateralNeeded, _amount, DEFAULT_ANNUAL_INTEREST_RATE);
+
+        ITroveManager.Trove memory _trove = troveManager.troves(_troveId);
+
+        // Drop price to 1% below MCR
+        uint256 _price;
+        if (BORROW_TOKEN_PRECISION < COLLATERAL_TOKEN_PRECISION) {
+            _price =
+                troveManager.minimum_collateral_ratio() * _trove.debt * ORACLE_PRICE_SCALE * 99 / (100 * _trove.collateral * BORROW_TOKEN_PRECISION);
+        } else {
+            _price =
+                troveManager.minimum_collateral_ratio() * _trove.debt / (100 * _trove.collateral) * ORACLE_PRICE_SCALE / BORROW_TOKEN_PRECISION * 99;
+        }
+        vm.mockCall(address(priceOracle), abi.encodeWithSelector(IPriceOracleScaled.get_price.selector), abi.encode(_price));
+        vm.mockCall(
+            address(priceOracle),
+            abi.encodeWithSelector(IPriceOracleNotScaled.get_price.selector, false),
+            abi.encode(_price * COLLATERAL_TOKEN_PRECISION * WAD / (ORACLE_PRICE_SCALE * BORROW_TOKEN_PRECISION))
+        );
+
+        // Liquidate a small amount (1/4 of debt) -- less than what safe CR would allow
+        uint256 _smallDebt = _trove.debt / 4;
+        uint256 _crBefore = (_trove.collateral * _price / ORACLE_PRICE_SCALE) * BORROW_TOKEN_PRECISION / _trove.debt;
+        uint256 _expectedCollateral = calculateCollateralToDecrease(_crBefore, _smallDebt, _price, _trove.collateral);
+
+        liquidatorMock.liquidate(_troveId, _smallDebt);
+
+        // Trove should be active with exactly the requested debt removed
+        ITroveManager.Trove memory _troveAfter = troveManager.troves(_troveId);
+        assertEq(uint256(_troveAfter.status), uint256(ITroveManager.Status.active), "E0");
+        assertEq(_troveAfter.debt, _trove.debt - _smallDebt, "E1");
+        assertEq(_troveAfter.collateral, _trove.collateral - _expectedCollateral, "E2");
+
+        // CR should have improved
+        uint256 _crAfter = (_troveAfter.collateral * _price / ORACLE_PRICE_SCALE) * BORROW_TOKEN_PRECISION / _troveAfter.debt;
+        assertGt(_crAfter, _crBefore, "E3");
+
+        // CR should be below safe CR (we didn't liquidate enough to reach it)
+        assertLt(_crAfter, troveManager.safe_collateral_ratio(), "E4");
+
+        // But still above MCR
+        assertGe(_crAfter, troveManager.minimum_collateral_ratio(), "E5");
+    }
+
+    // When safe CR cap + min_debt check forces full liquidation
+    function test_liquidateTrove_safeCRCapForcesFullViaMinDebt(
+        uint256 _amount
+    ) public {
+        _amount = bound(_amount, troveManager.min_debt(), troveManager.min_debt() * 13 / 10);
+
+        mintAndDepositIntoLender(userLender, _amount);
+
+        uint256 _collateralNeeded =
+            (_amount * DEFAULT_TARGET_COLLATERAL_RATIO / BORROW_TOKEN_PRECISION) * ORACLE_PRICE_SCALE / priceOracle.get_price();
+
+        uint256 _troveId = mintAndOpenTrove(userBorrower, _collateralNeeded, _amount, DEFAULT_ANNUAL_INTEREST_RATE);
+
+        ITroveManager.Trove memory _trove = troveManager.troves(_troveId);
+
+        // Drop price to 1% below MCR
+        uint256 _price;
+        if (BORROW_TOKEN_PRECISION < COLLATERAL_TOKEN_PRECISION) {
+            _price =
+                troveManager.minimum_collateral_ratio() * _trove.debt * ORACLE_PRICE_SCALE * 99 / (100 * _trove.collateral * BORROW_TOKEN_PRECISION);
+        } else {
+            _price =
+                troveManager.minimum_collateral_ratio() * _trove.debt / (100 * _trove.collateral) * ORACLE_PRICE_SCALE / BORROW_TOKEN_PRECISION * 99;
+        }
+        vm.mockCall(address(priceOracle), abi.encodeWithSelector(IPriceOracleScaled.get_price.selector), abi.encode(_price));
+        vm.mockCall(
+            address(priceOracle),
+            abi.encodeWithSelector(IPriceOracleNotScaled.get_price.selector, false),
+            abi.encode(_price * COLLATERAL_TOKEN_PRECISION * WAD / (ORACLE_PRICE_SCALE * BORROW_TOKEN_PRECISION))
+        );
+
+        // Liquidate with max --> safe CR cap would leave remaining debt below min_debt --> forced full
+        liquidate(_troveId);
+
+        // Trove should be fully liquidated
+        ITroveManager.Trove memory _troveAfter = troveManager.troves(_troveId);
+        assertEq(uint256(_troveAfter.status), uint256(ITroveManager.Status.liquidated), "E0");
+        assertEq(_troveAfter.debt, 0, "E1");
+        assertEq(_troveAfter.collateral, 0, "E2");
+
+        // Trove owner received remaining collateral
+        assertGt(collateralToken.balanceOf(userBorrower), 0, "E3");
+
+        // Trove removed from sorted list
+        assertFalse(sortedTroves.contains(_troveId), "E4");
+    }
+
+    // Bad debt scenario: CR < 100% + fee --> safe CR formula returns > total debt --> full liquidation
+    function test_liquidateTrove_badDebtFullLiquidation(
+        uint256 _amount
+    ) public {
+        _amount = bound(_amount, troveManager.min_debt(), maxFuzzAmount);
+
+        mintAndDepositIntoLender(userLender, _amount);
+
+        uint256 _collateralNeeded =
+            (_amount * DEFAULT_TARGET_COLLATERAL_RATIO / BORROW_TOKEN_PRECISION) * ORACLE_PRICE_SCALE / priceOracle.get_price();
+
+        uint256 _troveId = mintAndOpenTrove(userBorrower, _collateralNeeded, _amount, DEFAULT_ANNUAL_INTEREST_RATE);
+
+        ITroveManager.Trove memory _trove = troveManager.troves(_troveId);
+
+        // Drop price dramatically to put CR below 100% (bad debt)
+        // Target CR ≈ 98%
+        uint256 _price = 98 * troveManager.one_pct() * _trove.debt * ORACLE_PRICE_SCALE / (_trove.collateral * BORROW_TOKEN_PRECISION);
+        vm.mockCall(address(priceOracle), abi.encodeWithSelector(IPriceOracleScaled.get_price.selector), abi.encode(_price));
+        vm.mockCall(
+            address(priceOracle),
+            abi.encodeWithSelector(IPriceOracleNotScaled.get_price.selector, false),
+            abi.encode(_price * COLLATERAL_TOKEN_PRECISION * WAD / (ORACLE_PRICE_SCALE * BORROW_TOKEN_PRECISION))
+        );
+
+        // Verify CR is below 100%
+        uint256 _cr = (_trove.collateral * _price / ORACLE_PRICE_SCALE) * BORROW_TOKEN_PRECISION / _trove.debt;
+        assertLt(_cr, BORROW_TOKEN_PRECISION, "E0");
+
+        // Liquidate --> safe CR formula returns > total debt --> min() caps at total debt --> full liquidation
+        liquidate(_troveId);
+
+        // Trove should be fully liquidated
+        ITroveManager.Trove memory _troveAfter = troveManager.troves(_troveId);
+        assertEq(uint256(_troveAfter.status), uint256(ITroveManager.Status.liquidated), "E1");
+        assertEq(_troveAfter.debt, 0, "E2");
+        assertEq(_troveAfter.collateral, 0, "E3");
+
+        // Liquidator gets all collateral (bad debt means collateral_with_fee > trove.collateral)
+        assertEq(collateralToken.balanceOf(address(liquidatorMock)), _trove.collateral, "E4");
+
+        // Trove owner gets nothing (all collateral went to liquidator)
+        assertEq(collateralToken.balanceOf(userBorrower), 0, "E5");
+
+        // Trove removed from sorted list
+        assertFalse(sortedTroves.contains(_troveId), "E6");
     }
 
 }
