@@ -37,15 +37,19 @@ interface ITroveManager {
 
     struct InitializeParams {
         address lender;
-        address dutchDesk;
-        address priceOracle;
-        address sortedTroves;
-        address borrowToken;
-        address collateralToken;
-        uint256 minimumDebt;
-        uint256 minimumCollateralRatio;
-        uint256 upfrontInterestPeriod;
-        uint256 interestRateAdjCooldown;
+        address dutch_desk;
+        address price_oracle;
+        address sorted_troves;
+        address borrow_token;
+        address collateral_token;
+        uint256 minimum_debt;
+        uint256 safe_collateral_ratio;
+        uint256 minimum_collateral_ratio;
+        uint256 max_penalty_collateral_ratio;
+        uint256 min_liquidation_fee;
+        uint256 max_liquidation_fee;
+        uint256 upfront_interest_period;
+        uint256 interest_rate_adj_cooldown;
     }
 
     // ============================================================================================
@@ -66,7 +70,11 @@ interface ITroveManager {
     function one_pct() external view returns (uint256);
     function borrow_token_precision() external view returns (uint256);
     function min_debt() external view returns (uint256);
+    function safe_collateral_ratio() external view returns (uint256);
     function minimum_collateral_ratio() external view returns (uint256);
+    function max_penalty_collateral_ratio() external view returns (uint256);
+    function min_liquidation_fee() external view returns (uint256);
+    function max_liquidation_fee() external view returns (uint256);
     function upfront_interest_period() external view returns (uint256);
     function interest_rate_adj_cooldown() external view returns (uint256);
     function min_annual_interest_rate() external view returns (uint256);
@@ -182,9 +190,12 @@ interface ITroveManager {
     // Liquidate trove
     // ============================================================================================
 
-    function liquidate_troves(
-        uint256[20] calldata trove_ids
-    ) external;
+    function liquidate_trove(
+        uint256 trove_id,
+        uint256 max_debt_to_repay,
+        address receiver,
+        bytes calldata data
+    ) external returns (uint256);
 
     // ============================================================================================
     // Redeem

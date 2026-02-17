@@ -36,7 +36,7 @@ struct Trove:
 
 _ROOT_TROVE_ID: constant(uint256) = 0
 _BAD_HINT: constant(uint256) = 0
-_MAX_TROVES: constant(uint256) = 10000
+_MAX_TROVES: constant(uint256) = 10_000
 
 
 # ============================================================================================

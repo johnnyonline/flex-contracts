@@ -42,14 +42,16 @@ struct DeployParams:
     management: address  # address of the management
     performance_fee_recipient: address  # address of the performance fee recipient
     minimum_debt: uint256  # minimum borrowable amount, e.g., `500 * borrow_token_precision` for 500 tokens
-    minimum_collateral_ratio: uint256  # minimum CR to avoid liquidation, e.g., `110 * one_pct` for 110%
+    safe_collateral_ratio: uint256  # target CR after partial liquidation, e.g., `115` for 115%. must be greater than `100% + max_liquidation_fee` to avoid underflow in the safe CR calculation
+    minimum_collateral_ratio: uint256  # minimum CR to avoid liquidation, e.g., `110` for 110%
+    max_penalty_collateral_ratio: uint256  # CR at which max liquidation fee applies, e.g., `105` for 105%
+    min_liquidation_fee: uint256  # minimum liquidation fee in hundredths of a percent, e.g., `50` for 0.5%
+    max_liquidation_fee: uint256  # maximum liquidation fee in hundredths of a percent, e.g., `500` for 5%
     upfront_interest_period: uint256  # duration for upfront interest charges, e.g., `7 * 24 * 60 * 60` for 7 days
     interest_rate_adj_cooldown: uint256  # cooldown between rate adjustments, e.g., `7 * 24 * 60 * 60` for 7 days
-    redemption_minimum_price_buffer_percentage: uint256  # redemption auction minimum price buffer, e.g. `WAD - 5 * 10 ** 16` for 5% below oracle price
-    redemption_starting_price_buffer_percentage: uint256  # redemption auction starting price buffer, e.g. `WAD + 1 * 10 ** 16` for 1% above oracle price. must be >= max oracle deviation from market price to ensure the starting auction price is always above market price, preventing value extraction from oracle lag
-    redemption_re_kick_starting_price_buffer_percentage: uint256  # redemption auction re-kick price buffer, e.g. `WAD + 5 * 10 ** 16` for 5% above oracle price
-    liquidation_minimum_price_buffer_percentage: uint256  # liquidation auction minimum price buffer, e.g. `WAD - 10 * 10 ** 16` for 10% below oracle price
-    liquidation_starting_price_buffer_percentage: uint256  # liquidation auction starting price buffer, e.g., `WAD - 1 * 10 ** 16` for 1% below oracle price
+    minimum_price_buffer_percentage: uint256  # auction minimum price buffer, e.g. `WAD - 5 * 10 ** 16` for 5% below oracle price
+    starting_price_buffer_percentage: uint256  # auction starting price buffer, e.g. `WAD + 1 * 10 ** 16` for 1% above oracle price. must be >= max oracle deviation from market price to ensure the starting auction price is always above market price, preventing value extraction from oracle lag
+    re_kick_starting_price_buffer_percentage: uint256  # auction re-kick price buffer, e.g. `WAD + 5 * 10 ** 16` for 5% above oracle price
     step_duration: uint256  # duration of each price step, e.g., `60` for price change every minute
     step_decay_rate: uint256  # decay rate per step, e.g., `50` for 0.5% decrease per step
     auction_length: uint256  # total auction duration in seconds, e.g., `86400` for 1 day
@@ -70,10 +72,6 @@ LENDER_FACTORY: public(immutable(ILenderFactory))
 
 # Version
 VERSION: public(constant(String[28])) = "1.0.0"
-
-# Utils
-_WAD: constant(uint256) = 10 ** 18
-_MAX_TOKEN_DECIMALS: constant(uint256) = 18
 
 
 # ============================================================================================
@@ -120,17 +118,6 @@ def deploy(params: DeployParams) -> (address, address, address, address, address
     @return auction Address of the deployed Auction contract
     @return lender Address of the deployed Lender contract
     """
-    # Make sure borrow and collateral tokens are different
-    assert params.borrow_token != params.collateral_token, "!tokens"
-
-    # Borrow token cannot have more than 18 decimals
-    borrow_token_decimals: uint256 = convert(staticcall IERC20Detailed(params.borrow_token).decimals(), uint256)
-    assert borrow_token_decimals <= _MAX_TOKEN_DECIMALS, "!borrow_token_decimals"
-
-    # Collateral token cannot have more than 18 decimals
-    collateral_token_decimals: uint256 = convert(staticcall IERC20Detailed(params.collateral_token).decimals(), uint256)
-    assert collateral_token_decimals <= _MAX_TOKEN_DECIMALS, "!collateral_token_decimals"
-
     # Compute the salt value
     salt: bytes32 = keccak256(abi_encode(msg.sender, params.salt, params.collateral_token, params.borrow_token))
 
@@ -154,7 +141,6 @@ def deploy(params: DeployParams) -> (address, address, address, address, address
     # Deploy the Lender contract via the Lender Factory
     lender: address = extcall LENDER_FACTORY.deploy(
         params.borrow_token,
-        auction,
         trove_manager,
         params.management,
         params.performance_fee_recipient,
@@ -170,7 +156,11 @@ def deploy(params: DeployParams) -> (address, address, address, address, address
         borrow_token=params.borrow_token,
         collateral_token=params.collateral_token,
         minimum_debt=params.minimum_debt,
+        safe_collateral_ratio=params.safe_collateral_ratio,
         minimum_collateral_ratio=params.minimum_collateral_ratio,
+        max_penalty_collateral_ratio=params.max_penalty_collateral_ratio,
+        min_liquidation_fee=params.min_liquidation_fee,
+        max_liquidation_fee=params.max_liquidation_fee,
         upfront_interest_period=params.upfront_interest_period,
         interest_rate_adj_cooldown=params.interest_rate_adj_cooldown,
     ))
@@ -186,11 +176,9 @@ def deploy(params: DeployParams) -> (address, address, address, address, address
         auction=auction,
         borrow_token=params.borrow_token,
         collateral_token=params.collateral_token,
-        redemption_minimum_price_buffer_percentage=params.redemption_minimum_price_buffer_percentage,
-        redemption_starting_price_buffer_percentage=params.redemption_starting_price_buffer_percentage,
-        redemption_re_kick_starting_price_buffer_percentage=params.redemption_re_kick_starting_price_buffer_percentage,
-        liquidation_minimum_price_buffer_percentage=params.liquidation_minimum_price_buffer_percentage,
-        liquidation_starting_price_buffer_percentage=params.liquidation_starting_price_buffer_percentage,
+        minimum_price_buffer_percentage=params.minimum_price_buffer_percentage,
+        starting_price_buffer_percentage=params.starting_price_buffer_percentage,
+        re_kick_starting_price_buffer_percentage=params.re_kick_starting_price_buffer_percentage,
     ))
 
     # Initialize the Auction contract

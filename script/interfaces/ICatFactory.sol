@@ -8,23 +8,25 @@ interface ICatFactory {
     // ============================================================================================
 
     struct DeployParams {
-        address borrowToken;
-        address collateralToken;
-        address priceOracle;
+        address borrow_token;
+        address collateral_token;
+        address price_oracle;
         address management;
-        address performanceFeeRecipient;
-        uint256 minimumDebt;
-        uint256 minimumCollateralRatio;
-        uint256 upfrontInterestPeriod;
-        uint256 interestRateAdjCooldown;
-        uint256 redemptionMinimumPriceBufferPercentage;
-        uint256 redemptionStartingPriceBufferPercentage;
-        uint256 redemptionReKickStartingPriceBufferPercentage;
-        uint256 liquidationMinimumPriceBufferPercentage;
-        uint256 liquidationStartingPriceBufferPercentage;
-        uint256 stepDuration;
-        uint256 stepDecayRate;
-        uint256 auctionLength;
+        address performance_fee_recipient;
+        uint256 minimum_debt;
+        uint256 safe_collateral_ratio;
+        uint256 minimum_collateral_ratio;
+        uint256 max_penalty_collateral_ratio;
+        uint256 min_liquidation_fee;
+        uint256 max_liquidation_fee;
+        uint256 upfront_interest_period;
+        uint256 interest_rate_adj_cooldown;
+        uint256 minimum_price_buffer_percentage;
+        uint256 starting_price_buffer_percentage;
+        uint256 re_kick_starting_price_buffer_percentage;
+        uint256 step_duration;
+        uint256 step_decay_rate;
+        uint256 auction_length;
         bytes32 salt;
     }
 

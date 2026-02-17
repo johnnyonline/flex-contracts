@@ -28,7 +28,6 @@ contract AuctionTests is Base {
         assertEq(auction.step_duration(), stepDuration, "E5");
         assertEq(auction.step_decay_rate(), stepDecayRate, "E6");
         assertEq(auction.auction_length(), auctionLength, "E7");
-        assertEq(auction.liquidation_auctions(), 0, "E8");
     }
 
     function test_initialize_revertsIfAlreadyInitialized() public {
@@ -36,11 +35,11 @@ contract AuctionTests is Base {
         auction.initialize(
             IAuction.InitializeParams({
                 papi: address(dutchDesk),
-                buyToken: address(borrowToken),
-                sellToken: address(collateralToken),
-                stepDuration: stepDuration,
-                stepDecayRate: stepDecayRate,
-                auctionLength: auctionLength
+                buy_token: address(borrowToken),
+                sell_token: address(collateralToken),
+                step_duration: stepDuration,
+                step_decay_rate: stepDecayRate,
+                auction_length: auctionLength
             })
         );
     }
@@ -62,49 +61,21 @@ contract AuctionTests is Base {
 
         // Kick auction as dutchDesk
         vm.prank(address(dutchDesk));
-        auction.kick(_auctionId, _kickAmount, _maximumAmount, _startingPrice, _minimumPrice, userLender, address(lender), false);
+        auction.kick(_auctionId, _kickAmount, _maximumAmount, _startingPrice, _minimumPrice, userLender, address(lender));
 
         // Check auction state
         assertTrue(auction.is_active(_auctionId), "E0");
         IAuction.AuctionInfo memory auctionInfo = auction.auctions(_auctionId);
-        assertEq(auctionInfo.kickTimestamp, block.timestamp, "E1");
-        assertEq(auctionInfo.initialAmount, _kickAmount, "E2");
-        assertEq(auctionInfo.currentAmount, _kickAmount, "E3");
-        assertEq(auctionInfo.maximumAmount, _maximumAmount, "E4");
-        assertEq(auctionInfo.amountReceived, 0, "E5");
-        assertEq(auctionInfo.startingPrice, _startingPrice, "E6");
-        assertEq(auctionInfo.minimumPrice, _minimumPrice, "E7");
+        assertEq(auctionInfo.kick_timestamp, block.timestamp, "E1");
+        assertEq(auctionInfo.initial_amount, _kickAmount, "E2");
+        assertEq(auctionInfo.current_amount, _kickAmount, "E3");
+        assertEq(auctionInfo.maximum_amount, _maximumAmount, "E4");
+        assertEq(auctionInfo.amount_received, 0, "E5");
+        assertEq(auctionInfo.starting_price, _startingPrice, "E6");
+        assertEq(auctionInfo.minimum_price, _minimumPrice, "E7");
         assertEq(auctionInfo.receiver, userLender, "E8");
-        assertEq(auctionInfo.surplusReceiver, address(lender), "E9");
-        assertFalse(auctionInfo.isLiquidation, "E10");
-        assertFalse(auction.is_ongoing_liquidation_auction(), "E11");
-        assertEq(auction.liquidation_auctions(), 0, "E12");
-        assertEq(collateralToken.balanceOf(address(auction)), _kickAmount, "E13");
-    }
-
-    function test_kick_liquidation(
-        uint256 _auctionId,
-        uint256 _kickAmount,
-        uint256 _startingPrice,
-        uint256 _minimumPrice
-    ) public {
-        _kickAmount = bound(_kickAmount, minFuzzAmount, maxFuzzAmount);
-        _startingPrice = bound(_startingPrice, _kickAmount * 1e18, _kickAmount * 100e18);
-        _minimumPrice = bound(_minimumPrice, 1, _startingPrice / _kickAmount);
-
-        // Airdrop collateral to dutchDesk
-        airdrop(address(collateralToken), address(dutchDesk), _kickAmount);
-
-        // Kick liquidation auction (maximum_amount=0 for liquidations since all goes to receiver anyway)
-        vm.prank(address(dutchDesk));
-        auction.kick(_auctionId, _kickAmount, 0, _startingPrice, _minimumPrice, address(lender), address(lender), true);
-
-        // Check liquidation state
-        assertTrue(auction.is_active(_auctionId), "E0");
-        assertTrue(auction.auctions(_auctionId).isLiquidation, "E1");
-        assertTrue(auction.is_ongoing_liquidation_auction(), "E2");
-        assertEq(auction.liquidation_auctions(), 1, "E3");
-        assertEq(auction.auctions(_auctionId).receiver, address(lender), "E4");
+        assertEq(auctionInfo.surplus_receiver, address(lender), "E9");
+        assertEq(collateralToken.balanceOf(address(auction)), _kickAmount, "E10");
     }
 
     function test_kick_notPapi(
@@ -120,7 +91,7 @@ contract AuctionTests is Base {
         // Should revert when called by non-PAPI
         vm.prank(userBorrower);
         vm.expectRevert("!papi");
-        auction.kick(_auctionId, _kickAmount, 0, _startingPrice, _minimumPrice, userLender, address(lender), false);
+        auction.kick(_auctionId, _kickAmount, 0, _startingPrice, _minimumPrice, userLender, address(lender));
     }
 
     function test_kick_zeroAmount(
@@ -128,7 +99,7 @@ contract AuctionTests is Base {
     ) public {
         vm.prank(address(dutchDesk));
         vm.expectRevert("!kick_amount");
-        auction.kick(_auctionId, 0, 0, 1e18, 1e17, userLender, address(lender), false);
+        auction.kick(_auctionId, 0, 0, 1e18, 1e17, userLender, address(lender));
     }
 
     function test_kick_zeroStartingPrice(
@@ -139,7 +110,7 @@ contract AuctionTests is Base {
 
         vm.prank(address(dutchDesk));
         vm.expectRevert("!starting_price");
-        auction.kick(_auctionId, _kickAmount, 0, 0, 1e17, userLender, address(lender), false);
+        auction.kick(_auctionId, _kickAmount, 0, 0, 1e17, userLender, address(lender));
     }
 
     function test_kick_zeroMinimumPrice(
@@ -152,7 +123,7 @@ contract AuctionTests is Base {
 
         vm.prank(address(dutchDesk));
         vm.expectRevert("!minimum_price");
-        auction.kick(_auctionId, _kickAmount, 0, _startingPrice, 0, userLender, address(lender), false);
+        auction.kick(_auctionId, _kickAmount, 0, _startingPrice, 0, userLender, address(lender));
     }
 
     function test_kick_zeroReceiver(
@@ -167,7 +138,7 @@ contract AuctionTests is Base {
 
         vm.prank(address(dutchDesk));
         vm.expectRevert("!receiver");
-        auction.kick(_auctionId, _kickAmount, 0, _startingPrice, _minimumPrice, address(0), address(lender), false);
+        auction.kick(_auctionId, _kickAmount, 0, _startingPrice, _minimumPrice, address(0), address(lender));
     }
 
     function test_kick_zeroSurplusReceiver(
@@ -182,7 +153,7 @@ contract AuctionTests is Base {
 
         vm.prank(address(dutchDesk));
         vm.expectRevert("!surplus_receiver");
-        auction.kick(_auctionId, _kickAmount, 0, _startingPrice, _minimumPrice, userLender, address(0), false);
+        auction.kick(_auctionId, _kickAmount, 0, _startingPrice, _minimumPrice, userLender, address(0));
     }
 
     function test_kick_auctionAlreadyActive(
@@ -196,12 +167,12 @@ contract AuctionTests is Base {
 
         // First kick succeeds
         vm.prank(address(dutchDesk));
-        auction.kick(_auctionId, _kickAmount, 0, _kickAmount * 1e18, 1e17, userLender, address(lender), false);
+        auction.kick(_auctionId, _kickAmount, 0, _kickAmount * 1e18, 1e17, userLender, address(lender));
 
         // Second kick on same ID should revert
         vm.prank(address(dutchDesk));
         vm.expectRevert("active");
-        auction.kick(_auctionId, _kickAmount, 0, _kickAmount * 1e18, 1e17, userLender, address(lender), false);
+        auction.kick(_auctionId, _kickAmount, 0, _kickAmount * 1e18, 1e17, userLender, address(lender));
     }
 
     function test_reKick(
@@ -213,7 +184,7 @@ contract AuctionTests is Base {
         // Airdrop and kick
         airdrop(address(collateralToken), address(dutchDesk), _kickAmount);
         vm.prank(address(dutchDesk));
-        auction.kick(_auctionId, _kickAmount, 0, _kickAmount * 1e18, 1e17, userLender, address(lender), false);
+        auction.kick(_auctionId, _kickAmount, 0, _kickAmount * 1e18, 1e17, userLender, address(lender));
 
         // Skip past auction duration so it becomes inactive
         skip(auction.auction_length() + 1);
@@ -229,10 +200,10 @@ contract AuctionTests is Base {
         // Verify auction is active again with updated prices
         assertTrue(auction.is_active(_auctionId), "E2");
         IAuction.AuctionInfo memory auctionInfo = auction.auctions(_auctionId);
-        assertEq(auctionInfo.currentAmount, _kickAmount, "E3");
-        assertEq(auctionInfo.kickTimestamp, block.timestamp, "E4");
-        assertEq(auctionInfo.startingPrice, _kickAmount * 1e18, "E5");
-        assertEq(auctionInfo.minimumPrice, 1e17, "E6");
+        assertEq(auctionInfo.current_amount, _kickAmount, "E3");
+        assertEq(auctionInfo.kick_timestamp, block.timestamp, "E4");
+        assertEq(auctionInfo.starting_price, _kickAmount * 1e18, "E5");
+        assertEq(auctionInfo.minimum_price, 1e17, "E6");
     }
 
     function test_reKick_notPapi(
@@ -252,7 +223,7 @@ contract AuctionTests is Base {
         // Airdrop and kick
         airdrop(address(collateralToken), address(dutchDesk), _kickAmount);
         vm.prank(address(dutchDesk));
-        auction.kick(_auctionId, _kickAmount, 0, _kickAmount * 1e18, 1e17, userLender, address(lender), false);
+        auction.kick(_auctionId, _kickAmount, 0, _kickAmount * 1e18, 1e17, userLender, address(lender));
 
         // Try to re-kick while still active - should revert
         vm.prank(address(dutchDesk));
@@ -278,7 +249,7 @@ contract AuctionTests is Base {
         // Airdrop and kick
         airdrop(address(collateralToken), address(dutchDesk), _kickAmount);
         vm.prank(address(dutchDesk));
-        auction.kick(_auctionId, _kickAmount, 0, 1e18, 1e17, userLender, address(lender), false);
+        auction.kick(_auctionId, _kickAmount, 0, 1e18, 1e17, userLender, address(lender));
 
         // Skip past auction duration so it becomes inactive
         skip(auction.auction_length() + 1);
@@ -298,7 +269,7 @@ contract AuctionTests is Base {
         // Airdrop and kick
         airdrop(address(collateralToken), address(dutchDesk), _kickAmount);
         vm.prank(address(dutchDesk));
-        auction.kick(_auctionId, _kickAmount, 0, 1e18, 1e17, userLender, address(lender), false);
+        auction.kick(_auctionId, _kickAmount, 0, 1e18, 1e17, userLender, address(lender));
 
         // Skip past auction duration so it becomes inactive
         skip(auction.auction_length() + 1);
@@ -318,7 +289,7 @@ contract AuctionTests is Base {
         // Airdrop and kick with high maximum_amount (so no surplus)
         airdrop(address(collateralToken), address(dutchDesk), _kickAmount);
         vm.prank(address(dutchDesk));
-        auction.kick(_auctionId, _kickAmount, type(uint256).max, _kickAmount * 1e18, 1e17, userLender, address(lender), false);
+        auction.kick(_auctionId, _kickAmount, type(uint256).max, _kickAmount * 1e18, 1e17, userLender, address(lender));
 
         // Skip some time to let price decay
         skip(auction.step_duration() * 10);
@@ -336,13 +307,13 @@ contract AuctionTests is Base {
         // Verify auction is complete
         assertFalse(auction.is_active(_auctionId), "E0");
         IAuction.AuctionInfo memory auctionInfo = auction.auctions(_auctionId);
-        assertEq(auctionInfo.currentAmount, 0, "E1");
-        assertEq(auctionInfo.kickTimestamp, 0, "E2");
+        assertEq(auctionInfo.current_amount, 0, "E1");
+        assertEq(auctionInfo.kick_timestamp, 0, "E2");
 
         // Verify token transfers - all goes to receiver since neededAmount <= maximum_amount
         assertEq(collateralToken.balanceOf(liquidator), _kickAmount, "E3");
         assertEq(borrowToken.balanceOf(userLender), _neededAmount, "E4");
-        assertEq(auctionInfo.amountReceived, _neededAmount, "E5");
+        assertEq(auctionInfo.amount_received, _neededAmount, "E5");
     }
 
     function test_take_surplusToLender(
@@ -361,7 +332,7 @@ contract AuctionTests is Base {
         // Airdrop and kick with low maximum_amount
         airdrop(address(collateralToken), address(dutchDesk), _kickAmount);
         vm.prank(address(dutchDesk));
-        auction.kick(_auctionId, _kickAmount, _maximumAmount, _kickAmount * 1e18, 1e17, userLender, address(lender), false);
+        auction.kick(_auctionId, _kickAmount, _maximumAmount, _kickAmount * 1e18, 1e17, userLender, address(lender));
 
         // Get actual needed amount
         uint256 _neededAmount = auction.get_needed_amount(_auctionId, type(uint256).max, block.timestamp);
@@ -378,7 +349,7 @@ contract AuctionTests is Base {
         uint256 _surplus = _neededAmount > _maximumAmount ? _neededAmount - _maximumAmount : 0;
         assertEq(borrowToken.balanceOf(address(lender)) - _surplusReceiverBalanceBefore, _surplus, "E0");
         assertEq(borrowToken.balanceOf(userLender), _maximumAmount, "E1");
-        assertEq(auction.auctions(_auctionId).amountReceived, _maximumAmount, "E2");
+        assertEq(auction.auctions(_auctionId).amount_received, _maximumAmount, "E2");
     }
 
     function test_take_liquidationAllToReceiver(
@@ -390,7 +361,7 @@ contract AuctionTests is Base {
         // Airdrop and kick as liquidation (receiver=lender for liquidations)
         airdrop(address(collateralToken), address(dutchDesk), _kickAmount);
         vm.prank(address(dutchDesk));
-        auction.kick(_auctionId, _kickAmount, 0, _kickAmount * 1e18, 1e17, address(lender), address(lender), true);
+        auction.kick(_auctionId, _kickAmount, 0, _kickAmount * 1e18, 1e17, address(lender), address(lender));
 
         // Skip some time to let price decay
         skip(auction.step_duration() * 10);
@@ -419,7 +390,7 @@ contract AuctionTests is Base {
         // Airdrop and kick
         airdrop(address(collateralToken), address(dutchDesk), _kickAmount);
         vm.prank(address(dutchDesk));
-        auction.kick(_auctionId, _kickAmount, type(uint256).max, _kickAmount * 1e18, 1e17, userLender, address(lender), false);
+        auction.kick(_auctionId, _kickAmount, type(uint256).max, _kickAmount * 1e18, 1e17, userLender, address(lender));
 
         // Skip some time
         skip(auction.step_duration() * 10);
@@ -437,9 +408,9 @@ contract AuctionTests is Base {
         // Verify auction is still active with remaining amount
         assertTrue(auction.is_active(_auctionId), "E0");
         IAuction.AuctionInfo memory auctionInfo = auction.auctions(_auctionId);
-        assertEq(auctionInfo.currentAmount, _kickAmount - _takeAmount, "E1");
+        assertEq(auctionInfo.current_amount, _kickAmount - _takeAmount, "E1");
         assertEq(collateralToken.balanceOf(liquidator), _takeAmount, "E2");
-        assertEq(auctionInfo.amountReceived, _neededAmount, "E3");
+        assertEq(auctionInfo.amount_received, _neededAmount, "E3");
     }
 
     function test_take_multipleTakes_receiverCoveredFirst(
@@ -452,7 +423,7 @@ contract AuctionTests is Base {
         // Kick auction
         airdrop(address(collateralToken), address(dutchDesk), _kickAmount);
         vm.prank(address(dutchDesk));
-        auction.kick(0, _kickAmount, _maximumAmount, _kickAmount * 1e18, 1e17, userLender, address(lender), false);
+        auction.kick(0, _kickAmount, _maximumAmount, _kickAmount * 1e18, 1e17, userLender, address(lender));
 
         uint256 _surplusReceiverBefore = borrowToken.balanceOf(address(lender));
 
@@ -465,11 +436,11 @@ contract AuctionTests is Base {
         vm.stopPrank();
 
         // Second take: remaining
-        uint256 _needed2 = auction.get_needed_amount(0, auction.auctions(0).currentAmount, block.timestamp);
+        uint256 _needed2 = auction.get_needed_amount(0, auction.auctions(0).current_amount, block.timestamp);
         airdrop(address(borrowToken), liquidator, _needed2);
         vm.startPrank(liquidator);
         borrowToken.approve(address(auction), _needed2);
-        auction.take(0, auction.auctions(0).currentAmount, liquidator, "");
+        auction.take(0, auction.auctions(0).current_amount, liquidator, "");
         vm.stopPrank();
 
         // Receiver capped at maximum_amount, surplus to surplus_receiver
@@ -495,42 +466,12 @@ contract AuctionTests is Base {
         // Airdrop and kick
         airdrop(address(collateralToken), address(dutchDesk), _kickAmount);
         vm.prank(address(dutchDesk));
-        auction.kick(_auctionId, _kickAmount, 0, _kickAmount * 1e18, 1e17, userLender, address(lender), false);
+        auction.kick(_auctionId, _kickAmount, 0, _kickAmount * 1e18, 1e17, userLender, address(lender));
 
         // Try to take 0 amount
         vm.prank(liquidator);
         vm.expectRevert("!needed_amount");
         auction.take(_auctionId, 0, liquidator, "");
-    }
-
-    function test_take_liquidationDecreasesCounter(
-        uint256 _auctionId,
-        uint256 _kickAmount
-    ) public {
-        _kickAmount = bound(_kickAmount, minFuzzAmount, maxFuzzAmount);
-
-        // Airdrop and kick as liquidation
-        airdrop(address(collateralToken), address(dutchDesk), _kickAmount);
-        vm.prank(address(dutchDesk));
-        auction.kick(_auctionId, _kickAmount, 0, _kickAmount * 1e18, 1e17, address(lender), address(lender), true);
-
-        // Verify liquidation counter incremented
-        assertEq(auction.liquidation_auctions(), 1, "E0");
-        assertTrue(auction.is_ongoing_liquidation_auction(), "E1");
-
-        // Skip time and take
-        skip(auction.step_duration() * 10);
-        uint256 _neededAmount = auction.get_needed_amount(_auctionId, type(uint256).max, block.timestamp);
-        airdrop(address(borrowToken), liquidator, _neededAmount);
-
-        vm.startPrank(liquidator);
-        borrowToken.approve(address(auction), _neededAmount);
-        auction.take(_auctionId, type(uint256).max, liquidator, "");
-        vm.stopPrank();
-
-        // Verify liquidation counter decremented
-        assertEq(auction.liquidation_auctions(), 0, "E2");
-        assertFalse(auction.is_ongoing_liquidation_auction(), "E3");
     }
 
     function test_priceDecay(
@@ -542,7 +483,7 @@ contract AuctionTests is Base {
         // Airdrop and kick
         airdrop(address(collateralToken), address(dutchDesk), _kickAmount);
         vm.prank(address(dutchDesk));
-        auction.kick(_auctionId, _kickAmount, 0, _kickAmount * 1e18, 1e17, userLender, address(lender), false);
+        auction.kick(_auctionId, _kickAmount, 0, _kickAmount * 1e18, 1e17, userLender, address(lender));
 
         // Get initial price
         uint256 _initialPrice = auction.get_price(_auctionId, block.timestamp);
@@ -574,7 +515,7 @@ contract AuctionTests is Base {
         // Airdrop and kick
         airdrop(address(collateralToken), address(dutchDesk), _kickAmount);
         vm.prank(address(dutchDesk));
-        auction.kick(_auctionId, _kickAmount, 0, _kickAmount * 1e18, 1e17, userLender, address(lender), false);
+        auction.kick(_auctionId, _kickAmount, 0, _kickAmount * 1e18, 1e17, userLender, address(lender));
 
         // Verify auction is active
         assertTrue(auction.is_active(_auctionId), "E0");
@@ -601,7 +542,7 @@ contract AuctionTests is Base {
         // Airdrop and kick
         airdrop(address(collateralToken), address(dutchDesk), _kickAmount);
         vm.prank(address(dutchDesk));
-        auction.kick(_auctionId, _kickAmount, 0, _kickAmount * 1e18, 1e17, userLender, address(lender), false);
+        auction.kick(_auctionId, _kickAmount, 0, _kickAmount * 1e18, 1e17, userLender, address(lender));
 
         // After kick, available amount should equal kick amount
         assertEq(auction.get_available_amount(_auctionId), _kickAmount, "E1");
@@ -623,7 +564,7 @@ contract AuctionTests is Base {
         // Airdrop and kick
         airdrop(address(collateralToken), address(dutchDesk), _kickAmount);
         vm.prank(address(dutchDesk));
-        auction.kick(_auctionId, _kickAmount, 0, _kickAmount * 1e18, 1e17, userLender, address(lender), false);
+        auction.kick(_auctionId, _kickAmount, 0, _kickAmount * 1e18, 1e17, userLender, address(lender));
 
         // While active, kickable amount should be 0
         assertEq(auction.get_kickable_amount(_auctionId), 0, "E1");
@@ -642,7 +583,7 @@ contract AuctionTests is Base {
         // Airdrop and kick
         airdrop(address(collateralToken), address(dutchDesk), _kickAmount);
         vm.prank(address(dutchDesk));
-        auction.kick(_auctionId, _kickAmount, 0, _kickAmount * 1e18, 1e17, userLender, address(lender), false);
+        auction.kick(_auctionId, _kickAmount, 0, _kickAmount * 1e18, 1e17, userLender, address(lender));
 
         // Get needed amount for full take
         uint256 _neededAmount = auction.get_needed_amount(_auctionId, _kickAmount, block.timestamp);
@@ -670,7 +611,7 @@ contract AuctionTests is Base {
         // Airdrop and kick
         airdrop(address(collateralToken), address(dutchDesk), _kickAmount);
         vm.prank(address(dutchDesk));
-        auction.kick(_auctionId, _kickAmount, 0, 1e18, 1e17, userLender, address(lender), false);
+        auction.kick(_auctionId, _kickAmount, 0, 1e18, 1e17, userLender, address(lender));
 
         // Skip some time to let price decay
         skip(auction.step_duration() * 10);
@@ -704,7 +645,7 @@ contract AuctionTests is Base {
 
         // Kick auction
         vm.prank(address(dutchDesk));
-        auction.kick(_auctionId, _kickAmount, 0, 1e18, 1e17, userLender, address(lender), false);
+        auction.kick(_auctionId, _kickAmount, 0, 1e18, 1e17, userLender, address(lender));
 
         // Skip some time
         skip(auction.step_duration() * 10);
@@ -735,7 +676,7 @@ contract AuctionTests is Base {
         // Airdrop and kick
         airdrop(address(collateralToken), address(dutchDesk), _kickAmount);
         vm.prank(address(dutchDesk));
-        auction.kick(_auctionId, _kickAmount, 0, 1e18, 1e17, userLender, address(lender), false);
+        auction.kick(_auctionId, _kickAmount, 0, 1e18, 1e17, userLender, address(lender));
 
         // Skip some time
         skip(auction.step_duration() * 10);
@@ -766,7 +707,7 @@ contract AuctionTests is Base {
         // Airdrop and kick
         airdrop(address(collateralToken), address(dutchDesk), _kickAmount);
         vm.prank(address(dutchDesk));
-        auction.kick(_auctionId, _kickAmount, 0, 1e18, 1e17, userLender, address(lender), false);
+        auction.kick(_auctionId, _kickAmount, 0, 1e18, 1e17, userLender, address(lender));
 
         // Skip some time
         skip(auction.step_duration() * 10);
@@ -844,7 +785,7 @@ contract ReentrantTaker {
         if (attackType == AttackType.Take) {
             auction.take(auctionId, takeAmount, address(this), "");
         } else if (attackType == AttackType.Kick) {
-            auction.kick(auctionId, 1e18, 0, 1e18, 1e17, address(this), address(this), false);
+            auction.kick(auctionId, 1e18, 0, 1e18, 1e17, address(this), address(this));
         } else if (attackType == AttackType.ReKick) {
             auction.re_kick(auctionId, 2e18, 2e17);
         } else if (attackType == AttackType.ViewFunctions) {

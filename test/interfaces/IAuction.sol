@@ -8,25 +8,24 @@ interface IAuction {
     // ============================================================================================
 
     struct AuctionInfo {
-        uint256 kickTimestamp;
-        uint256 initialAmount;
-        uint256 currentAmount;
-        uint256 maximumAmount;
-        uint256 amountReceived;
-        uint256 startingPrice;
-        uint256 minimumPrice;
+        uint256 kick_timestamp;
+        uint256 initial_amount;
+        uint256 current_amount;
+        uint256 maximum_amount;
+        uint256 amount_received;
+        uint256 starting_price;
+        uint256 minimum_price;
         address receiver;
-        address surplusReceiver;
-        bool isLiquidation;
+        address surplus_receiver;
     }
 
     struct InitializeParams {
         address papi;
-        address buyToken;
-        address sellToken;
-        uint256 stepDuration;
-        uint256 stepDecayRate;
-        uint256 auctionLength;
+        address buy_token;
+        address sell_token;
+        uint256 step_duration;
+        uint256 step_decay_rate;
+        uint256 auction_length;
     }
 
     // ============================================================================================
@@ -48,7 +47,6 @@ interface IAuction {
     function auction_length() external view returns (uint256);
 
     // Accounting
-    function liquidation_auctions() external view returns (uint256);
     function auctions(
         uint256 auctionId
     ) external view returns (AuctionInfo memory);
@@ -83,7 +81,6 @@ interface IAuction {
     function is_active(
         uint256 auction_id
     ) external view returns (bool);
-    function is_ongoing_liquidation_auction() external view returns (bool);
 
     // ============================================================================================
     // Kick
@@ -96,8 +93,7 @@ interface IAuction {
         uint256 starting_price,
         uint256 minimum_price,
         address receiver,
-        address surplus_receiver,
-        bool is_liquidation
+        address surplus_receiver
     ) external;
 
     function re_kick(

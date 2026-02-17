@@ -12,6 +12,8 @@ import {IPriceOracle} from "./interfaces/IPriceOracle.sol";
 import {ISortedTroves} from "./interfaces/ISortedTroves.sol";
 import {ITroveManager} from "./interfaces/ITroveManager.sol";
 
+import {LiquidatorMock} from "./mocks/LiquidatorMock.sol";
+
 import "../script/Deploy.s.sol";
 
 import "forge-std/Test.sol";
@@ -25,6 +27,7 @@ abstract contract Base is Deploy, Test {
     IDutchDesk public dutchDesk;
     ISortedTroves public sortedTroves;
     ITroveManager public troveManager;
+    LiquidatorMock public liquidatorMock;
 
     // Roles
     address public userLender = address(420);
@@ -37,14 +40,16 @@ abstract contract Base is Deploy, Test {
 
     // Market parameters
     uint256 public minimumDebt = 500; // 500 tokens
+    uint256 public safeCollateralRatio = 115; // 115%
     uint256 public minimumCollateralRatio = 110; // 110%
+    uint256 public maxPenaltyCollateralRatio = 105; // 105%
+    uint256 public minLiquidationFee = 50; // 0.5%
+    uint256 public maxLiquidationFee = 500; // 5%
     uint256 public upfrontInterestPeriod = 7 days; // 7 days
     uint256 public interestRateAdjCooldown = 7 days; // 7 days
-    uint256 public redemptionMinimumPriceBufferPercentage = 1e18 - 5e16; // 95%
-    uint256 public redemptionStartingPriceBufferPercentage = 1e18 + 1e16; // 101%
-    uint256 public redemptionReKickStartingPriceBufferPercentage = 1e18 + 20e16; // 120%
-    uint256 public liquidationMinimumPriceBufferPercentage = 1e18 - 10e16; // 90%
-    uint256 public liquidationStartingPriceBufferPercentage = 1e18 - 1e16; // 99%
+    uint256 public minimumPriceBufferPercentage = 1e18 - 5e16; // 95%
+    uint256 public startingPriceBufferPercentage = 1e18 + 1e16; // 101%
+    uint256 public reKickStartingPriceBufferPercentage = 1e18 + 10e16; // 110%
     uint256 public stepDuration = 20; // 20 seconds
     uint256 public stepDecayRate = 20; // 0.2%
     uint256 public auctionLength = 1 days; // 1 day
@@ -58,7 +63,6 @@ abstract contract Base is Deploy, Test {
     uint256 public DEFAULT_ANNUAL_INTEREST_RATE;
     uint256 public DEFAULT_TARGET_COLLATERAL_RATIO;
 
-    uint256 public constant MAX_LIQUIDATIONS = 20;
     uint256 public constant ORACLE_PRICE_SCALE = 1e36;
     uint256 public constant WAD = 1e18;
 
@@ -79,23 +83,25 @@ abstract contract Base is Deploy, Test {
         // Deploy market
         (address _troveManager, address _sortedTroves, address _dutchDesk, address _auction, address _lender) = catFactory.deploy(
             ICatFactory.DeployParams({
-                borrowToken: address(borrowToken),
-                collateralToken: address(collateralToken),
-                priceOracle: address(priceOracle),
+                borrow_token: address(borrowToken),
+                collateral_token: address(collateralToken),
+                price_oracle: address(priceOracle),
                 management: management,
-                performanceFeeRecipient: performanceFeeRecipient,
-                minimumDebt: minimumDebt,
-                minimumCollateralRatio: minimumCollateralRatio,
-                upfrontInterestPeriod: upfrontInterestPeriod,
-                interestRateAdjCooldown: interestRateAdjCooldown,
-                redemptionMinimumPriceBufferPercentage: redemptionMinimumPriceBufferPercentage,
-                redemptionStartingPriceBufferPercentage: redemptionStartingPriceBufferPercentage,
-                redemptionReKickStartingPriceBufferPercentage: redemptionReKickStartingPriceBufferPercentage,
-                liquidationMinimumPriceBufferPercentage: liquidationMinimumPriceBufferPercentage,
-                liquidationStartingPriceBufferPercentage: liquidationStartingPriceBufferPercentage,
-                stepDuration: stepDuration,
-                stepDecayRate: stepDecayRate,
-                auctionLength: auctionLength,
+                performance_fee_recipient: performanceFeeRecipient,
+                minimum_debt: minimumDebt,
+                safe_collateral_ratio: safeCollateralRatio,
+                minimum_collateral_ratio: minimumCollateralRatio,
+                max_penalty_collateral_ratio: maxPenaltyCollateralRatio,
+                min_liquidation_fee: minLiquidationFee,
+                max_liquidation_fee: maxLiquidationFee,
+                upfront_interest_period: upfrontInterestPeriod,
+                interest_rate_adj_cooldown: interestRateAdjCooldown,
+                minimum_price_buffer_percentage: minimumPriceBufferPercentage,
+                starting_price_buffer_percentage: startingPriceBufferPercentage,
+                re_kick_starting_price_buffer_percentage: reKickStartingPriceBufferPercentage,
+                step_duration: stepDuration,
+                step_decay_rate: stepDecayRate,
+                auction_length: auctionLength,
                 salt: SALT
             })
         );
@@ -106,6 +112,9 @@ abstract contract Base is Deploy, Test {
         dutchDesk = IDutchDesk(_dutchDesk);
         auction = IAuction(_auction);
         lender = ILender(_lender);
+
+        // Deploy liquidator mock
+        liquidatorMock = new LiquidatorMock(troveManager, borrowToken);
 
         // Label addresses
         vm.label(address(troveManager), "TroveManager");
@@ -156,6 +165,12 @@ abstract contract Base is Deploy, Test {
             uint256 _balanceBefore = _addToBalance ? IERC20(_token).balanceOf(_to) : 0;
             deal({token: _token, to: _to, give: _balanceBefore + _amount});
         }
+    }
+
+    function liquidate(
+        uint256 _troveId
+    ) public returns (uint256) {
+        return liquidatorMock.liquidate(_troveId, type(uint256).max);
     }
 
     function takeAuction(
@@ -209,6 +224,35 @@ abstract contract Base is Deploy, Test {
     ) public {
         airdrop(address(borrowToken), _user, _amount);
         depositIntoLender(_user, _amount);
+    }
+
+    function calculateCollateralToDecrease(
+        uint256 _collateralRatio,
+        uint256 _debtToDecrease,
+        uint256 _collateralPrice,
+        uint256 _troveCollateral
+    ) public view returns (uint256) {
+        uint256 _liquidationFeePct;
+        uint256 _mcr = troveManager.minimum_collateral_ratio();
+        uint256 _maxPenaltyCR = troveManager.max_penalty_collateral_ratio();
+
+        if (_collateralRatio >= _mcr) {
+            _liquidationFeePct = troveManager.min_liquidation_fee();
+        } else if (_collateralRatio <= _maxPenaltyCR) {
+            _liquidationFeePct = troveManager.max_liquidation_fee();
+        } else {
+            uint256 _minFee = troveManager.min_liquidation_fee();
+            uint256 _feeRange = troveManager.max_liquidation_fee() - _minFee;
+            uint256 _crDrop = _mcr - _collateralRatio;
+            uint256 _crRange = _mcr - _maxPenaltyCR;
+            _liquidationFeePct = _minFee + (_feeRange * _crDrop / _crRange);
+        }
+
+        uint256 _baseCollateral = _debtToDecrease * ORACLE_PRICE_SCALE / _collateralPrice;
+        uint256 _collateralToDecrease = _baseCollateral * (BORROW_TOKEN_PRECISION + _liquidationFeePct) / BORROW_TOKEN_PRECISION;
+
+        if (_collateralToDecrease > _troveCollateral) return _troveCollateral;
+        return _collateralToDecrease;
     }
 
     function mintAndOpenTrove(

@@ -51,6 +51,7 @@ contract TransferOwnershipTests is Base {
         uint256 _amount,
         address _newOwner
     ) public {
+        vm.assume(_newOwner != userLender);
         _amount = bound(_amount, troveManager.min_debt(), maxFuzzAmount);
 
         // Start the ownership transfer process

@@ -33,7 +33,7 @@ contract LaggingOracleValueExtractionPOC is Base {
 
         // Max market premium must be less than starting price buffer, otherwise attacker can still profit
         // STARTING_PRICE_BUFFER_PERCENTAGE is 1e18 + buffer%, e.g. 1.15e18 for 15%
-        uint256 _startingBufferBps = (dutchDesk.redemption_starting_price_buffer_percentage() - WAD) / 1e14;
+        uint256 _startingBufferBps = (dutchDesk.starting_price_buffer_percentage() - WAD) / 1e14;
         _marketPremiumBps = bound(_marketPremiumBps, 10, _startingBufferBps - 1);
 
         // Lend liquidity
@@ -61,7 +61,7 @@ contract LaggingOracleValueExtractionPOC is Base {
         assertEq(auction.auctions(0).receiver, userBorrower, "E0");
 
         uint256 _auctionCollateral = auction.get_available_amount(0);
-        uint256 _maximumAmount = auction.auctions(0).maximumAmount;
+        uint256 _maximumAmount = auction.auctions(0).maximum_amount;
 
         // Track lender balance before auction take
         uint256 _lenderBalanceBefore = borrowToken.balanceOf(address(lender));

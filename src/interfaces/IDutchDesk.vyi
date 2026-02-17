@@ -13,11 +13,9 @@ struct InitializeParams:
     auction: address
     borrow_token: address
     collateral_token: address
-    redemption_minimum_price_buffer_percentage: uint256
-    redemption_starting_price_buffer_percentage: uint256
-    redemption_re_kick_starting_price_buffer_percentage: uint256
-    liquidation_minimum_price_buffer_percentage: uint256
-    liquidation_starting_price_buffer_percentage: uint256
+    minimum_price_buffer_percentage: uint256
+    starting_price_buffer_percentage: uint256
+    re_kick_starting_price_buffer_percentage: uint256
 
 
 # ============================================================================================
@@ -36,5 +34,5 @@ def initialize(params: InitializeParams):
 
 
 @external
-def kick(amount: uint256, maximum_amount: uint256 = 0, receiver: address = empty(address), is_liquidation: bool = True):
+def kick(amount: uint256, maximum_amount: uint256, receiver: address):
     ...

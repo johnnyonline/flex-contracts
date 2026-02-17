@@ -5,7 +5,6 @@ import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol
 import {BaseHooks, ERC20} from "@periphery/Bases/Hooks/BaseHooks.sol";
 import {BaseStrategy} from "@tokenized-strategy/BaseStrategy.sol";
 
-import {IAuction} from "./interfaces/IAuction.sol";
 import {ITroveManager} from "./interfaces/ITroveManager.sol";
 
 /// @title Lender
@@ -27,9 +26,6 @@ contract Lender is BaseHooks {
     // Constants
     // ============================================================================================
 
-    /// @notice Auction contract
-    IAuction public immutable AUCTION;
-
     /// @notice TroveManager contract
     ITroveManager public immutable TROVE_MANAGER;
 
@@ -50,17 +46,14 @@ contract Lender is BaseHooks {
 
     /// @notice Constructor
     /// @param _asset The address of the borrow token
-    /// @param _auction The address of the Auction contract
     /// @param _troveManager The address of the TroveManager contract
     /// @param _name The name of the vault
     constructor(
         address _asset,
-        address _auction,
         address _troveManager,
         string memory _name
     ) BaseHooks(_asset, _name) {
-        // Set immutable addresses
-        AUCTION = IAuction(_auction);
+        // Set Trove Manager contract
         TROVE_MANAGER = ITroveManager(_troveManager);
 
         // No deposit limit by default
@@ -79,18 +72,6 @@ contract Lender is BaseHooks {
         uint256 _depositLimit = depositLimit;
         uint256 _currentAssets = TokenizedStrategy.totalAssets();
         return _depositLimit <= _currentAssets ? 0 : _depositLimit - _currentAssets;
-    }
-
-    /// @inheritdoc BaseStrategy
-    function availableWithdrawLimit(address /*_owner*/) public view override returns (uint256) {
-        // If the strategy is shutdown always allow full withdrawals
-        if (TokenizedStrategy.isShutdown()) return type(uint256).max;
-
-        // Withdrawals are blocked during ongoing liquidation auctions.
-        // During liquidation, collateral has been seized but not yet sold for borrow tokens.
-        // The system is temporarily insolvent until the auction completes and proceeds return to this contract.
-        // However, any idle liquidity already in the contract remains available for withdrawal
-        return AUCTION.is_ongoing_liquidation_auction() ? asset.balanceOf(address(this)) : type(uint256).max;
     }
 
     // ============================================================================================
