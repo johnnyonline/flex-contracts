@@ -98,10 +98,10 @@ def get_price(scaled: bool = True) -> uint256:
     assert usdc_usd_price > 0, "wtf"
 
     # Fetch yvcrvUSD-2 price per share
-    pps: uint256 = staticcall IYearnVault(_COLLATERAL_TOKEN.address).pricePerShare()  # yvcrvUSD-2 in crvUSD
+    pps: uint256 = staticcall IYearnVault(_COLLATERAL_TOKEN.address).pricePerShare()
 
     # Calculate yvcrvUSD-2/USDC price
-    price: uint256 = convert(crvusd_usd_price, uint256) * _WAD // convert(usdc_usd_price, uint256) * pps // _WAD  # yvcrvUSD-2 in USDC WAD
+    price: uint256 = convert(crvusd_usd_price, uint256) * _WAD // convert(usdc_usd_price, uint256) * pps // _WAD
 
     # Scale price to the required format if needed and return
     return price * _ORACLE_SCALE_FACTOR // _WAD if scaled else price
