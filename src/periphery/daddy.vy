@@ -72,45 +72,6 @@ def __default__():
 
 
 # ============================================================================================
-# Execute
-# ============================================================================================
-
-
-@external
-@payable
-def execute(
-    target: address,
-    data: Bytes[_MAX_RETURN_SIZE],
-    eth_value: uint256 = 0,
-    revert_on_failure: bool = True,
-) -> Bytes[_MAX_RETURN_SIZE]:
-    """
-    @notice Execute an arbitrary call
-    @dev Only callable by the owner
-    @param target The address to call
-    @param data The calldata to send
-    @param eth_value The ETH value to send. Defaults to 0
-    @param revert_on_failure Whether to revert on failure. Defaults to True
-    @return response The return data from the call
-    """
-    assert msg.sender == self.owner, "!owner"
-
-    success: bool = False
-    response: Bytes[_MAX_RETURN_SIZE] = b""
-    success, response = raw_call(
-        target,
-        data,
-        max_outsize=_MAX_RETURN_SIZE,
-        value=eth_value,
-        revert_on_failure=False,
-    )
-
-    assert success or not revert_on_failure, "call failed"
-
-    return response
-
-
-# ============================================================================================
 # Ownership
 # ============================================================================================
 
@@ -150,3 +111,42 @@ def accept_ownership():
         old_owner=old_owner,
         new_owner=msg.sender,
     )
+
+
+# ============================================================================================
+# Execute
+# ============================================================================================
+
+
+@external
+@payable
+def execute(
+    target: address,
+    data: Bytes[_MAX_RETURN_SIZE],
+    eth_value: uint256 = 0,
+    revert_on_failure: bool = True,
+) -> Bytes[_MAX_RETURN_SIZE]:
+    """
+    @notice Execute an arbitrary call
+    @dev Only callable by the owner
+    @param target The address to call
+    @param data The calldata to send
+    @param eth_value The ETH value to send. Defaults to 0
+    @param revert_on_failure Whether to revert on failure. Defaults to True
+    @return response The return data from the call
+    """
+    assert msg.sender == self.owner, "!owner"
+
+    success: bool = False
+    response: Bytes[_MAX_RETURN_SIZE] = b""
+    success, response = raw_call(
+        target,
+        data,
+        max_outsize=_MAX_RETURN_SIZE,
+        value=eth_value,
+        revert_on_failure=False,
+    )
+
+    assert success or not revert_on_failure, "call failed"
+
+    return response
