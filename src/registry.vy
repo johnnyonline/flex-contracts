@@ -15,14 +15,6 @@ from interfaces import ITroveManager
 # ============================================================================================
 
 
-event PendingOwnershipTransfer:
-    old_daddy: address
-    new_daddy: address
-
-event OwnershipTransferred:
-    old_daddy: address
-    new_daddy: address
-
 event EndorseMarket:
     trove_manager: indexed(address)
 
@@ -45,6 +37,9 @@ flag Status:
 # ============================================================================================
 
 
+# Daddy
+DADDY: public(immutable(address))
+
 # Version
 VERSION: public(constant(String[28])) = "1.0.0"
 
@@ -57,10 +52,6 @@ _MAX_UINT32: constant(uint256) = 2 ** 32
 # Storage
 # ============================================================================================
 
-
-# Ownership
-daddy: public(address)
-pending_daddy: public(address)
 
 # Markets
 markets: public(DynArray[address, _MAX_UINT32])  # append-only list of Trove Manager contracts
@@ -80,13 +71,7 @@ def __init__(daddy: address):
     @param daddy Address of Daddy
     """
     # Set Daddy
-    self.daddy = daddy
-
-    # Emit event
-    log OwnershipTransferred(
-        old_daddy=empty(address),
-        new_daddy=daddy,
-    )
+    DADDY = daddy
 
 
 # ============================================================================================
@@ -138,57 +123,6 @@ def find_market_for_pair(collateral_token: address, borrow_token: address, index
 
 
 # ============================================================================================
-# Ownership
-# ============================================================================================
-
-
-@external
-def transfer_ownership(new_daddy: address):
-    """
-    @notice Starts the ownership transfer of the contract to a new account
-    @dev Only callable by Daddy
-    @dev Replaces the pending transfer if there is one
-    @param new_daddy The address of the new Daddy
-    """
-    # Make sure caller is Daddy
-    assert msg.sender == self.daddy, "bad daddy"
-
-    # Set new pending Daddy
-    self.pending_daddy = new_daddy
-
-    # Emit event
-    log PendingOwnershipTransfer(
-        old_daddy=self.daddy,
-        new_daddy=new_daddy,
-    )
-
-
-@external
-def accept_ownership():
-    """
-    @notice The new Daddy accepts the ownership transfer
-    @dev Only callable by the current `pending_daddy`
-    """
-    # Make sure caller is pending Daddy
-    assert self.pending_daddy == msg.sender, "!pending_daddy"
-
-    # Zero out pending Daddy
-    self.pending_daddy = empty(address)
-
-    # Cache old Daddy for the event
-    old_daddy: address = self.daddy
-
-    # Set new Daddy
-    self.daddy = msg.sender
-
-    # Emit event
-    log OwnershipTransferred(
-        old_daddy=old_daddy,
-        new_daddy=msg.sender,
-    )
-
-
-# ============================================================================================
 # Endorse
 # ============================================================================================
 
@@ -202,7 +136,7 @@ def endorse(trove_manager: address):
     @param trove_manager Address of the Trove Manager contract of the market to endorse
     """
     # Make sure caller is Daddy
-    assert msg.sender == self.daddy, "bad daddy"
+    assert msg.sender == DADDY, "bad daddy"
 
     # Make sure market has not been endorsed before
     assert self.market_status[trove_manager] == empty(Status), "!empty"
@@ -235,7 +169,7 @@ def unendorse(trove_manager: address):
     @param trove_manager Address of the Trove Manager contract of the market to unendorse
     """
     # Make sure caller is Daddy
-    assert msg.sender == self.daddy, "bad daddy"
+    assert msg.sender == DADDY, "bad daddy"
 
     # Make sure market is endorsed
     assert self.market_status[trove_manager] == Status.ENDORSED, "!ENDORSED"

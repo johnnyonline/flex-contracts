@@ -18,15 +18,12 @@ interface IRegistry {
     // Constants
     // ============================================================================================
 
+    function DADDY() external view returns (address);
     function VERSION() external view returns (string memory);
 
     // ============================================================================================
     // Storage
     // ============================================================================================
-
-    // Ownership
-    function daddy() external view returns (address);
-    function pending_daddy() external view returns (address);
 
     // Markets
     function markets(
@@ -50,15 +47,6 @@ interface IRegistry {
         address borrow_token,
         uint256 index
     ) external view returns (address);
-
-    // ============================================================================================
-    // Ownership
-    // ============================================================================================
-
-    function transfer_ownership(
-        address new_daddy
-    ) external;
-    function accept_ownership() external;
 
     // ============================================================================================
     // Endorse

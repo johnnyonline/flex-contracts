@@ -7,8 +7,8 @@
 @notice Helper contract used by the frontend to calculate debt-in-front
 """
 
-from interfaces import ITroveManager
-from interfaces import ISortedTroves
+from ..interfaces import ITroveManager
+from ..interfaces import ISortedTroves
 
 
 # ============================================================================================

@@ -9,11 +9,11 @@ contract LendTests is Base {
         Base.setUp();
 
         // Set `profitMaxUnlockTime` to 0
-        vm.prank(management);
+        vm.prank(address(daddy));
         lender.setProfitMaxUnlockTime(0);
 
         // Set fees to 0
-        vm.prank(management);
+        vm.prank(address(daddy));
         lender.setPerformanceFee(0);
 
         // Adjust fuzz
@@ -421,7 +421,7 @@ contract LendTests is Base {
     function test_setDepositLimit(
         uint256 _depositLimit
     ) public {
-        vm.prank(management);
+        vm.prank(address(daddy));
         lender.setDepositLimit(_depositLimit);
 
         assertEq(lender.depositLimit(), _depositLimit, "E0");
@@ -431,7 +431,7 @@ contract LendTests is Base {
         uint256 _depositLimit,
         address _wrongCaller
     ) public {
-        vm.assume(_wrongCaller != management);
+        vm.assume(_wrongCaller != address(daddy));
 
         vm.prank(_wrongCaller);
         vm.expectRevert("!management");

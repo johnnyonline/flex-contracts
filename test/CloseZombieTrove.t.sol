@@ -9,11 +9,11 @@ contract CloseZombieTroveTests is Base {
         Base.setUp();
 
         // Set `profitMaxUnlockTime` to 0
-        vm.prank(management);
+        vm.prank(address(daddy));
         lender.setProfitMaxUnlockTime(0);
 
         // Set fees to 0
-        vm.prank(management);
+        vm.prank(address(daddy));
         lender.setPerformanceFee(0);
     }
 

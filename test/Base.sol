@@ -2,6 +2,7 @@
 pragma solidity 0.8.23;
 
 import {IBaseStrategy} from "@tokenized-strategy/interfaces/IBaseStrategy.sol";
+import {ITokenizedStrategy} from "@tokenized-strategy/interfaces/ITokenizedStrategy.sol";
 
 import {ILender} from "../src/lender/interfaces/ILender.sol";
 
@@ -34,9 +35,6 @@ abstract contract Base is Deploy, Test {
     address public userBorrower = address(69);
     address public anotherUserBorrower = address(555);
     address public liquidator = address(88);
-    address public management = address(420_420);
-    address public performanceFeeRecipient = address(420_69_420);
-    address public keeper = address(69_69);
 
     // Market parameters
     uint256 public minimumDebt = 500; // 500 tokens
@@ -74,7 +72,7 @@ abstract contract Base is Deploy, Test {
         uint256 _blockNumber = 24_449_313; // cache state for faster tests
         vm.selectFork(vm.createFork(vm.envString("ETH_RPC_URL"), _blockNumber));
 
-        // Deploy factories
+        // Deploy factories, daddy, and registry
         run();
 
         // Deploy price oracle
@@ -86,8 +84,6 @@ abstract contract Base is Deploy, Test {
                 borrow_token: address(borrowToken),
                 collateral_token: address(collateralToken),
                 price_oracle: address(priceOracle),
-                management: management,
-                performance_fee_recipient: performanceFeeRecipient,
                 minimum_debt: minimumDebt,
                 safe_collateral_ratio: safeCollateralRatio,
                 minimum_collateral_ratio: minimumCollateralRatio,
@@ -123,9 +119,9 @@ abstract contract Base is Deploy, Test {
         vm.label(address(auction), "Auction");
         vm.label(address(lender), "Lender");
 
-        // Set up Lender
-        vm.prank(management);
-        lender.acceptManagement();
+        // Accept Lender management via Daddy
+        vm.prank(deployerAddress);
+        daddy.execute(address(lender), abi.encodeWithSelector(ITokenizedStrategy.acceptManagement.selector), 0, true);
 
         // Set up "constants" for tests
         BORROW_TOKEN_PRECISION = 10 ** IERC20Metadata(address(borrowToken)).decimals();

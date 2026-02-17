@@ -10,8 +10,6 @@
 def deploy(
     _asset: address,
     _troveManager: address,
-    _management: address,
-    _performanceFeeRecipient: address,
     name: String[77],
 ) -> address:
     ...

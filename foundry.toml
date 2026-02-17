@@ -24,7 +24,7 @@ contract_new_lines = true
 line_length = 150
 number_underscore = "preserve"
 quote_style = "double"
-ignore = ["lib/", "src/lender/Lender.sol"]
+ignore = ["lib/", "src/lender/Lender.sol", "src/lender/LenderFactory.sol"]
 
 [invariant]
 runs = 50

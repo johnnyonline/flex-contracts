@@ -5,6 +5,7 @@ import {IERC20} from "@openzeppelin/contracts/token/ERC20/ERC20.sol";
 import {IERC20Metadata} from "@openzeppelin/contracts/token/ERC20/extensions/IERC20Metadata.sol";
 
 import {ICatFactory} from "./interfaces/ICatFactory.sol";
+import {IDaddy} from "./interfaces/IDaddy.sol";
 import {IDeployer} from "./interfaces/IDeployer.sol";
 import {IRegistry} from "./interfaces/IRegistry.sol";
 
@@ -39,6 +40,9 @@ contract Deploy is Script {
     ICatFactory public catFactory;
     LenderFactory public lenderFactory;
 
+    // Daddy
+    IDaddy public daddy;
+
     // Registry
     IRegistry public registry;
 
@@ -72,6 +76,9 @@ contract Deploy is Script {
         // Deploy original contracts using CREATE2
         deployOriginalContracts();
 
+        // Deploy daddy using CREATE2
+        deployDaddy();
+
         // Deploy factories using CREATE2
         deployFactories();
 
@@ -85,6 +92,7 @@ contract Deploy is Script {
             vm.label({account: originalTroveManager, newLabel: "OriginalTroveManager"});
             vm.label({account: address(lenderFactory), newLabel: "LenderFactory"});
             vm.label({account: address(catFactory), newLabel: "CatFactory"});
+            vm.label({account: address(daddy), newLabel: "Daddy"});
             vm.label({account: address(registry), newLabel: "Registry"});
         } else {
             console2.log("---------------------------------");
@@ -94,6 +102,7 @@ contract Deploy is Script {
             console2.log("Original Trove Manager: ", originalTroveManager);
             console2.log("Lender Factory: ", address(lenderFactory));
             console2.log("Cat Factory: ", address(catFactory));
+            console2.log("Daddy: ", address(daddy));
             console2.log("Registry: ", address(registry));
             console2.log("---------------------------------");
         }
@@ -109,7 +118,9 @@ contract Deploy is Script {
     }
 
     function deployFactories() internal {
-        lenderFactory = LenderFactory(DEPLOYER.deployCreate2(SALT, vm.getCode("LenderFactory.sol:LenderFactory")));
+        lenderFactory =
+            LenderFactory(DEPLOYER.deployCreate2(SALT, abi.encodePacked(vm.getCode("LenderFactory.sol:LenderFactory"), abi.encode(address(daddy)))));
+        require(lenderFactory.DADDY() == address(daddy), "DADDY mismatch");
         bytes memory catFactoryBytecode = abi.encodePacked(
             vm.getCode("factory"), abi.encode(originalTroveManager, originalSortedTroves, originalDutchDesk, originalAuction, address(lenderFactory))
         );
@@ -117,10 +128,15 @@ contract Deploy is Script {
         require(catFactory.LENDER_FACTORY() == address(lenderFactory), "LENDER_FACTORY mismatch");
     }
 
+    function deployDaddy() internal {
+        bytes memory daddyBytecode = abi.encodePacked(vm.getCode("daddy"), abi.encode(deployerAddress));
+        daddy = IDaddy(DEPLOYER.deployCreate2(keccak256(abi.encode(SALT, "daddy")), daddyBytecode));
+    }
+
     function deployRegistry() internal {
-        bytes memory registryBytecode = abi.encodePacked(vm.getCode("registry"), abi.encode(deployerAddress));
+        bytes memory registryBytecode = abi.encodePacked(vm.getCode("registry"), abi.encode(address(daddy)));
         registry = IRegistry(DEPLOYER.deployCreate2(SALT, registryBytecode));
-        require(registry.daddy() == deployerAddress, "daddy mismatch");
+        require(registry.DADDY() == address(daddy), "daddy mismatch");
     }
 
 }

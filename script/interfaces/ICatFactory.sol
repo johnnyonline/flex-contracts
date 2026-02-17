@@ -11,8 +11,6 @@ interface ICatFactory {
         address borrow_token;
         address collateral_token;
         address price_oracle;
-        address management;
-        address performance_fee_recipient;
         uint256 minimum_debt;
         uint256 safe_collateral_ratio;
         uint256 minimum_collateral_ratio;

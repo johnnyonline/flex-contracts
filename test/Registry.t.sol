@@ -11,66 +11,13 @@ contract RegistryTests is Base {
 
     function test_setup() public {
         assertEq(registry.VERSION(), "1.0.0", "E0");
-        assertEq(registry.daddy(), deployerAddress, "E1");
-        assertEq(registry.pending_daddy(), address(0), "E2");
-        assertEq(registry.markets_count(), 0, "E3");
-    }
-
-    function test_transferOwnership(
-        address _newDaddy
-    ) public {
-        vm.assume(_newDaddy != address(0));
-
-        vm.prank(deployerAddress);
-        registry.transfer_ownership(_newDaddy);
-
-        assertEq(registry.pending_daddy(), _newDaddy, "E0");
-        assertEq(registry.daddy(), deployerAddress, "E1");
-    }
-
-    function test_transferOwnership_notDaddy(
-        address _notDaddy
-    ) public {
-        vm.assume(_notDaddy != deployerAddress);
-
-        vm.expectRevert("bad daddy");
-        vm.prank(_notDaddy);
-        registry.transfer_ownership(address(1));
-    }
-
-    function test_acceptOwnership(
-        address _newDaddy
-    ) public {
-        vm.assume(_newDaddy != address(0));
-
-        vm.prank(deployerAddress);
-        registry.transfer_ownership(_newDaddy);
-
-        vm.prank(_newDaddy);
-        registry.accept_ownership();
-
-        assertEq(registry.daddy(), _newDaddy, "E0");
-        assertEq(registry.pending_daddy(), address(0), "E1");
-    }
-
-    function test_acceptOwnership_notPendingDaddy(
-        address _newDaddy,
-        address _notPendingDaddy
-    ) public {
-        vm.assume(_newDaddy != address(0));
-        vm.assume(_notPendingDaddy != _newDaddy);
-
-        vm.prank(deployerAddress);
-        registry.transfer_ownership(_newDaddy);
-
-        vm.expectRevert("!pending_daddy");
-        vm.prank(_notPendingDaddy);
-        registry.accept_ownership();
+        assertEq(registry.DADDY(), address(daddy), "E1");
+        assertEq(registry.markets_count(), 0, "E2");
     }
 
     function test_endorse() public {
         vm.prank(deployerAddress);
-        registry.endorse(address(troveManager));
+        daddy.execute(address(registry), abi.encodeWithSelector(IRegistry.endorse.selector, address(troveManager)), 0, true);
 
         assertEq(registry.markets_count(), 1, "E0");
         assertEq(registry.markets(0), address(troveManager), "E1");
@@ -82,7 +29,7 @@ contract RegistryTests is Base {
     function test_endorse_notDaddy(
         address _notDaddy
     ) public {
-        vm.assume(_notDaddy != deployerAddress);
+        vm.assume(_notDaddy != address(daddy));
 
         vm.expectRevert("bad daddy");
         vm.prank(_notDaddy);
@@ -91,31 +38,31 @@ contract RegistryTests is Base {
 
     function test_endorse_notEmpty() public {
         vm.prank(deployerAddress);
-        registry.endorse(address(troveManager));
+        daddy.execute(address(registry), abi.encodeWithSelector(IRegistry.endorse.selector, address(troveManager)), 0, true);
 
-        vm.expectRevert("!empty");
+        vm.expectRevert();
         vm.prank(deployerAddress);
-        registry.endorse(address(troveManager));
+        daddy.execute(address(registry), abi.encodeWithSelector(IRegistry.endorse.selector, address(troveManager)), 0, true);
     }
 
     function test_endorse_unendorsed() public {
         vm.prank(deployerAddress);
-        registry.endorse(address(troveManager));
+        daddy.execute(address(registry), abi.encodeWithSelector(IRegistry.endorse.selector, address(troveManager)), 0, true);
 
         vm.prank(deployerAddress);
-        registry.unendorse(address(troveManager));
+        daddy.execute(address(registry), abi.encodeWithSelector(IRegistry.unendorse.selector, address(troveManager)), 0, true);
 
-        vm.expectRevert("!empty");
+        vm.expectRevert();
         vm.prank(deployerAddress);
-        registry.endorse(address(troveManager));
+        daddy.execute(address(registry), abi.encodeWithSelector(IRegistry.endorse.selector, address(troveManager)), 0, true);
     }
 
     function test_unendorse() public {
         vm.prank(deployerAddress);
-        registry.endorse(address(troveManager));
+        daddy.execute(address(registry), abi.encodeWithSelector(IRegistry.endorse.selector, address(troveManager)), 0, true);
 
         vm.prank(deployerAddress);
-        registry.unendorse(address(troveManager));
+        daddy.execute(address(registry), abi.encodeWithSelector(IRegistry.unendorse.selector, address(troveManager)), 0, true);
 
         assertEq(uint256(registry.market_status(address(troveManager))), uint256(IRegistry.Status.unendorsed), "E0");
         assertEq(registry.markets_count(), 1, "E1"); // markets list is append-only
@@ -125,10 +72,10 @@ contract RegistryTests is Base {
     function test_unendorse_notDaddy(
         address _notDaddy
     ) public {
-        vm.assume(_notDaddy != deployerAddress);
+        vm.assume(_notDaddy != address(daddy));
 
         vm.prank(deployerAddress);
-        registry.endorse(address(troveManager));
+        daddy.execute(address(registry), abi.encodeWithSelector(IRegistry.endorse.selector, address(troveManager)), 0, true);
 
         vm.expectRevert("bad daddy");
         vm.prank(_notDaddy);
@@ -136,26 +83,26 @@ contract RegistryTests is Base {
     }
 
     function test_unendorse_notEndorsed() public {
-        vm.expectRevert("!ENDORSED");
+        vm.expectRevert();
         vm.prank(deployerAddress);
-        registry.unendorse(address(troveManager));
+        daddy.execute(address(registry), abi.encodeWithSelector(IRegistry.unendorse.selector, address(troveManager)), 0, true);
     }
 
     function test_unendorse_alreadyUnendorsed() public {
         vm.prank(deployerAddress);
-        registry.endorse(address(troveManager));
+        daddy.execute(address(registry), abi.encodeWithSelector(IRegistry.endorse.selector, address(troveManager)), 0, true);
 
         vm.prank(deployerAddress);
-        registry.unendorse(address(troveManager));
+        daddy.execute(address(registry), abi.encodeWithSelector(IRegistry.unendorse.selector, address(troveManager)), 0, true);
 
-        vm.expectRevert("!ENDORSED");
+        vm.expectRevert();
         vm.prank(deployerAddress);
-        registry.unendorse(address(troveManager));
+        daddy.execute(address(registry), abi.encodeWithSelector(IRegistry.unendorse.selector, address(troveManager)), 0, true);
     }
 
     function test_marketsCountForPairSymmetry() public {
         vm.prank(deployerAddress);
-        registry.endorse(address(troveManager));
+        daddy.execute(address(registry), abi.encodeWithSelector(IRegistry.endorse.selector, address(troveManager)), 0, true);
 
         // Should return same count regardless of order
         assertEq(
@@ -167,7 +114,7 @@ contract RegistryTests is Base {
 
     function test_findMarketForPairSymmetry() public {
         vm.prank(deployerAddress);
-        registry.endorse(address(troveManager));
+        daddy.execute(address(registry), abi.encodeWithSelector(IRegistry.endorse.selector, address(troveManager)), 0, true);
 
         // Should return same market regardless of order
         assertEq(

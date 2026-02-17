@@ -39,8 +39,6 @@ struct DeployParams:
     borrow_token: address  # address of the borrow token
     collateral_token: address  # address of the collateral token
     price_oracle: address  # address of the Price Oracle contract
-    management: address  # address of the management
-    performance_fee_recipient: address  # address of the performance fee recipient
     minimum_debt: uint256  # minimum borrowable amount, e.g., `500 * borrow_token_precision` for 500 tokens
     safe_collateral_ratio: uint256  # target CR after partial liquidation, e.g., `115` for 115%. must be greater than `100% + max_liquidation_fee` to avoid underflow in the safe CR calculation
     minimum_collateral_ratio: uint256  # minimum CR to avoid liquidation, e.g., `110` for 110%
@@ -142,8 +140,6 @@ def deploy(params: DeployParams) -> (address, address, address, address, address
     lender: address = extcall LENDER_FACTORY.deploy(
         params.borrow_token,
         trove_manager,
-        params.management,
-        params.performance_fee_recipient,
         name,
     )
 

@@ -48,11 +48,7 @@ contract Lender is BaseHooks {
     /// @param _asset The address of the borrow token
     /// @param _troveManager The address of the TroveManager contract
     /// @param _name The name of the vault
-    constructor(
-        address _asset,
-        address _troveManager,
-        string memory _name
-    ) BaseHooks(_asset, _name) {
+    constructor(address _asset, address _troveManager, string memory _name) BaseHooks(_asset, _name) {
         // Set Trove Manager contract
         TROVE_MANAGER = ITroveManager(_troveManager);
 
