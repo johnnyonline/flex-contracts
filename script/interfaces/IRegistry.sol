@@ -37,6 +37,11 @@ interface IRegistry {
     // View functions
     // ============================================================================================
 
+    function get_all_markets() external view returns (address[] memory);
+    function get_all_markets_for_pair(
+        address collateral_token,
+        address borrow_token
+    ) external view returns (address[] memory);
     function markets_count() external view returns (uint256);
     function markets_count_for_pair(
         address collateral_token,

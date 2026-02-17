@@ -81,6 +81,29 @@ def __init__(daddy: address):
 
 @view
 @external
+def get_all_markets() -> DynArray[address, _MAX_UINT32]:
+    """
+    @notice Get all markets
+    @return markets The list of all market addresses
+    """
+    return self.markets
+
+
+@view
+@external
+def get_all_markets_for_pair(collateral_token: address, borrow_token: address) -> DynArray[address, _MAX_UINT32]:
+    """
+    @notice Get all markets for a specific pair
+    @param collateral_token The address of the collateral token
+    @param borrow_token The address of the borrow token
+    @return markets The list of market addresses for the given pair
+    """
+    key: uint256 = self._get_pair_key(collateral_token, borrow_token)
+    return self.markets_by_pair[key]
+
+
+@view
+@external
 def markets_count() -> uint256:
     """
     @notice Get the count of the markets that have been endorsed

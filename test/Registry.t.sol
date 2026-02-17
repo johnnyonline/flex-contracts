@@ -124,4 +124,35 @@ contract RegistryTests is Base {
         );
     }
 
+    function test_getAllMarkets() public {
+        // Empty before endorsing
+        assertEq(registry.get_all_markets().length, 0, "E0");
+
+        // Endorse
+        vm.prank(deployerAddress);
+        daddy.execute(address(registry), abi.encodeWithSelector(IRegistry.endorse.selector, address(troveManager)), 0, true);
+
+        address[] memory _markets = registry.get_all_markets();
+        assertEq(_markets.length, 1, "E1");
+        assertEq(_markets[0], address(troveManager), "E2");
+    }
+
+    function test_getAllMarketsForPair() public {
+        // Empty before endorsing
+        assertEq(registry.get_all_markets_for_pair(address(collateralToken), address(borrowToken)).length, 0, "E0");
+
+        // Endorse
+        vm.prank(deployerAddress);
+        daddy.execute(address(registry), abi.encodeWithSelector(IRegistry.endorse.selector, address(troveManager)), 0, true);
+
+        address[] memory _markets = registry.get_all_markets_for_pair(address(collateralToken), address(borrowToken));
+        assertEq(_markets.length, 1, "E1");
+        assertEq(_markets[0], address(troveManager), "E2");
+
+        // Symmetry
+        address[] memory _marketsReversed = registry.get_all_markets_for_pair(address(borrowToken), address(collateralToken));
+        assertEq(_marketsReversed.length, 1, "E3");
+        assertEq(_marketsReversed[0], address(troveManager), "E4");
+    }
+
 }
