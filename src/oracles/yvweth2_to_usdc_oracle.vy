@@ -98,7 +98,7 @@ def get_price(scaled: bool = True) -> uint256:
     assert usdc_usd_price > 0, "wtf"
 
     # Fetch yvWETH-2 price per share
-    pps: uint256 = staticcall IYearnVault(_COLLATERAL_TOKEN.address).pricePerShare()  # yvWETH-2 in WETH WAD
+    pps: uint256 = staticcall IYearnVault(_COLLATERAL_TOKEN.address).pricePerShare()  # yvWETH-2 in WETH
 
     # Calculate yvWETH-2/USDC price
     price: uint256 = convert(eth_usd_price, uint256) * _WAD // convert(usdc_usd_price, uint256) * pps // _WAD  # yvWETH-2 in USDC WAD
