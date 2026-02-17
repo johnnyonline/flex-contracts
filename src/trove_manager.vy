@@ -1065,7 +1065,7 @@ def liquidate_trove(
     # Determine how much collateral to liquidate, cap at the Trove's collateral
     collateral_to_liquidate: uint256 = min(collateral_with_fee, trove.collateral)
 
-    # Cache the trove owner before the trove is potentially emptied
+    # Cache the Trove owner before the Trove is potentially emptied
     trove_owner: address = trove.owner
 
     # Check if this is a full liquidation and cache the result
@@ -1147,7 +1147,8 @@ def liquidate_trove(
     # Transfer the collateral tokens to the `receiver`
     assert extcall self.collateral_token.transfer(receiver, collateral_to_liquidate, default_return_value=True)
 
-    # If the caller provided data, perform the callback
+    # If the caller provided data, perform the callback.
+    # No reentrancy concern: all state updates are complete before the external call (CEI)
     if len(data) != 0:
         extcall ITaker(receiver).takeCallback(
             trove_id,
