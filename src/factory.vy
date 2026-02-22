@@ -4,7 +4,7 @@
 @title Factory
 @license MIT
 @author Flex
-@notice Factory contract for deploying new markets
+@notice Deploys new markets
 """
 
 from ethereum.ercs import IERC20Detailed

@@ -4,7 +4,7 @@
 @title Dutch Desk
 @license MIT
 @author Flex
-@notice Handles redemptions through Dutch Auctions
+@notice Manages redemption Dutch Auctions
 """
 
 from ethereum.ercs import IERC20

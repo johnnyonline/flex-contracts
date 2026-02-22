@@ -4,7 +4,7 @@
 @title Daddy
 @license MIT
 @author Flex
-@notice Protocol owner contract with a generalized execute function
+@notice Protocol owner with a generalized execute function
 """
 
 

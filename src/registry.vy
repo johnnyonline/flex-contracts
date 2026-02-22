@@ -4,7 +4,7 @@
 @title Registry
 @license MIT
 @author Flex
-@notice Registry contract for storing addresses of deployed markets
+@notice Stores and manages endorsed market addresses
 """
 
 from interfaces import ITroveManager

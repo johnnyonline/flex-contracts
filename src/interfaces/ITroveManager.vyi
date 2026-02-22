@@ -83,3 +83,79 @@ def get_trove_debt_after_interest(trove_id: uint256) -> uint256:
 @external
 def initialize(params: InitializeParams):
     ...
+
+
+# ============================================================================================
+# Ownership
+# ============================================================================================
+
+
+@external
+def transfer_ownership(trove_id: uint256, new_owner: address):
+    ...
+
+
+@external
+def accept_ownership(trove_id: uint256):
+    ...
+
+
+# ============================================================================================
+# Open trove
+# ============================================================================================
+
+
+@external
+def open_trove(
+    owner_index: uint256,
+    collateral_amount: uint256,
+    debt_amount: uint256,
+    prev_id: uint256,
+    next_id: uint256,
+    annual_interest_rate: uint256,
+    max_upfront_fee: uint256,
+    min_borrow_out: uint256,
+    min_collateral_out: uint256,
+) -> uint256:
+    ...
+
+
+# ============================================================================================
+# Adjust trove
+# ============================================================================================
+
+
+@external
+def add_collateral(trove_id: uint256, collateral_amount: uint256):
+    ...
+
+
+@external
+def remove_collateral(trove_id: uint256, collateral_amount: uint256):
+    ...
+
+
+@external
+def borrow(
+    trove_id: uint256,
+    debt_amount: uint256,
+    max_upfront_fee: uint256,
+    min_borrow_out: uint256,
+    min_collateral_out: uint256,
+):
+    ...
+
+
+@external
+def repay(trove_id: uint256, debt_amount: uint256):
+    ...
+
+
+# ============================================================================================
+# Close trove
+# ============================================================================================
+
+
+@external
+def close_trove(trove_id: uint256):
+    ...
