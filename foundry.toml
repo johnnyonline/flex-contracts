@@ -3,7 +3,9 @@ src = 'src'
 out = 'out'
 libs = ['lib', 'lib/snekmate/src']
 solc = "0.8.23"
-evm_version = "cancun"
+evm_version = "osaka"
+# evm_version = "cancun"
+ffi = true
 skip = ["**/lib/snekmate/**"]
 
 remappings = [
