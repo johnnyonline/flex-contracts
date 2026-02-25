@@ -9,8 +9,6 @@
 
 from ethereum.ercs import IERC20
 
-from ..interfaces import IAuction
-from ..interfaces import IDutchDesk
 from ..interfaces import IFlashLender
 from ..interfaces import ITroveManager
 
@@ -52,7 +50,6 @@ struct OpenLeveragedData:
     min_collateral_out: uint256
     collateral_swap: SwapData
     debt_swap: SwapData
-    take_swap: SwapData
 
 
 struct CloseLeveragedData:
@@ -76,7 +73,6 @@ struct LeverUpData:
     min_collateral_out: uint256
     collateral_swap: SwapData
     debt_swap: SwapData
-    take_swap: SwapData
 
 
 struct LeverDownData:
@@ -97,9 +93,6 @@ struct LeverDownData:
 
 # Max swap calldata size
 _MAX_SWAP_DATA_SIZE: constant(uint256) = 10 ** 4
-
-# Auction
-_MAX_TAKE_CALLBACK_DATA_SIZE: constant(uint256) = 10 ** 5
 
 # ERC3156
 _MAX_FLASHLOAN_CALLBACK_DATA_SIZE: constant(uint256) = 10 ** 5
@@ -125,6 +118,7 @@ def open_leveraged_trove(data: OpenLeveragedData) -> uint256:
     @param data The open leveraged Trove parameters
     @return The Trove ID
     """
+    print("111close_leveraged_trove", hardhat_compat=True)
     # Make sure the owner is non-zero
     assert data.owner != empty(address), "!owner"
 
@@ -140,13 +134,17 @@ def open_leveraged_trove(data: OpenLeveragedData) -> uint256:
         abi_encode(Operation.OPEN, data),  # data
     )
 
-    # Sweep any remaining tokens to caller
+    # Compute the Trove ID
+    trove_id: uint256 = convert(keccak256(abi_encode(self, data.owner_index)), uint256)
+
+    # Transfer the Trove ownership to the owner
+    extcall ITroveManager(data.trove_manager).transfer_ownership(trove_id, data.owner)
+
+    # Sweep any remaining crvUSD tokens to caller
     self._sweep(_CRVUSD.address, msg.sender)
-    if collateral_token != _CRVUSD.address:
-        self._sweep(collateral_token, msg.sender)
 
     # Return the Trove ID
-    return convert(keccak256(abi_encode(self, data.owner_index)), uint256)
+    return trove_id
 
 
 # ============================================================================================
@@ -162,17 +160,21 @@ def close_leveraged_trove(data: CloseLeveragedData):
     @dev User must call `trove_manager.transfer_ownership(trove_id, zapper)` before calling this
     @param data The close leveraged Trove parameters
     """
+    print("close_leveraged_trove", hardhat_compat=True)
     # Cache the Trove Manager instance
     trove_manager: ITroveManager = ITroveManager(data.trove_manager)
+    print("0close_leveraged_trove", hardhat_compat=True)
 
     # Get the Trove info
     trove: ITroveManager.Trove = staticcall trove_manager.troves(data.trove_id)
+    print("1close_leveraged_trove", hardhat_compat=True)
 
     # Make sure the caller is the current Trove owner
     assert trove.owner == msg.sender, "!owner"
 
     # Accept Trove ownership
     extcall trove_manager.accept_ownership(data.trove_id)
+    print("2close_leveraged_trove", hardhat_compat=True)
 
     # Initiate flash loan
     extcall _FLASH_LENDER.flashLoan(
@@ -181,19 +183,16 @@ def close_leveraged_trove(data: CloseLeveragedData):
         data.flash_loan_amount,  # amount
         abi_encode(Operation.CLOSE, data),  # data
     )
+    print("3close_leveraged_trove", hardhat_compat=True)
 
     # Get collateral and borrow tokens from the Trove Manager
     collateral_token: address = staticcall trove_manager.collateral_token()
     borrow_token: address = staticcall trove_manager.borrow_token()
 
-    # Sweep crvUSD
+    # Sweep any remaining crvUSD tokens to caller
     self._sweep(_CRVUSD.address, msg.sender)
 
-    # Sweep collateral token if it's not crvUSD
-    if collateral_token != _CRVUSD.address:
-        self._sweep(collateral_token, msg.sender)
-
-    # Sweep borrow token if it's not crvUSD
+    # Sweep any remaining borrow tokens to caller
     if borrow_token != _CRVUSD.address:
         self._sweep(borrow_token, msg.sender)
 
@@ -239,12 +238,8 @@ def lever_up_trove(data: LeverUpData):
     # Transfer Trove ownership back to caller
     extcall trove_manager.transfer_ownership(data.trove_id, msg.sender)
 
-    # Sweep crvUSD
+    # Sweep any remaining crvUSD tokens to caller
     self._sweep(_CRVUSD.address, msg.sender)
-
-    # Sweep collateral token if it's not crvUSD
-    if collateral_token != _CRVUSD.address:
-        self._sweep(collateral_token, msg.sender)
 
 
 # ============================================================================================
@@ -297,41 +292,6 @@ def lever_down_trove(data: LeverDownData):
     # Sweep borrow token if it's not crvUSD
     if borrow_token != _CRVUSD.address:
         self._sweep(borrow_token, msg.sender)
-
-
-# ============================================================================================
-# Auction take callback
-# ============================================================================================
-
-
-@external
-def takeCallback(
-    auction_id: uint256,
-    taker: address,
-    amount_taken: uint256,
-    needed_amount: uint256,
-    data: Bytes[_MAX_TAKE_CALLBACK_DATA_SIZE],
-):
-    """
-    @notice Callback from an Auction contract after receiving collateral from a take
-    @dev Swaps collateral to borrow tokens, then approves the Auction to pull them
-    @param auction_id The auction identifier
-    @param taker The address that initiated the take
-    @param amount_taken The amount of collateral tokens received
-    @param needed_amount The amount of borrow tokens needed by the Auction
-    @param data Encoded (borrow_token, collateral_token, swap)
-    """
-    # Decode the callback data
-    borrow_token: address = empty(address)
-    collateral_token: address = empty(address)
-    swap: SwapData = empty(SwapData)
-    borrow_token, collateral_token, swap = abi_decode(data, (address, address, SwapData))
-
-    # Collateral --> borrow token
-    self._swap(swap, collateral_token, amount_taken)
-
-    # Approve the Auction contract to pull the borrow tokens
-    assert extcall IERC20(borrow_token).approve(msg.sender, needed_amount, default_return_value=True)
 
 
 # ============================================================================================
@@ -418,11 +378,8 @@ def _handle_open(flash_loan_amount: uint256, data: Bytes[_MAX_FLASHLOAN_CALLBACK
     # Approve spending of the collateral by the Trove Manager
     assert extcall IERC20(collateral_token).approve(params.trove_manager, available_collateral, default_return_value=True)
 
-    # Record nonce before opening the Trove (opening may trigger a redemption auction)
-    nonce_before: uint256 = staticcall IDutchDesk(staticcall trove_manager.dutch_desk()).nonce()
-
     # Open the Trove
-    trove_id: uint256 = extcall trove_manager.open_trove(
+    extcall trove_manager.open_trove(
         params.owner_index,
         available_collateral,
         params.debt_amount,
@@ -434,15 +391,9 @@ def _handle_open(flash_loan_amount: uint256, data: Bytes[_MAX_FLASHLOAN_CALLBACK
         params.min_collateral_out,
     )
 
-    # Take the kicked auction if a redemption was triggered
-    self._take_kicked_auction(trove_manager, nonce_before, borrow_token, collateral_token, params.take_swap)
-
     # Borrow token --> crvUSD
     borrow_token_balance: uint256 = staticcall IERC20(borrow_token).balanceOf(self)
     self._swap(params.debt_swap, borrow_token, borrow_token_balance)
-
-    # Transfer the Trove ownership to owner
-    extcall trove_manager.transfer_ownership(trove_id, params.owner)
 
 
 @internal
@@ -508,9 +459,6 @@ def _handle_lever_up(flash_loan_amount: uint256, data: Bytes[_MAX_FLASHLOAN_CALL
     # Add collateral to the Trove
     extcall trove_manager.add_collateral(params.trove_id, available_collateral)
 
-    # Record nonce before borrowing (borrow may trigger a redemption auction)
-    nonce_before: uint256 = staticcall IDutchDesk(staticcall trove_manager.dutch_desk()).nonce()
-
     # Borrow additional debt
     extcall trove_manager.borrow(
         params.trove_id,
@@ -519,9 +467,6 @@ def _handle_lever_up(flash_loan_amount: uint256, data: Bytes[_MAX_FLASHLOAN_CALL
         params.min_borrow_out,
         params.min_collateral_out,
     )
-
-    # Take the kicked auction if a redemption was triggered
-    self._take_kicked_auction(trove_manager, nonce_before, borrow_token, collateral_token, params.take_swap)
 
     # Borrow token --> crvUSD
     borrow_token_balance: uint256 = staticcall IERC20(borrow_token).balanceOf(self)
@@ -547,6 +492,7 @@ def _handle_lever_down(flash_loan_amount: uint256, data: Bytes[_MAX_FLASHLOAN_CA
 
     # crvUSD --> borrow token
     self._swap(params.debt_swap, _CRVUSD.address, flash_loan_amount)
+    # @todo -- repay using all the borrow tokens we have
 
     # Approve spending of the borrow token by the Trove Manager
     assert extcall IERC20(borrow_token).approve(params.trove_manager, params.debt_to_repay, default_return_value=True)
@@ -565,43 +511,6 @@ def _handle_lever_down(flash_loan_amount: uint256, data: Bytes[_MAX_FLASHLOAN_CA
 # ============================================================================================
 # Internal helpers
 # ============================================================================================
-
-
-@internal
-def _take_kicked_auction(
-    trove_manager: ITroveManager,
-    nonce_before: uint256,
-    borrow_token: address,
-    collateral_token: address,
-    take_swap: SwapData,
-):
-    """
-    @notice Take a kicked auction if the Dutch Desk nonce increased
-    @dev Called after `open_trove()` or `borrow()`, which may trigger a redemption auction
-    @param trove_manager The Trove Manager instance
-    @param nonce_before The Dutch Desk nonce before the borrow operation
-    @param borrow_token The borrow token address
-    @param collateral_token The collateral token address
-    @param take_swap The swap parameters for collateral --> borrow token in the take callback
-    """
-    # Get the Dutch Desk
-    dutch_desk: IDutchDesk = IDutchDesk(staticcall trove_manager.dutch_desk())
-
-    # Check if the nonce increased (auction was kicked)
-    nonce_after: uint256 = staticcall dutch_desk.nonce()
-    if nonce_after <= nonce_before:
-        return
-
-    # Get the Auction contract
-    auction: IAuction = IAuction(staticcall dutch_desk.auction())
-
-    # Take the kicked auction
-    extcall auction.take(
-        nonce_before,  # auction_id
-        max_value(uint256),  # max_take_amount
-        self,  # receiver
-        abi_encode(borrow_token, collateral_token, take_swap),  # data for takeCallback
-    )
 
 
 @internal

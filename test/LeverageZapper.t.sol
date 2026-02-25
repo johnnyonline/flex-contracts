@@ -22,11 +22,7 @@ contract LeverageZapperTests is Base {
         vm.label(address(leverageZapper), "LeverageZapper");
     }
 
-    // ============================================================================================
-    // Open leveraged trove
-    // ============================================================================================
-
-    function test_open_leveraged_trove() public {
+    function test_openLeveragedTrove() public returns (uint256) {
         // Airdrop collateral to borrower
         uint256 userCollateral = 10 ether;
         airdrop(address(collateralToken), userBorrower, userCollateral);
@@ -38,7 +34,7 @@ contract LeverageZapperTests is Base {
         uint256 flashLoanAmount = debtAmount * WAD / BORROW_TOKEN_PRECISION; // scale to crvUSD (18 decimals)
 
         // Add slippage buffer to debt
-        debtAmount = debtAmount * 105 / 100;
+        debtAmount = debtAmount * 10001 / 10000; // 0.01% slippage buffer
 
         // Fund the lender
         mintAndDepositIntoLender(userLender, debtAmount);
@@ -84,8 +80,7 @@ contract LeverageZapperTests is Base {
                     : ILeverageZapper.SwapData({router: ENSO_ROUTER, data: collateralSwapData}),
                 debt_swap: borrowIsCrvUSD
                     ? ILeverageZapper.SwapData({router: address(0), data: ""})
-                    : ILeverageZapper.SwapData({router: ENSO_ROUTER, data: debtSwapData}),
-                take_swap: ILeverageZapper.SwapData({router: address(0), data: ""})
+                    : ILeverageZapper.SwapData({router: ENSO_ROUTER, data: debtSwapData})
             })
         );
 
@@ -101,7 +96,7 @@ contract LeverageZapperTests is Base {
 
         // Verify leverage: trove.collateral should be approximately targetLeverage * userCollateral
         uint256 expectedCollateral = userCollateral * targetLeverage;
-        assertApproxEqRel(trove.collateral, expectedCollateral, 10e16, "E3"); // 10% tolerance
+        assertApproxEqRel(trove.collateral, expectedCollateral, 1e16, "E3"); // 1% tolerance
 
         // Verify zapper has no leftover tokens
         assertEq(collateralToken.balanceOf(address(leverageZapper)), 0, "E4");
@@ -109,9 +104,72 @@ contract LeverageZapperTests is Base {
         assertEq(IERC20(CRVUSD).balanceOf(address(leverageZapper)), 0, "E6");
 
         // Verify swept balances to borrower are dust
-        assertLt(collateralToken.balanceOf(userBorrower), COLLATERAL_TOKEN_PRECISION / 100, "E7");
-        assertLt(borrowToken.balanceOf(userBorrower), BORROW_TOKEN_PRECISION / 100, "E8");
-        assertLt(IERC20(CRVUSD).balanceOf(userBorrower), 1e16, "E9");
+        assertEq(collateralToken.balanceOf(userBorrower), 0, "E7");
+        assertEq(borrowToken.balanceOf(userBorrower), 0, "E8");
+        assertLt(IERC20(CRVUSD).balanceOf(userBorrower), 100e18, "E9");
+
+        return troveId;
+    }
+
+    function test_closeLeveragedTrove() public {
+        uint256 troveId = test_openLeveragedTrove();
+
+        // Get trove state
+        ITroveManager.Trove memory trove = troveManager.troves(troveId);
+        uint256 troveDebt = troveManager.get_trove_debt_after_interest(troveId);
+        uint256 troveCollateral = trove.collateral;
+
+        // Flash loan enough crvUSD to cover the debt (with buffer for swap slippage)
+        uint256 closeFlashLoanAmount = troveDebt * WAD / BORROW_TOKEN_PRECISION * 101 / 100;
+
+        // debt_swap: crvUSD → borrow token (to repay debt)
+        bytes memory closeDebtSwapData;
+        if (address(borrowToken) != CRVUSD) {
+            closeDebtSwapData = _getEnsoSwapData(1, CRVUSD, address(borrowToken), closeFlashLoanAmount, address(leverageZapper));
+        }
+
+        // collateral_swap: collateral → crvUSD (to repay flash loan)
+        bytes memory closeCollateralSwapData;
+        if (address(collateralToken) != CRVUSD) {
+            closeCollateralSwapData = _getEnsoSwapData(1, address(collateralToken), CRVUSD, troveCollateral, address(leverageZapper));
+        }
+
+        // Transfer trove ownership to zapper
+        vm.prank(userBorrower);
+        troveManager.transfer_ownership(troveId, address(leverageZapper));
+
+        // Close leveraged trove
+        vm.prank(userBorrower);
+        leverageZapper.close_leveraged_trove(
+            ILeverageZapper.CloseLeveragedData({
+                owner: userBorrower,
+                trove_manager: address(troveManager),
+                trove_id: troveId,
+                flash_loan_amount: closeFlashLoanAmount,
+                collateral_swap: address(collateralToken) != CRVUSD
+                    ? ILeverageZapper.SwapData({router: ENSO_ROUTER, data: closeCollateralSwapData})
+                    : ILeverageZapper.SwapData({router: address(0), data: ""}),
+                debt_swap: address(borrowToken) != CRVUSD
+                    ? ILeverageZapper.SwapData({router: ENSO_ROUTER, data: closeDebtSwapData})
+                    : ILeverageZapper.SwapData({router: address(0), data: ""})
+            })
+        );
+
+        // Verify trove is closed
+        ITroveManager.Trove memory closedTrove = troveManager.troves(troveId);
+        assertEq(uint256(closedTrove.status), uint256(ITroveManager.Status.closed), "E0");
+        assertEq(closedTrove.debt, 0, "E1");
+        assertEq(closedTrove.collateral, 0, "E2");
+
+        // Verify zapper has no leftover tokens
+        assertEq(collateralToken.balanceOf(address(leverageZapper)), 0, "E3");
+        assertEq(borrowToken.balanceOf(address(leverageZapper)), 0, "E4");
+        assertEq(IERC20(CRVUSD).balanceOf(address(leverageZapper)), 0, "E5");
+
+        // Verify user balances
+        assertEq(collateralToken.balanceOf(userBorrower), 0, "E6");
+        assertLt(borrowToken.balanceOf(userBorrower), BORROW_TOKEN_PRECISION / 100, "E7");
+        assertGt(IERC20(CRVUSD).balanceOf(userBorrower), 0, "E8");
     }
 
     // ============================================================================================

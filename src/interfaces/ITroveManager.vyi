@@ -65,12 +65,6 @@ def collateral_token() -> address:
 
 @external
 @view
-def dutch_desk() -> address:
-    ...
-
-
-@external
-@view
 def troves(trove_id: uint256) -> Trove:
     ...
 

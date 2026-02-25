@@ -27,7 +27,6 @@ interface ILeverageZapper {
         uint256 min_collateral_out;
         SwapData collateral_swap;
         SwapData debt_swap;
-        SwapData take_swap;
     }
 
     struct CloseLeveragedData {
@@ -51,7 +50,6 @@ interface ILeverageZapper {
         uint256 min_collateral_out;
         SwapData collateral_swap;
         SwapData debt_swap;
-        SwapData take_swap;
     }
 
     struct LeverDownData {
