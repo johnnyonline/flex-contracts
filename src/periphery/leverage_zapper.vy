@@ -198,7 +198,7 @@ def close_leveraged_trove(data: CloseLeveragedData):
 @external
 def lever_up_trove(data: LeverUpData):
     """
-    @notice Add leverage to an existing Trove (add collateral + borrow more)
+    @notice Add leverage to an existing Trove
     @dev Only callable by the Trove owner
     @dev User must call `trove_manager.transfer_ownership(trove_id, zapper)` before calling this
     @param data The lever up parameters
@@ -243,7 +243,7 @@ def lever_up_trove(data: LeverUpData):
 @external
 def lever_down_trove(data: LeverDownData):
     """
-    @notice Reduce leverage on an existing Trove (repay debt + remove collateral)
+    @notice Reduce leverage on an existing Trove
     @dev Only callable by the Trove owner
     @dev User must call `trove_manager.transfer_ownership(trove_id, zapper)` before calling this
     @param data The lever down parameters
@@ -329,7 +329,7 @@ def onFlashLoan(
     else:
         raise "!operation"
 
-    # Transfer crvUSD back to flash lender for repayment
+    # Repay the flash loan
     assert extcall _CRVUSD.transfer(_FLASH_LENDER.address, amount, default_return_value=True)
 
     # Return success hash
@@ -525,12 +525,12 @@ def _swap(swap: SwapData, token_in: address, amount_in: uint256):
 
 
 @internal
-def _sweep(token: address, user: address):
+def _sweep(token: address, receiver: address):
     """
-    @notice Transfer the entire balance of a token held by this contract to the user
+    @notice Transfer the entire balance of a token held by this contract to the `receiver`
     @param token The token to sweep
-    @param user The recipient
+    @param receiver The receiver of the swept tokens
     """
     balance: uint256 = staticcall IERC20(token).balanceOf(self)
     if balance > 0:
-        assert extcall IERC20(token).transfer(user, balance, default_return_value=True)
+        assert extcall IERC20(token).transfer(receiver, balance, default_return_value=True)
