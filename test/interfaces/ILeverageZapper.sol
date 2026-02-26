@@ -57,7 +57,6 @@ interface ILeverageZapper {
         address trove_manager;
         uint256 trove_id;
         uint256 flash_loan_amount;
-        uint256 debt_to_repay;
         uint256 collateral_to_remove;
         SwapData collateral_swap;
         SwapData debt_swap;
@@ -67,9 +66,17 @@ interface ILeverageZapper {
     // External functions
     // ============================================================================================
 
-    function open_leveraged_trove(OpenLeveragedData calldata data) external returns (uint256);
-    function close_leveraged_trove(CloseLeveragedData calldata data) external;
-    function lever_up_trove(LeverUpData calldata data) external;
-    function lever_down_trove(LeverDownData calldata data) external;
+    function open_leveraged_trove(
+        OpenLeveragedData calldata data
+    ) external returns (uint256);
+    function close_leveraged_trove(
+        CloseLeveragedData calldata data
+    ) external;
+    function lever_up_trove(
+        LeverUpData calldata data
+    ) external;
+    function lever_down_trove(
+        LeverDownData calldata data
+    ) external;
 
 }

@@ -80,7 +80,6 @@ struct LeverDownData:
     trove_manager: address
     trove_id: uint256
     flash_loan_amount: uint256
-    debt_to_repay: uint256
     collateral_to_remove: uint256
     collateral_swap: SwapData
     debt_swap: SwapData
@@ -118,7 +117,6 @@ def open_leveraged_trove(data: OpenLeveragedData) -> uint256:
     @param data The open leveraged Trove parameters
     @return The Trove ID
     """
-    print("111close_leveraged_trove", hardhat_compat=True)
     # Make sure the owner is non-zero
     assert data.owner != empty(address), "!owner"
 
@@ -160,21 +158,17 @@ def close_leveraged_trove(data: CloseLeveragedData):
     @dev User must call `trove_manager.transfer_ownership(trove_id, zapper)` before calling this
     @param data The close leveraged Trove parameters
     """
-    print("close_leveraged_trove", hardhat_compat=True)
     # Cache the Trove Manager instance
     trove_manager: ITroveManager = ITroveManager(data.trove_manager)
-    print("0close_leveraged_trove", hardhat_compat=True)
 
     # Get the Trove info
     trove: ITroveManager.Trove = staticcall trove_manager.troves(data.trove_id)
-    print("1close_leveraged_trove", hardhat_compat=True)
 
     # Make sure the caller is the current Trove owner
     assert trove.owner == msg.sender, "!owner"
 
     # Accept Trove ownership
     extcall trove_manager.accept_ownership(data.trove_id)
-    print("2close_leveraged_trove", hardhat_compat=True)
 
     # Initiate flash loan
     extcall _FLASH_LENDER.flashLoan(
@@ -183,7 +177,6 @@ def close_leveraged_trove(data: CloseLeveragedData):
         data.flash_loan_amount,  # amount
         abi_encode(Operation.CLOSE, data),  # data
     )
-    print("3close_leveraged_trove", hardhat_compat=True)
 
     # Get collateral and borrow tokens from the Trove Manager
     collateral_token: address = staticcall trove_manager.collateral_token()
@@ -285,10 +278,6 @@ def lever_down_trove(data: LeverDownData):
     # Sweep crvUSD
     self._sweep(_CRVUSD.address, msg.sender)
 
-    # Sweep collateral token if it's not crvUSD
-    if collateral_token != _CRVUSD.address:
-        self._sweep(collateral_token, msg.sender)
-
     # Sweep borrow token if it's not crvUSD
     if borrow_token != _CRVUSD.address:
         self._sweep(borrow_token, msg.sender)
@@ -309,7 +298,7 @@ def onFlashLoan(
 ) -> bytes32:
     """
     @notice ERC-3156 flash loan callback
-    @dev Only callable by the flash lender, only when initiated by this contract
+    @dev Only callable by the flash lender
     @param initiator The address that initiated the flash loan
     @param token The token that was flash loaned
     @param amount The amount that was flash loaned
@@ -492,13 +481,15 @@ def _handle_lever_down(flash_loan_amount: uint256, data: Bytes[_MAX_FLASHLOAN_CA
 
     # crvUSD --> borrow token
     self._swap(params.debt_swap, _CRVUSD.address, flash_loan_amount)
-    # @todo -- repay using all the borrow tokens we have
+
+    # Get the available borrow tokens
+    available_borrow: uint256 = staticcall IERC20(borrow_token).balanceOf(self)
 
     # Approve spending of the borrow token by the Trove Manager
-    assert extcall IERC20(borrow_token).approve(params.trove_manager, params.debt_to_repay, default_return_value=True)
+    assert extcall IERC20(borrow_token).approve(params.trove_manager, available_borrow, default_return_value=True)
 
-    # Repay debt
-    extcall trove_manager.repay(params.trove_id, params.debt_to_repay)
+    # Repay debt (Trove Manager caps the actual amount)
+    extcall trove_manager.repay(params.trove_id, available_borrow)
 
     # Remove collateral
     extcall trove_manager.remove_collateral(params.trove_id, params.collateral_to_remove)
