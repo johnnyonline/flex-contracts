@@ -28,6 +28,7 @@ import "forge-std/Script.sol";
 contract Deploy is Script {
 
     bool public isTest;
+    bool public isLatestBlock;
     address public deployerAddress;
 
     // Original contracts

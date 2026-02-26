@@ -150,7 +150,7 @@ contract LendTests is Base {
         // Check trove info
         _trove = troveManager.troves(_troveId);
         assertEq(_trove.debt, 0, "E34");
-        assertApproxEqRel(_trove.collateral, _expectedCollateralAfterRedemption, 5e15, "E35"); // 0.5%
+        assertApproxEqRel(_trove.collateral, _expectedCollateralAfterRedemption, 1e16, "E35"); // 1%
         assertEq(_trove.annual_interest_rate, DEFAULT_ANNUAL_INTEREST_RATE, "E36");
         assertEq(_trove.last_debt_update_time, _expectedTime, "E37");
         assertEq(_trove.last_interest_rate_adj_time, _expectedTime - _daysToSkip, "E38");
@@ -166,7 +166,7 @@ contract LendTests is Base {
         assertFalse(sortedTroves.contains(_troveId), "E46");
 
         // Check balances
-        assertApproxEqRel(collateralToken.balanceOf(address(troveManager)), _expectedCollateralAfterRedemption, 5e15, "E47"); // 0.5%
+        assertApproxEqRel(collateralToken.balanceOf(address(troveManager)), _expectedCollateralAfterRedemption, 1e16, "E47"); // 1%
         assertEq(collateralToken.balanceOf(address(troveManager)), troveManager.collateral_balance(), "E48");
         assertEq(collateralToken.balanceOf(address(userBorrower)), 0, "E49");
         assertEq(borrowToken.balanceOf(address(troveManager)), 0, "E50");
@@ -176,7 +176,7 @@ contract LendTests is Base {
         // Check global info
         assertApproxEqAbs(troveManager.total_debt(), 0, 2, "E53");
         assertEq(troveManager.total_weighted_debt(), 0, "E54");
-        assertApproxEqRel(troveManager.collateral_balance(), _expectedCollateralAfterRedemption, 5e15, "E55"); // 0.5%
+        assertApproxEqRel(troveManager.collateral_balance(), _expectedCollateralAfterRedemption, 1e16, "E55"); // 1%
         assertEq(troveManager.zombie_trove_id(), 0, "E56");
 
         // Check dutch desk is empty

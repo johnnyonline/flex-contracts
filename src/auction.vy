@@ -5,7 +5,7 @@
 @title Auction
 @license MIT
 @author Flex
-@notice Dutch Auctions for selling one token for another
+@notice Manages Dutch Auctions for selling one token for another
 
         This contract is based off of the following Auction.sol contract by Yearn:
         https://github.com/yearn/tokenized-strategy-periphery/blob/master/src/Auctions/Auction.sol

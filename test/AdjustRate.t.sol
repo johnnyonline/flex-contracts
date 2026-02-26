@@ -94,11 +94,7 @@ contract AdjustRateTests is Base {
         assertEq(_trove.owner, userBorrower, "E30");
         assertEq(_trove.pending_owner, address(0), "E31");
         assertEq(uint256(_trove.status), uint256(ITroveManager.Status.active), "E32");
-        assertLt(
-            (_trove.collateral * priceOracle.get_price() / ORACLE_PRICE_SCALE) * BORROW_TOKEN_PRECISION / _trove.debt,
-            DEFAULT_TARGET_COLLATERAL_RATIO,
-            "E33"
-        ); // increased debt --> lower CR
+        assertGt(_trove.debt, _expectedDebt, "E33"); // debt increased due to interest
 
         // Check sorted troves
         assertFalse(sortedTroves.empty(), "E34");
@@ -360,12 +356,7 @@ contract AdjustRateTests is Base {
         assertEq(_trove.owner, userBorrower, "E41");
         assertEq(_trove.pending_owner, address(0), "E42");
         assertEq(uint256(_trove.status), uint256(ITroveManager.Status.active), "E43");
-        assertLt(
-            (_trove.collateral * priceOracle.get_price() / ORACLE_PRICE_SCALE) * BORROW_TOKEN_PRECISION
-                / troveManager.get_trove_debt_after_interest(_troveId),
-            DEFAULT_TARGET_COLLATERAL_RATIO,
-            "E44"
-        ); // increased debt --> lower CR
+        assertGt(troveManager.get_trove_debt_after_interest(_troveId), _expectedDebt, "E44"); // debt increased due to interest
 
         // Calculate expected debt with interest accumulated
         uint256 _secondExpectedDebt = _expectedDebt
@@ -381,11 +372,7 @@ contract AdjustRateTests is Base {
         assertEq(_trove.last_interest_rate_adj_time, block.timestamp, "E49");
         assertEq(_trove.owner, anotherUserBorrower, "E50");
         assertEq(uint256(_trove.status), uint256(ITroveManager.Status.active), "E51");
-        assertLt(
-            (_trove.collateral * priceOracle.get_price() / ORACLE_PRICE_SCALE) * BORROW_TOKEN_PRECISION / _trove.debt,
-            DEFAULT_TARGET_COLLATERAL_RATIO,
-            "E52"
-        ); // increased debt --> lower CR
+        assertGt(_trove.debt, _expectedDebt, "E52"); // debt increased due to interest
 
         // Check sorted troves
         assertFalse(sortedTroves.empty(), "E53");

@@ -4,7 +4,7 @@
 @title Debt In Front Helper
 @license MIT
 @author Flex
-@notice Helper contract used by the frontend to calculate debt-in-front
+@notice Calculates the total debt in front of a given interest rate range
 """
 
 from ..interfaces import ITroveManager

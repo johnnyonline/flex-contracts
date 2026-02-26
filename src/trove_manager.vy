@@ -4,9 +4,7 @@
 @title Trove Manager
 @license MIT
 @author Flex
-@notice Core contract that manages all Troves. Handles opening, closing, liquidating, and updating borrower positions,
-        accrues interest, maintains aggregate debt accounting, and coordinates redemptions with the Lender,
-        Sorted Troves and Dutch Desk contracts
+@notice Manages borrower positions: opening, closing, liquidating, interest accrual, and redemption coordination
 """
 
 from ethereum.ercs import IERC20
