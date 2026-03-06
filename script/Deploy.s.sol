@@ -10,6 +10,7 @@ import {IDeployer} from "./interfaces/IDeployer.sol";
 import {IRegistry} from "./interfaces/IRegistry.sol";
 
 import {LenderFactory} from "../src/lender/LenderFactory.sol";
+import {StrategyAprOracle} from "../src/lender/periphery/StrategyAprOracle.sol";
 
 import "forge-std/Script.sol";
 
@@ -40,6 +41,9 @@ contract Deploy is Script {
     // Factories
     ICatFactory public catFactory;
     LenderFactory public lenderFactory;
+
+    // Lender Periphery
+    StrategyAprOracle public strategyAprOracle;
 
     // Daddy
     IDaddy public daddy;
@@ -86,6 +90,9 @@ contract Deploy is Script {
         // Deploy registry using CREATE2
         deployRegistry();
 
+        // Deploy lender periphery
+        deployLenderPeriphery();
+
         if (isTest) {
             vm.label({account: originalAuction, newLabel: "OriginalAuction"});
             vm.label({account: originalDutchDesk, newLabel: "OriginalDutchDesk"});
@@ -95,6 +102,7 @@ contract Deploy is Script {
             vm.label({account: address(catFactory), newLabel: "CatFactory"});
             vm.label({account: address(daddy), newLabel: "Daddy"});
             vm.label({account: address(registry), newLabel: "Registry"});
+            vm.label({account: address(strategyAprOracle), newLabel: "StrategyAprOracle"});
         } else {
             console2.log("---------------------------------");
             console2.log("Original Auction: ", originalAuction);
@@ -105,6 +113,7 @@ contract Deploy is Script {
             console2.log("Cat Factory: ", address(catFactory));
             console2.log("Daddy: ", address(daddy));
             console2.log("Registry: ", address(registry));
+            console2.log("Strategy APR Oracle: ", address(strategyAprOracle));
             console2.log("---------------------------------");
         }
 
@@ -138,6 +147,12 @@ contract Deploy is Script {
         bytes memory registryBytecode = abi.encodePacked(vm.getCode("registry"), abi.encode(address(daddy)));
         registry = IRegistry(DEPLOYER.deployCreate2(SALT, registryBytecode));
         require(registry.DADDY() == address(daddy), "daddy mismatch");
+    }
+
+    function deployLenderPeriphery() internal {
+        strategyAprOracle = StrategyAprOracle(
+            DEPLOYER.deployCreate2(keccak256(abi.encode(SALT, "strategyAprOracle")), abi.encodePacked(type(StrategyAprOracle).creationCode))
+        );
     }
 
 }

@@ -3,13 +3,15 @@ pragma solidity 0.8.23;
 
 import {IStrategy} from "@tokenized-strategy/interfaces/IStrategy.sol";
 
+import {ITroveManager} from "./ITroveManager.sol";
+
 interface ILender is IStrategy {
 
     // ============================================================================================
     // Constants
     // ============================================================================================
 
-    function TROVE_MANAGER() external view returns (address);
+    function TROVE_MANAGER() external view returns (ITroveManager);
 
     // ============================================================================================
     // Storage
