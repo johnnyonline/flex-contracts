@@ -21,6 +21,7 @@ contract Handler is Test {
     uint256 public minRate;
     uint256 public maxRate;
     uint256 public borrowTokenPrecision;
+    uint256 public collateralTokenPrecision;
     uint256 public minimumCollateralRatio;
 
     uint256 public constant ORACLE_PRICE_SCALE = 1e36;
@@ -49,6 +50,7 @@ contract Handler is Test {
         minRate = troveManager.min_annual_interest_rate();
         maxRate = troveManager.max_annual_interest_rate();
         borrowTokenPrecision = 10 ** IERC20Metadata(address(borrowToken)).decimals();
+        collateralTokenPrecision = 10 ** IERC20Metadata(address(collateralToken)).decimals();
         minimumCollateralRatio = troveManager.minimum_collateral_ratio();
     }
 
@@ -61,10 +63,11 @@ contract Handler is Test {
         uint256 _rate,
         uint256 _seed
     ) external {
-        _debt = bound(_debt, minDebt + 1, 1_000_000 * borrowTokenPrecision);
+        _debt = bound(_debt, minDebt, minDebt * 10);
         _rate = bound(_rate, minRate, maxRate);
 
-        address _user = address(uint160(bound(_seed, 1000, type(uint160).max)));
+        address[3] memory _users = [address(1001), address(1002), address(1003)];
+        address _user = _users[bound(_seed, 0, 2)];
         uint256 _targetRatio = minimumCollateralRatio * 120 / 100;
         uint256 _collateral = (_debt * _targetRatio / borrowTokenPrecision) * ORACLE_PRICE_SCALE / priceOracle.get_price();
 
@@ -86,7 +89,7 @@ contract Handler is Test {
     ) external {
         if (troveIds.length == 0) return;
         _troveIndex = bound(_troveIndex, 0, troveIds.length - 1);
-        _amount = bound(_amount, 1, 1_000_000 * borrowTokenPrecision);
+        _amount = bound(_amount, 1, 1_000_000 * collateralTokenPrecision);
 
         uint256 _troveId = troveIds[_troveIndex];
         address _owner = troveManager.troves(_troveId).owner;

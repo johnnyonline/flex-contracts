@@ -1252,8 +1252,9 @@ def _redeem(
         # Cache the ID of the next Trove to redeem, i.e., the previous Trove in the sorted list
         next_trove_to_redeem: uint256 = staticcall sorted_troves.prev(trove_to_redeem)
 
-        # Don't want to redeem a borrower's own Trove
-        if msg.sender != trove.owner:
+        # Don't redeem a borrower's own Trove, unless it's a zombie. A borrower with multiple
+        # Troves can have one become zombie and acting on another Trove should clear it
+        if msg.sender != trove.owner or is_zombie_trove:
             # Get the Trove's debt after accruing interest
             trove_debt_after_interest: uint256 = self._get_trove_debt_after_interest(trove)
 

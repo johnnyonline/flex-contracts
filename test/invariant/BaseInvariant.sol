@@ -14,7 +14,7 @@ abstract contract BaseInvariant is StdInvariant, Base {
         Base.setUp();
 
         // Fund lender
-        mintAndDepositIntoLender(userLender, maxFuzzAmount * 100);
+        mintAndDepositIntoLender(userLender, minimumDebt * 10 * BORROW_TOKEN_PRECISION);
 
         // Deploy handler
         handler = new Handler(troveManager, priceOracle, borrowToken, collateralToken, address(lender));
