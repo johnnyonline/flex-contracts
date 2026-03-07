@@ -20,31 +20,6 @@ _MAX_ITERATIONS: constant(uint256) = 10_000
 
 
 # ============================================================================================
-# Storage
-# ============================================================================================
-
-
-TROVE_MANAGER: public(immutable(ITroveManager))
-SORTED_TROVES: public(immutable(ISortedTroves))
-
-
-# ============================================================================================
-# Constructor
-# ============================================================================================
-
-
-@deploy
-def __init__(trove_manager: address, sorted_troves: address):
-    """
-    @notice Initialize the contract
-    @param trove_manager Address of the Trove Manager contract
-    @param sorted_troves Address of the Sorted Troves contract
-    """
-    TROVE_MANAGER = ITroveManager(trove_manager)
-    SORTED_TROVES = ISortedTroves(sorted_troves)
-
-
-# ============================================================================================
 # External view functions
 # ============================================================================================
 
@@ -52,6 +27,7 @@ def __init__(trove_manager: address, sorted_troves: address):
 @external
 @view
 def get_debt_in_front(
+    trove_manager: ITroveManager,
     interest_rate_low: uint256,
     interest_rate_high: uint256,
     stop_at_trove_id: uint256 = 0,
@@ -67,6 +43,7 @@ def get_debt_in_front(
     @dev Use case 2 - Preview debt in front for a new interest rate:
          Call with `interest_rate_low = 0`, `interest_rate_high = desired rate`,
          and `stop_at_trove_id = 0`. This returns the total debt of all troves with rates < the desired rate
+    @param trove_manager The Trove Manager contract
     @param interest_rate_low Lower bound interest rate
     @param interest_rate_high Upper bound interest rate
     @param stop_at_trove_id Trove ID to stop at (excluded from calculation). Pass 0 to not stop early
@@ -74,10 +51,12 @@ def get_debt_in_front(
     @param hint_next_id Hint for finding the insert position (next_id)
     @return debt Total debt of all troves in the range
     """
+    sorted_troves: ISortedTroves = ISortedTroves(staticcall trove_manager.sorted_troves())
+
     # Find insert position for the lower interest rate
     prev_id: uint256 = 0
     next_id: uint256 = 0
-    prev_id, next_id = staticcall SORTED_TROVES.find_insert_position(interest_rate_low, hint_prev_id, hint_next_id)
+    prev_id, next_id = staticcall sorted_troves.find_insert_position(interest_rate_low, hint_prev_id, hint_next_id)
 
     debt: uint256 = 0
 
@@ -89,13 +68,13 @@ def get_debt_in_front(
         if prev_id == stop_at_trove_id:
             break
 
-        trove: ITroveManager.Trove = staticcall TROVE_MANAGER.troves(prev_id)
+        trove: ITroveManager.Trove = staticcall trove_manager.troves(prev_id)
 
         if trove.annual_interest_rate >= interest_rate_high:
             break
 
-        debt += staticcall TROVE_MANAGER.get_trove_debt_after_interest(prev_id)
+        debt += staticcall trove_manager.get_trove_debt_after_interest(prev_id)
 
-        prev_id = staticcall SORTED_TROVES.prev(prev_id)
+        prev_id = staticcall sorted_troves.prev(prev_id)
 
     return debt

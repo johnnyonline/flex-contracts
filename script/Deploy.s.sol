@@ -6,6 +6,7 @@ import {IERC20Metadata} from "@openzeppelin/contracts/token/ERC20/extensions/IER
 
 import {ICatFactory} from "./interfaces/ICatFactory.sol";
 import {IDaddy} from "./interfaces/IDaddy.sol";
+import {IDebtInFrontHelper} from "./interfaces/IDebtInFrontHelper.sol";
 import {IDeployer} from "./interfaces/IDeployer.sol";
 import {IRegistry} from "./interfaces/IRegistry.sol";
 
@@ -42,8 +43,9 @@ contract Deploy is Script {
     ICatFactory public catFactory;
     LenderFactory public lenderFactory;
 
-    // Lender Periphery
+    // Periphery
     StrategyAprOracle public strategyAprOracle;
+    IDebtInFrontHelper public debtInFrontHelper;
 
     // Daddy
     IDaddy public daddy;
@@ -90,8 +92,8 @@ contract Deploy is Script {
         // Deploy registry using CREATE2
         deployRegistry();
 
-        // Deploy lender periphery
-        deployLenderPeriphery();
+        // Deploy periphery using CREATE2
+        deployPeriphery();
 
         if (isTest) {
             vm.label({account: originalAuction, newLabel: "OriginalAuction"});
@@ -103,6 +105,7 @@ contract Deploy is Script {
             vm.label({account: address(daddy), newLabel: "Daddy"});
             vm.label({account: address(registry), newLabel: "Registry"});
             vm.label({account: address(strategyAprOracle), newLabel: "StrategyAprOracle"});
+            vm.label({account: address(debtInFrontHelper), newLabel: "DebtInFrontHelper"});
         } else {
             console2.log("---------------------------------");
             console2.log("Original Auction: ", originalAuction);
@@ -114,6 +117,7 @@ contract Deploy is Script {
             console2.log("Daddy: ", address(daddy));
             console2.log("Registry: ", address(registry));
             console2.log("Strategy APR Oracle: ", address(strategyAprOracle));
+            console2.log("Debt In Front Helper: ", address(debtInFrontHelper));
             console2.log("---------------------------------");
         }
 
@@ -149,9 +153,12 @@ contract Deploy is Script {
         require(registry.DADDY() == address(daddy), "daddy mismatch");
     }
 
-    function deployLenderPeriphery() internal {
+    function deployPeriphery() internal {
         strategyAprOracle = StrategyAprOracle(
             DEPLOYER.deployCreate2(keccak256(abi.encode(SALT, "strategyAprOracle")), abi.encodePacked(type(StrategyAprOracle).creationCode))
+        );
+        debtInFrontHelper = IDebtInFrontHelper(
+            DEPLOYER.deployCreate2(keccak256(abi.encode(SALT, "debtInFrontHelper")), abi.encodePacked(vm.getCode("debt_in_front_helper")))
         );
     }
 
