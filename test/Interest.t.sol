@@ -34,7 +34,7 @@ contract InterestTests is Base {
         uint256 _initialDebt = _amount + _upfrontFee;
 
         // Open a trove
-        uint256 _troveId = mintAndOpenTrove(userBorrower, _collateralNeeded, _amount, _rate);
+        uint256 _troveId = mintAndOpenTrove(userBorrower, _collateralNeeded * 10, _amount, _rate);
 
         // Verify initial state
         ITroveManager.Trove memory _trove = troveManager.troves(_troveId);
