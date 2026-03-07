@@ -1,15 +1,12 @@
 // SPDX-License-Identifier: MIT
 pragma solidity 0.8.23;
 
-import {ILeverageZapper} from "./interfaces/ILeverageZapper.sol";
-
 import {MockRouter} from "./mocks/MockRouter.sol";
 
 import "./Base.sol";
 
 contract LeverageZapperTests is Base {
 
-    ILeverageZapper public leverageZapper;
     MockRouter public mockRouter;
 
     address constant CRVUSD = 0xf939E0A03FB07F59A73314E73794Be0E57ac1b4E;
@@ -24,10 +21,6 @@ contract LeverageZapperTests is Base {
     function setUp() public override {
         // isLatestBlock = true;
         Base.setUp();
-
-        // Deploy leverage zapper
-        leverageZapper = ILeverageZapper(deployCode("leverage_zapper"));
-        vm.label(address(leverageZapper), "LeverageZapper");
 
         // Deploy mock router
         mockRouter = new MockRouter(priceOracle, address(collateralToken), address(borrowToken), CRVUSD, SLIPPAGE_BPS);

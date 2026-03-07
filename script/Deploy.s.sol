@@ -8,6 +8,7 @@ import {ICatFactory} from "./interfaces/ICatFactory.sol";
 import {IDaddy} from "./interfaces/IDaddy.sol";
 import {IDebtInFrontHelper} from "./interfaces/IDebtInFrontHelper.sol";
 import {IDeployer} from "./interfaces/IDeployer.sol";
+import {ILeverageZapper} from "./interfaces/ILeverageZapper.sol";
 import {IRegistry} from "./interfaces/IRegistry.sol";
 
 import {LenderFactory} from "../src/lender/LenderFactory.sol";
@@ -46,6 +47,7 @@ contract Deploy is Script {
     // Periphery
     StrategyAprOracle public strategyAprOracle;
     IDebtInFrontHelper public debtInFrontHelper;
+    ILeverageZapper public leverageZapper;
 
     // Daddy
     IDaddy public daddy;
@@ -106,6 +108,7 @@ contract Deploy is Script {
             vm.label({account: address(registry), newLabel: "Registry"});
             vm.label({account: address(strategyAprOracle), newLabel: "StrategyAprOracle"});
             vm.label({account: address(debtInFrontHelper), newLabel: "DebtInFrontHelper"});
+            vm.label({account: address(leverageZapper), newLabel: "LeverageZapper"});
         } else {
             console2.log("---------------------------------");
             console2.log("Original Auction: ", originalAuction);
@@ -118,6 +121,7 @@ contract Deploy is Script {
             console2.log("Registry: ", address(registry));
             console2.log("Strategy APR Oracle: ", address(strategyAprOracle));
             console2.log("Debt In Front Helper: ", address(debtInFrontHelper));
+            console2.log("Leverage Zapper: ", address(leverageZapper));
             console2.log("---------------------------------");
         }
 
@@ -160,6 +164,8 @@ contract Deploy is Script {
         debtInFrontHelper = IDebtInFrontHelper(
             DEPLOYER.deployCreate2(keccak256(abi.encode(SALT, "debtInFrontHelper")), abi.encodePacked(vm.getCode("debt_in_front_helper")))
         );
+        leverageZapper =
+            ILeverageZapper(DEPLOYER.deployCreate2(keccak256(abi.encode(SALT, "leverageZapper")), abi.encodePacked(vm.getCode("leverage_zapper"))));
     }
 
 }
