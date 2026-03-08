@@ -12,7 +12,6 @@ from ethereum.ercs import IERC20
 from ..interfaces import IFlashLender
 from ..interfaces import ITroveManager
 
-
 # ============================================================================================
 # Flags
 # ============================================================================================

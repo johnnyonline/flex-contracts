@@ -7,7 +7,7 @@ import {Lender} from "./Lender.sol";
 
 /// @title Lender Factory
 /// @author Flex
-/// @notice Factory contract for deploying new Lender vaults
+/// @notice Deploys new Lender vaults
 contract LenderFactory {
 
     // ============================================================================================

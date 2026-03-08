@@ -13,7 +13,6 @@ from ethereum.ercs import IERC20Detailed
 from interfaces import IAuction
 from interfaces import IPriceOracle
 
-
 # ============================================================================================
 # Constants
 # ============================================================================================

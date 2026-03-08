@@ -23,7 +23,7 @@ import "forge-std/Script.sol";
 
 // verify:
 // vyper -f solc_json src/price_feed.vy > out/build-info/verify.json
-// vyper -f solc_json --path src/periphery --path src src/leverage_zapper.vy > out/build-info/verify.json
+// vyper -f solc_json --path lib/snekmate/src src/trove_manager.vy > out/build-info/verify.json
 
 // constructor args:
 // cast abi-encode "constructor(address)" 0xbACBBefda6fD1FbF5a2d6A79916F4B6124eD2D49
@@ -64,7 +64,7 @@ contract Deploy is Script {
     // IERC20 public collateralToken = IERC20(0xBF319dDC2Edc1Eb6FDf9910E39b37Be221C8805F); // yvcrvUSD-2
 
     // CREATE2 salt
-    bytes32 public constant SALT = bytes32(uint256(420));
+    bytes32 public constant SALT = bytes32(uint256(420420));
 
     // CREATE2 deployer
     IDeployer public DEPLOYER = IDeployer(0xba5Ed099633D3B313e4D5F7bdc1305d3c28ba5Ed);
@@ -76,7 +76,7 @@ contract Deploy is Script {
         deployerAddress = vm.addr(_pk);
 
         if (!isTest) {
-            require(deployerAddress == address(0x285E3b1E82f74A99D07D2aD25e159E75382bB43B), "!johnnyonline.eth");
+            require(deployerAddress == address(0x000005281a2b04A182085D37cC9E6dD552795caa), "!johnny.flexmeow.eth");
             console.log("Deployer address: %s", deployerAddress);
         }
 

@@ -17,7 +17,6 @@ from interfaces import IDutchDesk
 from interfaces import IPriceOracle
 from interfaces import ISortedTroves
 
-
 # ============================================================================================
 # Events
 # ============================================================================================

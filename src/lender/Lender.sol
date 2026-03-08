@@ -9,7 +9,7 @@ import {ITroveManager} from "./interfaces/ITroveManager.sol";
 
 /// @title Lender
 /// @author Flex
-/// @notice Tokenized Strategy vault that provides liquidity to the Flex lending market
+/// @notice Tokenized Strategy vault that provides liquidity to a market
 contract Lender is BaseHooks {
 
     using SafeERC20 for ERC20;
