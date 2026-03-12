@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: MIT
 pragma solidity 0.8.23;
 
+import {IPriceOracleScaled} from "./interfaces/IPriceOracleScaled.sol";
+
 import "./Base.sol";
 
 contract RedeemTests is Base {

@@ -184,6 +184,10 @@ def close_leveraged_trove(data: CloseLeveragedData):
     # Sweep any remaining crvUSD tokens to caller
     self._sweep(_CRVUSD.address, msg.sender)
 
+    # Sweep any remaining collateral tokens to caller
+    if collateral_token != _CRVUSD.address:
+        self._sweep(collateral_token, msg.sender)
+
     # Sweep any remaining borrow tokens to caller
     if borrow_token != _CRVUSD.address:
         self._sweep(borrow_token, msg.sender)
@@ -274,10 +278,14 @@ def lever_down_trove(data: LeverDownData):
     collateral_token: address = staticcall trove_manager.collateral_token()
     borrow_token: address = staticcall trove_manager.borrow_token()
 
-    # Sweep crvUSD
+    # Sweep any remaining crvUSD tokens to caller
     self._sweep(_CRVUSD.address, msg.sender)
 
-    # Sweep borrow token if it's not crvUSD
+    # Sweep any remaining collateral tokens to caller
+    if collateral_token != _CRVUSD.address:
+        self._sweep(collateral_token, msg.sender)
+
+    # Sweep any remaining borrow tokens to caller
     if borrow_token != _CRVUSD.address:
         self._sweep(borrow_token, msg.sender)
 
