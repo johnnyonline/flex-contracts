@@ -1031,13 +1031,10 @@ def liquidate_trove(
     assert collateral_ratio < minimum_collateral_ratio, "!collateral_ratio"
 
     # Determine the liquidation fee percentage based on the collateral ratio:
-    # - At or above minimum collateral ratio --> minimum fee
     # - At or below maximum penalty collateral ratio --> maximum fee
-    # - Between the two --> linear interpolation
+    # - Between max penalty and minimum collateral ratio --> linear interpolation
     liquidation_fee_pct: uint256 = 0
-    if collateral_ratio >= minimum_collateral_ratio:
-        liquidation_fee_pct = self.min_liquidation_fee
-    elif collateral_ratio <= self.max_penalty_collateral_ratio:
+    if collateral_ratio <= self.max_penalty_collateral_ratio:
         liquidation_fee_pct = self.max_liquidation_fee
     else:
         min_liquidation_fee: uint256 = self.min_liquidation_fee
