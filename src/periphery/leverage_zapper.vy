@@ -387,6 +387,9 @@ def _handle_open(flash_loan_amount: uint256, data: Bytes[_MAX_FLASHLOAN_CALLBACK
         params.min_collateral_out,
     )
 
+    # Make sure our approval is always back to 0
+    assert extcall IERC20(collateral_token).approve(params.trove_manager, 0, default_return_value=True)
+
     # Borrow token --> crvUSD
     borrow_token_balance: uint256 = staticcall IERC20(borrow_token).balanceOf(self)
     self._swap(params.debt_swap, borrow_token, borrow_token_balance)
@@ -421,6 +424,9 @@ def _handle_close(flash_loan_amount: uint256, data: Bytes[_MAX_FLASHLOAN_CALLBAC
     # Close the Trove
     extcall trove_manager.close_trove(params.trove_id)
 
+    # Make sure our approval is always back to 0
+    assert extcall IERC20(borrow_token).approve(params.trove_manager, 0, default_return_value=True)
+
     # Collateral --> crvUSD
     collateral_balance: uint256 = staticcall IERC20(collateral_token).balanceOf(self)
     self._swap(params.collateral_swap, collateral_token, collateral_balance)
@@ -454,6 +460,9 @@ def _handle_lever_up(flash_loan_amount: uint256, data: Bytes[_MAX_FLASHLOAN_CALL
 
     # Add collateral to the Trove
     extcall trove_manager.add_collateral(params.trove_id, available_collateral)
+
+    # Make sure our approval is always back to 0
+    assert extcall IERC20(collateral_token).approve(params.trove_manager, 0, default_return_value=True)
 
     # Borrow additional debt
     extcall trove_manager.borrow(
@@ -498,6 +507,9 @@ def _handle_lever_down(flash_loan_amount: uint256, data: Bytes[_MAX_FLASHLOAN_CA
     # Repay debt (Trove Manager caps the actual amount)
     extcall trove_manager.repay(params.trove_id, available_borrow)
 
+    # Make sure our approval is always back to 0
+    assert extcall IERC20(borrow_token).approve(params.trove_manager, 0, default_return_value=True)
+
     # Remove collateral
     extcall trove_manager.remove_collateral(params.trove_id, params.collateral_to_remove)
 
@@ -529,6 +541,9 @@ def _swap(swap: SwapData, token_in: address, amount_in: uint256):
 
     # Execute the swap
     raw_call(swap.router, swap.data)
+
+    # Make sure our approval is always back to 0
+    assert extcall IERC20(token_in).approve(swap.router, 0, default_return_value=True)
 
 
 @internal
