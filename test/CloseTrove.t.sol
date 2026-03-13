@@ -2,7 +2,6 @@
 pragma solidity 0.8.23;
 
 import "./Base.sol";
-import {IPriceOracleScaled} from "./interfaces/IPriceOracleScaled.sol";
 
 contract CloseTroveTests is Base {
 
@@ -171,44 +170,6 @@ contract CloseTroveTests is Base {
         // Make sure cannot close trove again since it's not active
         vm.prank(userBorrower);
         vm.expectRevert("!active");
-        troveManager.close_trove(_troveId);
-    }
-
-    // 1. lend
-    // 2. borrow
-    // 3. collateral price drops below MCR
-    // 4. try to close trove --> should revert (must be liquidated instead)
-    function test_closeTrove_revertsIfUnhealthy(
-        uint256 _amount
-    ) public {
-        _amount = bound(_amount, troveManager.min_debt(), maxFuzzAmount);
-
-        mintAndDepositIntoLender(userLender, _amount);
-
-        uint256 _collateralNeeded =
-            (_amount * DEFAULT_TARGET_COLLATERAL_RATIO / BORROW_TOKEN_PRECISION) * ORACLE_PRICE_SCALE / priceOracle.get_price();
-        uint256 _troveId = mintAndOpenTrove(userBorrower, _collateralNeeded, _amount, DEFAULT_ANNUAL_INTEREST_RATE);
-
-        ITroveManager.Trove memory _trove = troveManager.troves(_troveId);
-
-        // Drop collateral price to 1% below MCR
-        uint256 _priceDropToBelowMCR;
-        if (BORROW_TOKEN_PRECISION < COLLATERAL_TOKEN_PRECISION) {
-            _priceDropToBelowMCR =
-                troveManager.minimum_collateral_ratio() * _trove.debt * ORACLE_PRICE_SCALE * 99 / (100 * _trove.collateral * BORROW_TOKEN_PRECISION);
-        } else {
-            _priceDropToBelowMCR =
-                troveManager.minimum_collateral_ratio() * _trove.debt / (100 * _trove.collateral) * ORACLE_PRICE_SCALE / BORROW_TOKEN_PRECISION * 99;
-        }
-        vm.mockCall(address(priceOracle), abi.encodeWithSelector(IPriceOracleScaled.get_price.selector), abi.encode(_priceDropToBelowMCR));
-
-        // Verify trove is below MCR
-        uint256 _cr = (_trove.collateral * priceOracle.get_price() / ORACLE_PRICE_SCALE) * BORROW_TOKEN_PRECISION / _trove.debt;
-        assertLt(_cr, troveManager.minimum_collateral_ratio(), "E0");
-
-        // Should revert -- unhealthy trove must be liquidated, not closed
-        vm.prank(userBorrower);
-        vm.expectRevert("!minimum_collateral_ratio");
         troveManager.close_trove(_troveId);
     }
 

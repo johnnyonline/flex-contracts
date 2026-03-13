@@ -846,17 +846,6 @@ def close_trove(trove_id: uint256):
     # Get the Trove's debt after accruing interest
     trove_debt_after_interest: uint256 = self._get_trove_debt_after_interest(trove)
 
-    # Get the collateral price
-    collateral_price: uint256 = staticcall self.price_oracle.get_price()
-
-    # Calculate the collateral ratio
-    collateral_ratio: uint256 = self._calculate_collateral_ratio(
-        trove.collateral, trove_debt_after_interest, collateral_price
-    )
-
-    # Make sure the collateral ratio is above the minimum collateral ratio (unhealthy Troves must be liquidated)
-    assert collateral_ratio >= self.minimum_collateral_ratio, "!minimum_collateral_ratio"
-
     # Cache the Trove's old info for global accounting
     old_trove: Trove = trove
 
@@ -913,24 +902,6 @@ def close_zombie_trove(trove_id: uint256):
     # Make sure the Trove is zombie
     assert trove.status == Status.ZOMBIE, "!zombie"
 
-    # Initialize the Trove's debt after interest variable
-    trove_debt_after_interest: uint256 = 0
-
-    if trove.debt > 0:
-        # Get the Trove's debt after accruing interest
-        trove_debt_after_interest = self._get_trove_debt_after_interest(trove)
-
-        # Get the collateral price
-        collateral_price: uint256 = staticcall self.price_oracle.get_price()
-
-        # Calculate the collateral ratio
-        collateral_ratio: uint256 = self._calculate_collateral_ratio(
-            trove.collateral, trove_debt_after_interest, collateral_price
-        )
-
-        # Make sure the collateral ratio is above the minimum collateral ratio (unhealthy Troves must be liquidated)
-        assert collateral_ratio >= self.minimum_collateral_ratio, "!minimum_collateral_ratio"
-
     # Cache the Trove's old info for global accounting
     old_trove: Trove = trove
 
@@ -948,7 +919,13 @@ def close_zombie_trove(trove_id: uint256):
     # Update the contract's recorded collateral balance
     self.collateral_balance -= old_trove.collateral
 
+    # Initialize the Trove's debt after interest variable
+    trove_debt_after_interest: uint256 = 0
+
     if old_trove.debt > 0:
+        # Get the Trove's debt after accruing interest
+        trove_debt_after_interest = self._get_trove_debt_after_interest(old_trove)
+
         # Accrue interest on the total debt and update accounting
         self._accrue_interest_and_account_for_trove_change(
             0, # debt_increase
