@@ -6,7 +6,7 @@ interface ITroveManager {
     function total_weighted_debt() external view returns (uint256);
     function sync_total_debt() external returns (uint256);
     function redeem(
-        uint256 amount,
+        uint256 debt_amount,
         address receiver
     ) external;
 
