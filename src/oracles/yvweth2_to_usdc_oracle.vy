@@ -2,7 +2,7 @@
 
 """
 @title Price Oracle
-@license MIT
+@license GNU AGPLv3
 @author Flex
 @notice Provides the price of yvWETH-2 in terms of USDC
 """

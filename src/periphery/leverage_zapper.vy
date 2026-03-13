@@ -2,7 +2,7 @@
 
 """
 @title Leverage Zapper
-@license MIT
+@license GNU AGPLv3
 @author Flex
 @notice Enables leveraged positions using crvUSD flash loans and DEX aggregator swaps
 """

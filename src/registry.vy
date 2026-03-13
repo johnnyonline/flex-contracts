@@ -2,7 +2,7 @@
 
 """
 @title Registry
-@license MIT
+@license GNU AGPLv3
 @author Flex
 @notice Stores and manages endorsed market addresses
 """

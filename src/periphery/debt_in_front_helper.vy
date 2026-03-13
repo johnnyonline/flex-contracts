@@ -2,7 +2,7 @@
 
 """
 @title Debt In Front Helper
-@license MIT
+@license GNU AGPLv3
 @author Flex
 @notice Calculates the total debt in front of a given interest rate range
 """

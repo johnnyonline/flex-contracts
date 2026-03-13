@@ -2,7 +2,7 @@
 
 """
 @title Daddy
-@license MIT
+@license GNU AGPLv3
 @author Flex
 @notice Protocol owner with a generalized execute function
 """

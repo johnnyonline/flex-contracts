@@ -2,7 +2,7 @@
 
 """
 @title Trove Manager
-@license MIT
+@license GNU AGPLv3
 @author Flex
 @notice Manages borrower positions: opening, closing, liquidating, interest accrual, and redemption coordination
 """

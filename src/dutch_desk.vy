@@ -2,7 +2,7 @@
 
 """
 @title Dutch Desk
-@license MIT
+@license GNU AGPLv3
 @author Flex
 @notice Manages redemption Dutch Auctions
 """

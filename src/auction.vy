@@ -3,7 +3,7 @@
 
 """
 @title Auction
-@license MIT
+@license GNU AGPLv3
 @author Flex
 @notice Manages Dutch Auctions for selling one token for another
 

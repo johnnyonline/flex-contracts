@@ -2,7 +2,7 @@
 
 """
 @title Sorted Troves
-@license MIT
+@license GNU AGPLv3
 @author Flex
 @notice A sorted doubly linked list with Troves sorted in descending order.
         Troves are ordered according to the borrower's chosen annual interest rate.
