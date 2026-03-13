@@ -968,7 +968,15 @@ contract LiquidateTests is Base {
         uint256 _cr = (_trove.collateral * _price / ORACLE_PRICE_SCALE) * BORROW_TOKEN_PRECISION / _trove.debt;
         assertLt(_cr, BORROW_TOKEN_PRECISION, "E0");
 
-        // Liquidate --> safe CR formula returns > total debt --> min() caps at total debt --> full liquidation
+        // Cache state before liquidation
+        uint256 _troveDebtAfterInterest = troveManager.get_trove_debt_after_interest(_troveId);
+        uint256 _lenderBalanceBefore = borrowToken.balanceOf(address(lender));
+
+        // Compute expected debt_to_repay: collateral value / (1 + max_fee)
+        uint256 _collateralInBorrow = _trove.collateral * _price / ORACLE_PRICE_SCALE;
+        uint256 _expectedDebtToRepay = _collateralInBorrow * BORROW_TOKEN_PRECISION / (BORROW_TOKEN_PRECISION + troveManager.max_liquidation_fee());
+
+        // Liquidate — underwater trove is force-fully-liquidated with bad debt socialized
         liquidate(_troveId);
 
         // Trove should be fully liquidated
@@ -985,6 +993,14 @@ contract LiquidateTests is Base {
 
         // Trove removed from sorted list
         assertFalse(sortedTroves.contains(_troveId), "E6");
+
+        // Liquidator paid less than the full debt (only collateral value minus max fee)
+        uint256 _actualRepaid = borrowToken.balanceOf(address(lender)) - _lenderBalanceBefore;
+        assertEq(_actualRepaid, _expectedDebtToRepay, "E7");
+        assertLt(_actualRepaid, _troveDebtAfterInterest, "E8");
+
+        // Full debt was cleared from total_debt (bad debt socialized — only one trove, so total_debt is 0)
+        assertEq(troveManager.total_debt(), 0, "E9");
     }
 
 }

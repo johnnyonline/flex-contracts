@@ -1088,6 +1088,14 @@ def liquidate_trove(
     # Check if this is a full liquidation and cache the result
     is_full_liquidation: bool = debt_to_repay == trove_debt_after_interest
 
+    # Check if the Trove is underwater (collateral value < debt after fee).
+    # If so, force full liquidation: the liquidator pays the collateral value minus
+    # the liquidation fee (keeping the fee as profit), gets all the collateral,
+    # and the entire debt is cleared from the system
+    if collateral_with_fee > trove.collateral:
+        is_full_liquidation = True
+        debt_to_repay = trove_collateral_in_borrow * borrow_token_precision // (borrow_token_precision + liquidation_fee_pct)
+
     # Full liquidation: close the Trove and transfer any remaining collateral to the owner.
     # Partial liquidation: reduce the Trove's debt and collateral and keep it open.
     # After a partial liquidation, the Trove must end up above the minimum collateral ratio
@@ -1110,10 +1118,12 @@ def liquidate_trove(
         # Update the contract's recorded collateral balance
         self.collateral_balance -= trove_collateral
 
-        # Accrue interest on the total debt and update accounting
+        # Accrue interest on the total debt and update accounting.
+        # For underwater troves, the full debt (not just what the liquidator pays) is
+        # subtracted from total_debt, socializing the bad debt as a loss to the lender
         self._accrue_interest_and_account_for_trove_change(
             0,  # debt_increase
-            debt_to_repay,  # debt_decrease
+            trove_debt_after_interest,  # debt_decrease
             0,  # weighted_debt_increase
             trove_weighted_debt,  # weighted_debt_decrease
         )
