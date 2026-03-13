@@ -337,8 +337,9 @@ def re_kick(
     # Make sure there's actually something to kick
     assert auction.current_amount != 0, "!current_amount"
 
-    # Update kick timestamp, starting price, and minimum price
+    # Update kick timestamp, initial amount, starting price, and minimum price
     auction.kick_timestamp = block.timestamp
+    auction.initial_amount = auction.current_amount
     auction.starting_price = starting_price
     auction.minimum_price = minimum_price
 

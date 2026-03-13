@@ -206,6 +206,73 @@ contract AuctionTests is Base {
         assertEq(auctionInfo.minimum_price, 1e17, "E6");
     }
 
+    function test_reKick_majorityWasTaken(
+        uint256 _kickAmount,
+        uint256 _takePct
+    ) public {
+        _kickAmount = bound(_kickAmount, minFuzzAmount, maxFuzzAmount);
+        _takePct = bound(_takePct, 90, 99);
+
+        uint256 _auctionId = 0;
+
+        // Airdrop collateral to trove manager and approve dutch desk
+        airdrop(address(collateralToken), address(troveManager), _kickAmount);
+        vm.prank(address(troveManager));
+        collateralToken.approve(address(dutchDesk), _kickAmount);
+
+        // Kick auction via dutch desk
+        vm.prank(address(troveManager));
+        dutchDesk.kick(_kickAmount, type(uint256).max, userLender);
+
+        assertTrue(auction.is_active(_auctionId), "E0");
+
+        // Skip some time to let price decay
+        skip(auction.step_duration() * 10);
+
+        // Take _takePct% of the auction
+        uint256 _takeAmount = _kickAmount * _takePct / 100;
+        uint256 _neededAmount = auction.get_needed_amount(_auctionId, _takeAmount, block.timestamp);
+        airdrop(address(borrowToken), liquidator, _neededAmount);
+        vm.startPrank(liquidator);
+        borrowToken.approve(address(auction), _neededAmount);
+        auction.take(_auctionId, _takeAmount, liquidator, "");
+        vm.stopPrank();
+
+        // initial_amount unchanged, current_amount is the small remainder
+        IAuction.AuctionInfo memory _info = auction.auctions(_auctionId);
+        assertEq(_info.initial_amount, _kickAmount, "E1");
+        assertEq(_info.current_amount, _kickAmount - _takeAmount, "E2");
+
+        // Wait for auction to expire
+        skip(auction.auction_length() + 1);
+        assertFalse(auction.is_active(_auctionId), "E3");
+
+        // Re-kick via dutch desk — should restart auction for remaining collateral
+        dutchDesk.re_kick(_auctionId);
+
+        // Auction should be active and takeable after re-kick
+        assertTrue(auction.is_active(_auctionId), "E4");
+        assertGt(auction.get_price(_auctionId, block.timestamp), 0, "E5");
+
+        // initial_amount should be reset to current_amount
+        _info = auction.auctions(_auctionId);
+        assertEq(_info.initial_amount, _info.current_amount, "E6");
+
+        // Should be possible to take the remaining collateral
+        skip(auction.step_duration() * 10);
+        uint256 _remaining = _info.current_amount;
+        _neededAmount = auction.get_needed_amount(_auctionId, _remaining, block.timestamp);
+        airdrop(address(borrowToken), liquidator, _neededAmount);
+        vm.startPrank(liquidator);
+        borrowToken.approve(address(auction), _neededAmount);
+        auction.take(_auctionId, _remaining, liquidator, "");
+        vm.stopPrank();
+
+        // Auction fully taken
+        assertFalse(auction.is_active(_auctionId), "E7");
+        assertEq(auction.auctions(_auctionId).current_amount, 0, "E8");
+    }
+
     function test_reKick_notPapi(
         uint256 _auctionId
     ) public {
