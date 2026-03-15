@@ -202,8 +202,8 @@ interface ITroveManager {
     // ============================================================================================
 
     function redeem(
-        uint256 amount,
+        uint256 debt_amount,
         address receiver
-    ) external returns (uint256);
+    ) external;
 
 }

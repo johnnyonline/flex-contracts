@@ -1,9 +1,10 @@
 // SPDX-License-Identifier: MIT
 pragma solidity 0.8.23;
 
-import "./Base.sol";
 import {IPriceOracleNotScaled} from "./interfaces/IPriceOracleNotScaled.sol";
 import {IPriceOracleScaled} from "./interfaces/IPriceOracleScaled.sol";
+
+import "./Base.sol";
 
 contract LiquidateTests is Base {
 
@@ -1003,8 +1004,9 @@ contract LiquidateTests is Base {
         assertEq(troveManager.total_debt(), 0, "E9");
     }
 
-    // Redeeming an underwater trove reverts on underflow (collateral_to_redeem > trove.collateral)
-    function test_redeemUnderwaterTrove_reverts() public {
+    // Redeem all collateral from an underwater trove (CR ≈ 90%), then liquidate the 0-collateral zombie
+    // Example: 90 collateral value, 100 debt → redeem 90 debt → 0 collateral, 10 debt → liquidate → debt socialized
+    function test_liquidateTrove_zeroCollateralAfterRedemption() public {
         uint256 _amount = troveManager.min_debt();
 
         // Lend
@@ -1023,14 +1025,27 @@ contract LiquidateTests is Base {
         vm.mockCall(address(priceOracle), abi.encodeWithSelector(IPriceOracleScaled.get_price.selector), abi.encode(_price));
         vm.mockCall(address(priceOracle), abi.encodeWithSelector(IPriceOracleNotScaled.get_price.selector, false), abi.encode(_price18));
 
-        // Verify CR is below 100%
-        uint256 _cr = (_trove.collateral * _price / ORACLE_PRICE_SCALE) * BORROW_TOKEN_PRECISION / _trove.debt;
-        assertLt(_cr, BORROW_TOKEN_PRECISION, "E0");
+        // Calculate the collateral value in borrow tokens (this is how much debt we can redeem)
+        uint256 _collateralValue = _trove.collateral * _price / ORACLE_PRICE_SCALE;
 
-        // Attempting to redeem the full debt reverts because collateral_to_redeem > trove.collateral
+        // Redeem exactly the collateral value worth of debt
         vm.prank(address(lender));
-        vm.expectRevert();
-        troveManager.redeem(type(uint256).max, address(lender));
+        troveManager.redeem(_collateralValue, address(lender));
+
+        // Trove should be a zombie with ~0 collateral and remaining debt
+        ITroveManager.Trove memory _troveAfterRedeem = troveManager.troves(_troveId);
+        assertEq(uint256(_troveAfterRedeem.status), uint256(ITroveManager.Status.zombie), "E0");
+        assertApproxEqAbs(_troveAfterRedeem.collateral, 0, COLLATERAL_TOKEN_PRECISION, "E1");
+        assertGt(_troveAfterRedeem.debt, 0, "E2");
+
+        // Liquidate the zombie trove directly (no callback)
+        troveManager.liquidate_trove(_troveId, type(uint256).max, liquidator, "");
+
+        // Trove should be fully liquidated
+        ITroveManager.Trove memory _troveAfterLiq = troveManager.troves(_troveId);
+        assertEq(uint256(_troveAfterLiq.status), uint256(ITroveManager.Status.liquidated), "E3");
+        assertEq(_troveAfterLiq.debt, 0, "E4");
+        assertEq(_troveAfterLiq.collateral, 0, "E5");
     }
 
 }
