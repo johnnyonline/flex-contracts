@@ -17,8 +17,7 @@ contract EnsoSwapTests is Base {
         uint256 _amount = 1 * COLLATERAL_TOKEN_PRECISION;
         address _swapper = address(this);
 
-        (address _router, bytes memory _swapData) =
-            _getEnsoSwapData(1, address(collateralToken), address(borrowToken), _amount, _swapper);
+        (address _router, bytes memory _swapData) = _getEnsoSwapData(1, address(collateralToken), address(borrowToken), _amount, _swapper);
 
         airdrop(address(collateralToken), _swapper, _amount);
         collateralToken.approve(_router, _amount);
@@ -36,8 +35,7 @@ contract EnsoSwapTests is Base {
         uint256 _amount = 1000 * BORROW_TOKEN_PRECISION;
         address _swapper = address(this);
 
-        (address _router, bytes memory _swapData) =
-            _getEnsoSwapData(1, address(borrowToken), address(collateralToken), _amount, _swapper);
+        (address _router, bytes memory _swapData) = _getEnsoSwapData(1, address(borrowToken), address(collateralToken), _amount, _swapper);
 
         airdrop(address(borrowToken), _swapper, _amount);
         borrowToken.approve(_router, _amount);
@@ -83,4 +81,5 @@ contract EnsoSwapTests is Base {
             data[i] = _raw[i + 20];
         }
     }
+
 }

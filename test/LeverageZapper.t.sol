@@ -276,26 +276,4 @@ contract LeverageZapperTests is Base {
         assertGt(IERC20(CRVUSD).balanceOf(userBorrower), crvusdBalanceBefore, "E9");
     }
 
-    // ============================================================================================
-    // Helpers
-    // ============================================================================================
-
-    function _getEnsoSwapData(
-        uint256 chainId,
-        address inputToken,
-        address outputToken,
-        uint256 amount,
-        address sender
-    ) internal returns (bytes memory) {
-        string[] memory cmd = new string[](7);
-        cmd[0] = "bash";
-        cmd[1] = "script/get_enso_swap.sh";
-        cmd[2] = vm.toString(chainId);
-        cmd[3] = vm.toString(inputToken);
-        cmd[4] = vm.toString(outputToken);
-        cmd[5] = vm.toString(amount);
-        cmd[6] = vm.toString(sender);
-        return vm.ffi(cmd);
-    }
-
 }
