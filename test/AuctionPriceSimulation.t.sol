@@ -58,6 +58,26 @@ contract AuctionPriceSimulationTests is Base {
         console2.log("Time to reach market price in seconds:", timeInSeconds);
         console2.log("Time to reach market price in minutes:", timeInMinutes);
         console2.log("Final price:", price / 1e18, "tokens");
+
+        // Continue to minimum price
+        uint256 minPrice = (marketPrice * minimumPriceBufferPercentage) / WAD;
+        console2.log("");
+        console2.log("=== Time to Reach Minimum Price ===");
+        console2.log("Minimum Price Buffer: %s%%", minimumPriceBufferPercentage / 1e16);
+        console2.log("Minimum Price: %s", minPrice / 1e18);
+
+        while (price > minPrice && steps < 10000) {
+            price = (price * multiplier) / 10000;
+            steps++;
+        }
+
+        timeInSeconds = steps * stepDuration;
+        timeInMinutes = timeInSeconds / 60;
+
+        console2.log("Steps to reach minimum price:", steps);
+        console2.log("Time to reach minimum price in seconds:", timeInSeconds);
+        console2.log("Time to reach minimum price in minutes:", timeInMinutes);
+        console2.log("Final price:", price / 1e18, "tokens");
     }
 
 }
