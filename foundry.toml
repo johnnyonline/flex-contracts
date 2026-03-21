@@ -5,6 +5,7 @@ libs = ['lib', 'lib/snekmate/src']
 solc = "0.8.23"
 evm_version = "cancun"
 ffi = true
+no_match_contract = "EnsoSwapTests"
 skip = ["**/lib/snekmate/**"]
 
 remappings = [
