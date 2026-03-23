@@ -1,11 +1,11 @@
 // SPDX-License-Identifier: AGPL-3.0
 pragma solidity 0.8.23;
 
-import {IStrategy} from "@tokenized-strategy/interfaces/IStrategy.sol";
+import {IBaseHealthCheck} from "@periphery/Bases/HealthCheck/IBaseHealthCheck.sol";
 
 import {ITroveManager} from "./ITroveManager.sol";
 
-interface ILender is IStrategy {
+interface ILender is IBaseHealthCheck {
 
     // ============================================================================================
     // Constants

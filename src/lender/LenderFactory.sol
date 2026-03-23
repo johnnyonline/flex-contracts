@@ -47,10 +47,13 @@ contract LenderFactory {
         // Deploy the Lender contract
         ILender _lender = ILender(address(new Lender(_asset, _troveManager, _name)));
 
-        // Set initial parameters
+        // Configure lender roles
         _lender.setKeeper(KEEPER);
         _lender.setPendingManagement(DADDY);
         _lender.setPerformanceFeeRecipient(DADDY);
+
+        // Disable health checks
+        _lender.setDoHealthCheck(false);
 
         // Return the address of the new Lender
         return address(_lender);

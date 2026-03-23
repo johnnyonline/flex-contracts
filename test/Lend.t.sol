@@ -30,6 +30,7 @@ contract LendTests is Base {
         assertEq(lender.availableWithdrawLimit(userLender), type(uint256).max, "E3");
         assertEq(lender.availableDepositLimit(userLender), type(uint256).max, "E4");
         assertEq(lender.name(), "Flex yvWETH-2/USDC Lender", "E5");
+        assertEq(lender.doHealthCheck(), false, "E6");
     }
 
     // 1. lend
