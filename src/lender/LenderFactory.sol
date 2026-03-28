@@ -52,9 +52,6 @@ contract LenderFactory {
         _lender.setPendingManagement(DADDY);
         _lender.setPerformanceFeeRecipient(DADDY);
 
-        // Disable health checks
-        _lender.setDoHealthCheck(false);
-
         // Return the address of the new Lender
         return address(_lender);
     }
