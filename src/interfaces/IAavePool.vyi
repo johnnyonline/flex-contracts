@@ -7,10 +7,11 @@
 
 
 @external
-def flashLoan(
-    receiver: address,
-    token: address,
+def flashLoanSimple(
+    receiverAddress: address,
+    asset: address,
     amount: uint256,
-    data: Bytes[10 ** 5],
-) -> bool:
+    params: Bytes[10 ** 5],
+    referralCode: uint16,
+):
     ...

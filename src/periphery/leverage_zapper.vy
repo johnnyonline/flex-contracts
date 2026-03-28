@@ -4,12 +4,14 @@
 @title Leverage Zapper
 @license GNU AGPLv3
 @author Flex
-@notice Enables leveraged positions using crvUSD flash loans and DEX aggregator swaps
+@notice Enables leveraged positions using Aave V3 flash loans and DEX aggregator swaps
 """
 
 from ethereum.ercs import IERC20
 
-from ..interfaces import IFlashLender
+from ..interfaces import IAavePool
+from ..interfaces import IZapperAuctionTaker
+from ..interfaces import IDutchDesk
 from ..interfaces import ITroveManager
 
 # ============================================================================================
@@ -37,6 +39,8 @@ struct SwapData:
 struct OpenLeveragedData:
     owner: address
     trove_manager: address
+    flash_loan_token: address
+    auction_taker: address
     owner_index: uint256
     flash_loan_amount: uint256
     collateral_amount: uint256
@@ -54,6 +58,7 @@ struct OpenLeveragedData:
 struct CloseLeveragedData:
     owner: address
     trove_manager: address
+    flash_loan_token: address
     trove_id: uint256
     flash_loan_amount: uint256
     collateral_swap: SwapData
@@ -63,6 +68,8 @@ struct CloseLeveragedData:
 struct LeverUpData:
     owner: address
     trove_manager: address
+    flash_loan_token: address
+    auction_taker: address
     trove_id: uint256
     flash_loan_amount: uint256
     collateral_amount: uint256
@@ -77,6 +84,7 @@ struct LeverUpData:
 struct LeverDownData:
     owner: address
     trove_manager: address
+    flash_loan_token: address
     trove_id: uint256
     flash_loan_amount: uint256
     collateral_to_remove: uint256
@@ -92,15 +100,11 @@ struct LeverDownData:
 # Max swap calldata size
 _MAX_SWAP_DATA_SIZE: constant(uint256) = 10 ** 4
 
-# ERC3156
+# Max flash loan callback data size
 _MAX_FLASHLOAN_CALLBACK_DATA_SIZE: constant(uint256) = 10 ** 5
-_FLASHLOAN_CALLBACK_SUCCESS: constant(bytes32) = keccak256("ERC3156FlashBorrower.onFlashLoan")
 
-# Flash loan token
-_CRVUSD: constant(IERC20) = IERC20(0xf939E0A03FB07F59A73314E73794Be0E57ac1b4E)
-
-# Flashloan provider (ERC-3156 compliant)
-_FLASH_LENDER: constant(IFlashLender) = IFlashLender(0x26dE7861e213A5351F6ED767d00e0839930e9eE1)
+# Aave V3 Pool
+_AAVE_POOL: constant(IAavePool) = IAavePool(0x87870Bca3F3fD6335C3F4ce8392D69350B4fA4E2)
 
 
 # ============================================================================================
@@ -124,11 +128,12 @@ def open_leveraged_trove(data: OpenLeveragedData) -> uint256:
     assert extcall IERC20(collateral_token).transferFrom(msg.sender, self, data.collateral_amount, default_return_value=True)
 
     # Initiate flash loan
-    extcall _FLASH_LENDER.flashLoan(
-        self,  # receiver
-        _CRVUSD.address,  # token
+    extcall _AAVE_POOL.flashLoanSimple(
+        self,  # receiverAddress
+        data.flash_loan_token,  # asset
         data.flash_loan_amount,  # amount
-        abi_encode(Operation.OPEN, data),  # data
+        abi_encode(Operation.OPEN, data),  # params
+        0,  # referralCode
     )
 
     # Compute the Trove ID
@@ -137,8 +142,8 @@ def open_leveraged_trove(data: OpenLeveragedData) -> uint256:
     # Transfer the Trove ownership to the owner
     extcall ITroveManager(data.trove_manager).transfer_ownership(trove_id, data.owner)
 
-    # Sweep any remaining crvUSD tokens to caller
-    self._sweep(_CRVUSD.address, msg.sender)
+    # Sweep any remaining flash loan tokens to caller
+    self._sweep(data.flash_loan_token, msg.sender)
 
     # Return the Trove ID
     return trove_id
@@ -170,26 +175,27 @@ def close_leveraged_trove(data: CloseLeveragedData):
     extcall trove_manager.accept_ownership(data.trove_id)
 
     # Initiate flash loan
-    extcall _FLASH_LENDER.flashLoan(
-        self,  # receiver
-        _CRVUSD.address,  # token
+    extcall _AAVE_POOL.flashLoanSimple(
+        self,  # receiverAddress
+        data.flash_loan_token,  # asset
         data.flash_loan_amount,  # amount
-        abi_encode(Operation.CLOSE, data),  # data
+        abi_encode(Operation.CLOSE, data),  # params
+        0,  # referralCode
     )
 
     # Get collateral and borrow tokens from the Trove Manager
     collateral_token: address = staticcall trove_manager.collateral_token()
     borrow_token: address = staticcall trove_manager.borrow_token()
 
-    # Sweep any remaining crvUSD tokens to caller
-    self._sweep(_CRVUSD.address, msg.sender)
+    # Sweep any remaining flash loan tokens to caller
+    self._sweep(data.flash_loan_token, msg.sender)
 
     # Sweep any remaining collateral tokens to caller
-    if collateral_token != _CRVUSD.address:
+    if collateral_token != data.flash_loan_token:
         self._sweep(collateral_token, msg.sender)
 
     # Sweep any remaining borrow tokens to caller
-    if borrow_token != _CRVUSD.address:
+    if borrow_token != data.flash_loan_token and borrow_token != collateral_token:
         self._sweep(borrow_token, msg.sender)
 
 
@@ -224,18 +230,19 @@ def lever_up_trove(data: LeverUpData):
         assert extcall IERC20(collateral_token).transferFrom(msg.sender, self, data.collateral_amount, default_return_value=True)
 
     # Initiate flash loan
-    extcall _FLASH_LENDER.flashLoan(
-        self,  # receiver
-        _CRVUSD.address,  # token
+    extcall _AAVE_POOL.flashLoanSimple(
+        self,  # receiverAddress
+        data.flash_loan_token,  # asset
         data.flash_loan_amount,  # amount
-        abi_encode(Operation.LEVER_UP, data),  # data
+        abi_encode(Operation.LEVER_UP, data),  # params
+        0,  # referralCode
     )
 
     # Transfer Trove ownership back to caller
     extcall trove_manager.transfer_ownership(data.trove_id, msg.sender)
 
-    # Sweep any remaining crvUSD tokens to caller
-    self._sweep(_CRVUSD.address, msg.sender)
+    # Sweep any remaining flash loan tokens to caller
+    self._sweep(data.flash_loan_token, msg.sender)
 
 
 # ============================================================================================
@@ -264,11 +271,12 @@ def lever_down_trove(data: LeverDownData):
     extcall trove_manager.accept_ownership(data.trove_id)
 
     # Initiate flash loan
-    extcall _FLASH_LENDER.flashLoan(
-        self,  # receiver
-        _CRVUSD.address,  # token
+    extcall _AAVE_POOL.flashLoanSimple(
+        self,  # receiverAddress
+        data.flash_loan_token,  # asset
         data.flash_loan_amount,  # amount
-        abi_encode(Operation.LEVER_DOWN, data),  # data
+        abi_encode(Operation.LEVER_DOWN, data),  # params
+        0,  # referralCode
     )
 
     # Transfer Trove ownership back to caller
@@ -278,15 +286,15 @@ def lever_down_trove(data: LeverDownData):
     collateral_token: address = staticcall trove_manager.collateral_token()
     borrow_token: address = staticcall trove_manager.borrow_token()
 
-    # Sweep any remaining crvUSD tokens to caller
-    self._sweep(_CRVUSD.address, msg.sender)
+    # Sweep any remaining flash loan tokens to caller
+    self._sweep(data.flash_loan_token, msg.sender)
 
     # Sweep any remaining collateral tokens to caller
-    if collateral_token != _CRVUSD.address:
+    if collateral_token != data.flash_loan_token:
         self._sweep(collateral_token, msg.sender)
 
     # Sweep any remaining borrow tokens to caller
-    if borrow_token != _CRVUSD.address:
+    if borrow_token != data.flash_loan_token and borrow_token != collateral_token:
         self._sweep(borrow_token, msg.sender)
 
 
@@ -296,51 +304,49 @@ def lever_down_trove(data: LeverDownData):
 
 
 @external
-def onFlashLoan(
-    initiator: address,
-    token: address,
+def executeOperation(
+    asset: address,
     amount: uint256,
-    fee: uint256,
-    data: Bytes[_MAX_FLASHLOAN_CALLBACK_DATA_SIZE],
-) -> bytes32:
+    premium: uint256,
+    initiator: address,
+    params: Bytes[_MAX_FLASHLOAN_CALLBACK_DATA_SIZE],
+) -> bool:
     """
-    @notice ERC-3156 flash loan callback
-    @dev Only callable by the flash lender
-    @param initiator The address that initiated the flash loan
-    @param token The token that was flash loaned
+    @notice Aave V3 flash loan callback
+    @dev Only callable by the Aave Pool
+    @param asset The token that was flash loaned
     @param amount The amount that was flash loaned
-    @param fee The fee charged for the flash loan
-    @param data Encoded operation parameters
-    @return The ERC-3156 callback success hash
+    @param premium The fee charged for the flash loan
+    @param initiator The address that initiated the flash loan
+    @param params Encoded operation parameters
+    @return True on success
     """
     # Sanity checks
-    assert msg.sender == _FLASH_LENDER.address, "!caller"
+    assert msg.sender == _AAVE_POOL.address, "!caller"
     assert initiator == self, "!initiator"
-    assert token == _CRVUSD.address, "!token"
-    assert len(data) > 4, "!data"
-    assert staticcall _CRVUSD.balanceOf(self) >= amount, "!amount"
-    assert fee == 0, "!fee"
+    assert len(params) > 4, "!data"
+    assert staticcall IERC20(asset).balanceOf(self) >= amount, "!amount"
 
     # Decode operation type from the first 32 bytes of the flash loan data
-    operation: Operation = abi_decode(slice(data, 0, 32), Operation)
+    operation: Operation = abi_decode(slice(params, 0, 32), Operation)
 
     # Branch on operation
     if operation == Operation.OPEN:
-        self._handle_open(amount, data)
+        self._handle_open(amount, params)
     elif operation == Operation.CLOSE:
-        self._handle_close(amount, data)
+        self._handle_close(amount, params)
     elif operation == Operation.LEVER_UP:
-        self._handle_lever_up(amount, data)
+        self._handle_lever_up(amount, params)
     elif operation == Operation.LEVER_DOWN:
-        self._handle_lever_down(amount, data)
+        self._handle_lever_down(amount, params)
     else:
         raise "!operation"
 
-    # Repay the flash loan
-    assert extcall _CRVUSD.transfer(_FLASH_LENDER.address, amount, default_return_value=True)
+    # Approve the Aave Pool to pull repayment (amount + premium)
+    assert extcall IERC20(asset).approve(_AAVE_POOL.address, amount + premium, default_return_value=True)
 
-    # Return success hash
-    return _FLASHLOAN_CALLBACK_SUCCESS
+    # Return success
+    return True
 
 
 # ============================================================================================
@@ -352,7 +358,7 @@ def onFlashLoan(
 def _handle_open(flash_loan_amount: uint256, data: Bytes[_MAX_FLASHLOAN_CALLBACK_DATA_SIZE]):
     """
     @notice Handle the open leveraged Trove operation inside the flash loan callback
-    @param flash_loan_amount The amount of crvUSD that was flash loaned
+    @param flash_loan_amount The amount that was flash loaned
     @param data The encoded parameters
     """
     # Decode parameters
@@ -365,14 +371,18 @@ def _handle_open(flash_loan_amount: uint256, data: Bytes[_MAX_FLASHLOAN_CALLBACK
     collateral_token: address = staticcall trove_manager.collateral_token()
     borrow_token: address = staticcall trove_manager.borrow_token()
 
-    # crvUSD --> collateral
-    self._swap(params.collateral_swap, _CRVUSD.address, flash_loan_amount)
+    # Flash loan token --> collateral
+    self._swap(params.collateral_swap, params.flash_loan_token, flash_loan_amount)
 
     # Get the available collateral
     available_collateral: uint256 = staticcall IERC20(collateral_token).balanceOf(self)
 
     # Approve spending of the collateral by the Trove Manager
     assert extcall IERC20(collateral_token).approve(params.trove_manager, available_collateral, default_return_value=True)
+
+    # Record the Dutch Desk nonce before opening the Trove
+    dutch_desk: IDutchDesk = IDutchDesk(staticcall trove_manager.dutch_desk())
+    nonce_before: uint256 = staticcall dutch_desk.nonce()
 
     # Open the Trove
     extcall trove_manager.open_trove(
@@ -390,7 +400,11 @@ def _handle_open(flash_loan_amount: uint256, data: Bytes[_MAX_FLASHLOAN_CALLBACK
     # Make sure our approval is always back to 0
     assert extcall IERC20(collateral_token).approve(params.trove_manager, 0, default_return_value=True)
 
-    # Borrow token --> crvUSD
+    # Take the auction if one was kicked and an auction taker was provided
+    if params.auction_taker != empty(address) and staticcall dutch_desk.nonce() > nonce_before:
+        extcall IZapperAuctionTaker(params.auction_taker).takeAuction(staticcall dutch_desk.auction(), nonce_before)
+
+    # Borrow token --> flash loan token
     borrow_token_balance: uint256 = staticcall IERC20(borrow_token).balanceOf(self)
     self._swap(params.debt_swap, borrow_token, borrow_token_balance)
 
@@ -399,7 +413,7 @@ def _handle_open(flash_loan_amount: uint256, data: Bytes[_MAX_FLASHLOAN_CALLBACK
 def _handle_close(flash_loan_amount: uint256, data: Bytes[_MAX_FLASHLOAN_CALLBACK_DATA_SIZE]):
     """
     @notice Handle the close leveraged Trove operation inside the flash loan callback
-    @param flash_loan_amount The amount of crvUSD that was flash loaned
+    @param flash_loan_amount The amount that was flash loaned
     @param data The encoded parameters
     """
     # Decode parameters
@@ -412,8 +426,8 @@ def _handle_close(flash_loan_amount: uint256, data: Bytes[_MAX_FLASHLOAN_CALLBAC
     collateral_token: address = staticcall trove_manager.collateral_token()
     borrow_token: address = staticcall trove_manager.borrow_token()
 
-    # crvUSD --> borrow token
-    self._swap(params.debt_swap, _CRVUSD.address, flash_loan_amount)
+    # Flash loan token --> borrow token
+    self._swap(params.debt_swap, params.flash_loan_token, flash_loan_amount)
 
     # Get the Trove debt after interest
     trove_debt: uint256 = staticcall trove_manager.get_trove_debt_after_interest(params.trove_id)
@@ -427,7 +441,7 @@ def _handle_close(flash_loan_amount: uint256, data: Bytes[_MAX_FLASHLOAN_CALLBAC
     # Make sure our approval is always back to 0
     assert extcall IERC20(borrow_token).approve(params.trove_manager, 0, default_return_value=True)
 
-    # Collateral --> crvUSD
+    # Collateral --> flash loan token
     collateral_balance: uint256 = staticcall IERC20(collateral_token).balanceOf(self)
     self._swap(params.collateral_swap, collateral_token, collateral_balance)
 
@@ -436,7 +450,7 @@ def _handle_close(flash_loan_amount: uint256, data: Bytes[_MAX_FLASHLOAN_CALLBAC
 def _handle_lever_up(flash_loan_amount: uint256, data: Bytes[_MAX_FLASHLOAN_CALLBACK_DATA_SIZE]):
     """
     @notice Handle the lever up operation inside the flash loan callback
-    @param flash_loan_amount The amount of crvUSD that was flash loaned
+    @param flash_loan_amount The amount that was flash loaned
     @param data The encoded parameters
     """
     # Decode parameters
@@ -449,8 +463,8 @@ def _handle_lever_up(flash_loan_amount: uint256, data: Bytes[_MAX_FLASHLOAN_CALL
     collateral_token: address = staticcall trove_manager.collateral_token()
     borrow_token: address = staticcall trove_manager.borrow_token()
 
-    # crvUSD --> collateral
-    self._swap(params.collateral_swap, _CRVUSD.address, flash_loan_amount)
+    # Flash loan token --> collateral
+    self._swap(params.collateral_swap, params.flash_loan_token, flash_loan_amount)
 
     # Get the available collateral
     available_collateral: uint256 = staticcall IERC20(collateral_token).balanceOf(self)
@@ -464,6 +478,10 @@ def _handle_lever_up(flash_loan_amount: uint256, data: Bytes[_MAX_FLASHLOAN_CALL
     # Make sure our approval is always back to 0
     assert extcall IERC20(collateral_token).approve(params.trove_manager, 0, default_return_value=True)
 
+    # Record the Dutch Desk nonce before borrowing
+    dutch_desk: IDutchDesk = IDutchDesk(staticcall trove_manager.dutch_desk())
+    nonce_before: uint256 = staticcall dutch_desk.nonce()
+
     # Borrow additional debt
     extcall trove_manager.borrow(
         params.trove_id,
@@ -473,7 +491,11 @@ def _handle_lever_up(flash_loan_amount: uint256, data: Bytes[_MAX_FLASHLOAN_CALL
         params.min_collateral_out,
     )
 
-    # Borrow token --> crvUSD
+    # Take the auction if one was kicked and an auction taker was provided
+    if params.auction_taker != empty(address) and staticcall dutch_desk.nonce() > nonce_before:
+        extcall IZapperAuctionTaker(params.auction_taker).takeAuction(staticcall dutch_desk.auction(), nonce_before)
+
+    # Borrow token --> flash loan token
     borrow_token_balance: uint256 = staticcall IERC20(borrow_token).balanceOf(self)
     self._swap(params.debt_swap, borrow_token, borrow_token_balance)
 
@@ -482,7 +504,7 @@ def _handle_lever_up(flash_loan_amount: uint256, data: Bytes[_MAX_FLASHLOAN_CALL
 def _handle_lever_down(flash_loan_amount: uint256, data: Bytes[_MAX_FLASHLOAN_CALLBACK_DATA_SIZE]):
     """
     @notice Handle the lever down operation inside the flash loan callback
-    @param flash_loan_amount The amount of crvUSD that was flash loaned
+    @param flash_loan_amount The amount that was flash loaned
     @param data The encoded parameters
     """
     # Decode parameters
@@ -495,8 +517,8 @@ def _handle_lever_down(flash_loan_amount: uint256, data: Bytes[_MAX_FLASHLOAN_CA
     collateral_token: address = staticcall trove_manager.collateral_token()
     borrow_token: address = staticcall trove_manager.borrow_token()
 
-    # crvUSD --> borrow token
-    self._swap(params.debt_swap, _CRVUSD.address, flash_loan_amount)
+    # Flash loan token --> borrow token
+    self._swap(params.debt_swap, params.flash_loan_token, flash_loan_amount)
 
     # Get the available borrow tokens
     available_borrow: uint256 = staticcall IERC20(borrow_token).balanceOf(self)
@@ -513,7 +535,7 @@ def _handle_lever_down(flash_loan_amount: uint256, data: Bytes[_MAX_FLASHLOAN_CA
     # Remove collateral
     extcall trove_manager.remove_collateral(params.trove_id, params.collateral_to_remove)
 
-    # Collateral --> crvUSD
+    # Collateral --> flash loan token
     collateral_balance: uint256 = staticcall IERC20(collateral_token).balanceOf(self)
     self._swap(params.collateral_swap, collateral_token, collateral_balance)
 

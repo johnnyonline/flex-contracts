@@ -34,5 +34,17 @@ def initialize(params: InitializeParams):
 
 
 @external
+@view
+def auction() -> address:
+    ...
+
+
+@external
+@view
+def nonce() -> uint256:
+    ...
+
+
+@external
 def kick(amount: uint256, maximum_amount: uint256, receiver: address):
     ...

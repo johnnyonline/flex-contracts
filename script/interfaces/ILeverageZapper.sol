@@ -15,6 +15,8 @@ interface ILeverageZapper {
     struct OpenLeveragedData {
         address owner;
         address trove_manager;
+        address flash_loan_token;
+        address auction_taker;
         uint256 owner_index;
         uint256 flash_loan_amount;
         uint256 collateral_amount;
@@ -32,6 +34,7 @@ interface ILeverageZapper {
     struct CloseLeveragedData {
         address owner;
         address trove_manager;
+        address flash_loan_token;
         uint256 trove_id;
         uint256 flash_loan_amount;
         SwapData collateral_swap;
@@ -41,6 +44,8 @@ interface ILeverageZapper {
     struct LeverUpData {
         address owner;
         address trove_manager;
+        address flash_loan_token;
+        address auction_taker;
         uint256 trove_id;
         uint256 flash_loan_amount;
         uint256 collateral_amount;
@@ -55,6 +60,7 @@ interface ILeverageZapper {
     struct LeverDownData {
         address owner;
         address trove_manager;
+        address flash_loan_token;
         uint256 trove_id;
         uint256 flash_loan_amount;
         uint256 collateral_to_remove;

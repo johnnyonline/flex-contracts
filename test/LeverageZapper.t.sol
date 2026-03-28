@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: MIT
 pragma solidity 0.8.23;
 
+import {AuctionTakerMock} from "./mocks/AuctionTakerMock.sol";
 import {MockRouter} from "./mocks/MockRouter.sol";
 
 import "./Base.sol";
@@ -27,7 +28,7 @@ contract LeverageZapperTests is Base {
         vm.label(address(mockRouter), "MockRouter");
 
         // Set fuzz bounds
-        maxCollateralFuzzAmount = 100 * COLLATERAL_TOKEN_PRECISION;
+        maxCollateralFuzzAmount = 2 * COLLATERAL_TOKEN_PRECISION;
         minCollateralFuzzAmount = minimumDebt * BORROW_TOKEN_PRECISION * ORACLE_PRICE_SCALE / priceOracle.get_price() * 2;
         maxLeverage = (minimumCollateralRatio / (minimumCollateralRatio - 100)) * 90 / 100;
     }
@@ -49,7 +50,7 @@ contract LeverageZapperTests is Base {
         uint256 debtAmount = baseDebt * BPS / (BPS - 2 * SLIPPAGE_BPS);
 
         // Fund the lender
-        mintAndDepositIntoLender(userLender, debtAmount);
+        mintAndDepositIntoLender(userLender, debtAmount * 10);
 
         uint256 ownerIndex = block.timestamp;
 
@@ -63,13 +64,15 @@ contract LeverageZapperTests is Base {
             ILeverageZapper.OpenLeveragedData({
                 owner: userBorrower,
                 trove_manager: address(troveManager),
+                flash_loan_token: CRVUSD,
+                auction_taker: address(0),
                 owner_index: ownerIndex,
                 flash_loan_amount: flashLoanAmount,
                 collateral_amount: _userCollateral,
                 debt_amount: debtAmount,
                 prev_id: 0,
                 next_id: 0,
-                annual_interest_rate: DEFAULT_ANNUAL_INTEREST_RATE,
+                annual_interest_rate: DEFAULT_ANNUAL_INTEREST_RATE * 2,
                 max_upfront_fee: type(uint256).max,
                 min_borrow_out: 0,
                 min_collateral_out: 0,
@@ -104,6 +107,85 @@ contract LeverageZapperTests is Base {
         return troveId;
     }
 
+    function test_openLeveragedTroveWithCallback(
+        uint256 _userCollateral,
+        uint256 _leverage
+    ) public {
+        _userCollateral = bound(_userCollateral, minCollateralFuzzAmount, maxCollateralFuzzAmount);
+        _leverage = bound(_leverage, 2, maxLeverage);
+
+        // Deploy auction taker mock
+        AuctionTakerMock auctionTaker = new AuctionTakerMock();
+        vm.label(address(auctionTaker), "AuctionTakerMock");
+
+        airdrop(address(collateralToken), userBorrower, _userCollateral);
+
+        uint256 additionalCollateral = _userCollateral * (_leverage - 1);
+        uint256 baseDebt = additionalCollateral * priceOracle.get_price() / ORACLE_PRICE_SCALE;
+        uint256 flashLoanAmount = baseDebt * WAD / BORROW_TOKEN_PRECISION;
+
+        // Buffer debt to account for slippage on the debt swap (2x slippage to ensure surplus after rounding)
+        uint256 debtAmount = baseDebt * BPS / (BPS - 2 * SLIPPAGE_BPS);
+
+        // Fund the lender with enough for both troves
+        mintAndDepositIntoLender(userLender, debtAmount);
+
+        // Exhaust lender liquidity by opening a trove from another user
+        uint256 firstCollateral =
+            (debtAmount * DEFAULT_TARGET_COLLATERAL_RATIO / BORROW_TOKEN_PRECISION) * ORACLE_PRICE_SCALE / priceOracle.get_price();
+        mintAndOpenTrove(anotherUserBorrower, firstCollateral, debtAmount, DEFAULT_ANNUAL_INTEREST_RATE);
+
+        // Approve zapper to pull collateral
+        vm.prank(userBorrower);
+        collateralToken.approve(address(leverageZapper), _userCollateral);
+
+        // Open leveraged trove with auction taker to take the kicked auction
+        vm.prank(userBorrower);
+        uint256 troveId = leverageZapper.open_leveraged_trove(
+            ILeverageZapper.OpenLeveragedData({
+                owner: userBorrower,
+                trove_manager: address(troveManager),
+                flash_loan_token: CRVUSD,
+                auction_taker: address(auctionTaker),
+                owner_index: block.timestamp,
+                flash_loan_amount: flashLoanAmount,
+                collateral_amount: _userCollateral,
+                debt_amount: debtAmount,
+                prev_id: 0,
+                next_id: 0,
+                annual_interest_rate: DEFAULT_ANNUAL_INTEREST_RATE * 2, // higher rate so we can redeem the first trove
+                max_upfront_fee: type(uint256).max,
+                min_borrow_out: 0,
+                min_collateral_out: 0,
+                collateral_swap: ILeverageZapper.SwapData({router: address(mockRouter), data: abi.encode(CRVUSD, address(collateralToken))}),
+                debt_swap: ILeverageZapper.SwapData({router: address(mockRouter), data: abi.encode(address(borrowToken), CRVUSD)})
+            })
+        );
+
+        // Accept ownership
+        vm.prank(userBorrower);
+        troveManager.accept_ownership(troveId);
+
+        // Verify trove
+        ITroveManager.Trove memory trove = troveManager.troves(troveId);
+        assertEq(trove.owner, userBorrower, "E0");
+        assertEq(uint256(trove.status), uint256(ITroveManager.Status.active), "E1");
+        assertGt(trove.debt, 0, "E2");
+
+        // Verify leverage: trove.collateral should be approximately _leverage * userCollateral
+        assertApproxEqRel(trove.collateral, _userCollateral * _leverage, 1e16, "E3"); // 1% tolerance
+
+        // Verify zapper has no leftover tokens
+        assertEq(collateralToken.balanceOf(address(leverageZapper)), 0, "E4");
+        assertEq(borrowToken.balanceOf(address(leverageZapper)), 0, "E5");
+        assertEq(IERC20(CRVUSD).balanceOf(address(leverageZapper)), 0, "E6");
+
+        // Verify swept leftovers to borrower
+        assertEq(collateralToken.balanceOf(userBorrower), 0, "E7");
+        assertEq(borrowToken.balanceOf(userBorrower), 0, "E8");
+        assertGt(IERC20(CRVUSD).balanceOf(userBorrower), 0, "E9");
+    }
+
     function test_closeLeveragedTrove(
         uint256 _userCollateral,
         uint256 _leverage
@@ -126,6 +208,7 @@ contract LeverageZapperTests is Base {
             ILeverageZapper.CloseLeveragedData({
                 owner: userBorrower,
                 trove_manager: address(troveManager),
+                flash_loan_token: CRVUSD,
                 trove_id: troveId,
                 flash_loan_amount: closeFlashLoanAmount,
                 collateral_swap: ILeverageZapper.SwapData({router: address(mockRouter), data: abi.encode(address(collateralToken), CRVUSD)}),
@@ -184,6 +267,85 @@ contract LeverageZapperTests is Base {
             ILeverageZapper.LeverUpData({
                 owner: userBorrower,
                 trove_manager: address(troveManager),
+                flash_loan_token: CRVUSD,
+                auction_taker: address(0),
+                trove_id: troveId,
+                flash_loan_amount: flashLoanAmount,
+                collateral_amount: 0,
+                debt_amount: debtAmount,
+                max_upfront_fee: type(uint256).max,
+                min_borrow_out: 0,
+                min_collateral_out: 0,
+                collateral_swap: ILeverageZapper.SwapData({router: address(mockRouter), data: abi.encode(CRVUSD, address(collateralToken))}),
+                debt_swap: ILeverageZapper.SwapData({router: address(mockRouter), data: abi.encode(address(borrowToken), CRVUSD)})
+            })
+        );
+
+        // Accept ownership back
+        vm.prank(userBorrower);
+        troveManager.accept_ownership(troveId);
+
+        // Verify trove state
+        ITroveManager.Trove memory troveAfter = troveManager.troves(troveId);
+        assertEq(troveAfter.owner, userBorrower, "E0");
+        assertApproxEqRel(troveAfter.collateral, _userCollateral * (2 + _additionalLeverage), 2e16, "E1"); // 2% tolerance
+        assertGt(troveAfter.debt, troveBefore.debt, "E2");
+
+        // Verify zapper has no leftover tokens
+        assertEq(collateralToken.balanceOf(address(leverageZapper)), 0, "E3");
+        assertEq(borrowToken.balanceOf(address(leverageZapper)), 0, "E4");
+        assertEq(IERC20(CRVUSD).balanceOf(address(leverageZapper)), 0, "E5");
+
+        // Verify user received crvUSD leftovers from slippage buffer
+        assertGt(IERC20(CRVUSD).balanceOf(userBorrower), crvusdBalanceBefore, "E6");
+    }
+
+    function test_leverUpTroveWithCallback(
+        uint256 _userCollateral,
+        uint256 _additionalLeverage
+    ) public {
+        _userCollateral = bound(_userCollateral, minCollateralFuzzAmount, maxCollateralFuzzAmount);
+        _additionalLeverage = bound(_additionalLeverage, 1, maxLeverage - 2);
+
+        // Deploy auction taker mock
+        AuctionTakerMock auctionTaker = new AuctionTakerMock();
+        vm.label(address(auctionTaker), "AuctionTakerMock");
+
+        // Open trove at 2x leverage
+        uint256 troveId = test_openLeveragedTrove(_userCollateral, 2);
+
+        // Record state before lever up
+        ITroveManager.Trove memory troveBefore = troveManager.troves(troveId);
+        uint256 crvusdBalanceBefore = IERC20(CRVUSD).balanceOf(userBorrower);
+
+        // Compute flash loan for additional leverage
+        uint256 additionalDebtBase = _userCollateral * _additionalLeverage * priceOracle.get_price() / ORACLE_PRICE_SCALE;
+        uint256 flashLoanAmount = additionalDebtBase * WAD / BORROW_TOKEN_PRECISION;
+
+        // Buffer debt to account for slippage on the debt swap
+        uint256 debtAmount = additionalDebtBase * BPS / (BPS - 2 * SLIPPAGE_BPS);
+
+        // Exhaust lender liquidity by opening a trove from another user
+        uint256 idle = borrowToken.balanceOf(address(lender));
+        console2.log("Idle liquidity before opening trove for callback:", idle);
+        if (idle > 0) {
+            uint256 extraCollateral = (idle * DEFAULT_TARGET_COLLATERAL_RATIO / BORROW_TOKEN_PRECISION) * ORACLE_PRICE_SCALE / priceOracle.get_price();
+            mintAndOpenTrove(anotherUserBorrower, extraCollateral, idle, DEFAULT_ANNUAL_INTEREST_RATE);
+        }
+        assertEq(borrowToken.balanceOf(address(lender)), 0, "lender should have no idle liquidity");
+
+        // Transfer trove ownership to zapper
+        vm.prank(userBorrower);
+        troveManager.transfer_ownership(troveId, address(leverageZapper));
+
+        // Lever up with auction taker to take the kicked auction
+        vm.prank(userBorrower);
+        leverageZapper.lever_up_trove(
+            ILeverageZapper.LeverUpData({
+                owner: userBorrower,
+                trove_manager: address(troveManager),
+                flash_loan_token: CRVUSD,
+                auction_taker: address(auctionTaker),
                 trove_id: troveId,
                 flash_loan_amount: flashLoanAmount,
                 collateral_amount: 0,
@@ -246,6 +408,7 @@ contract LeverageZapperTests is Base {
             ILeverageZapper.LeverDownData({
                 owner: userBorrower,
                 trove_manager: address(troveManager),
+                flash_loan_token: CRVUSD,
                 trove_id: troveId,
                 flash_loan_amount: flashLoanAmount,
                 collateral_to_remove: collateralToRemove,
