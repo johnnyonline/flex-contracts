@@ -20,7 +20,7 @@ import "forge-std/Script.sol";
 // ---- Usage ----
 
 // deploy:
-// forge script script/Deploy.s.sol:Deploy --verify --slow --legacy --etherscan-api-key $KEY --rpc-url $RPC_URL --broadcast
+// forge script script/Deploy.s.sol:Deploy --verify --slow -g 250 --etherscan-api-key $KEY --rpc-url $RPC_URL --broadcast
 
 // verify:
 // vyper -f solc_json src/price_feed.vy > out/build-info/verify.json
