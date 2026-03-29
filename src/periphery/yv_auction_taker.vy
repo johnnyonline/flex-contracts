@@ -53,6 +53,11 @@ def takeAuction(auction: address, auction_id: uint256):
     # Take the full auction amount with callback
     extcall IAuction(auction).take(auction_id, max_value(uint256), self, abi_encode(buy_token, sell_token))
 
+    # Transfer any leftover buy tokens to the caller
+    leftover: uint256 = staticcall IERC20(buy_token).balanceOf(self)
+    if leftover > 0:
+        assert extcall IERC20(buy_token).transfer(msg.sender, leftover, default_return_value=True)
+
 
 @external
 def takeCallback(

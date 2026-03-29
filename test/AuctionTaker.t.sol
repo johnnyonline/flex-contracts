@@ -1,18 +1,20 @@
 // SPDX-License-Identifier: MIT
 pragma solidity 0.8.23;
 
-import {MockRouter} from "./mocks/MockRouter.sol";
-
 import "./Base.sol";
+
+interface IERC4626 {
+
+    function deposit(
+        uint256 assets,
+        address receiver
+    ) external returns (uint256);
+
+}
 
 contract AuctionTakerTests is Base {
 
-    MockRouter public mockRouter;
-
     address public yvUSD = address(0x696d02Db93291651ED510704c9b286841d506987);
-
-    uint256 constant SLIPPAGE_BPS = 50; // 0.5%
-    uint256 constant BPS = 10_000;
 
     uint256 public maxCollateralFuzzAmount;
     uint256 public minCollateralFuzzAmount;
@@ -52,10 +54,6 @@ contract AuctionTakerTests is Base {
         priceOracle = IPriceOracle(_oracle);
         collateralToken = IERC20(yvUSD);
 
-        // Deploy mock router
-        mockRouter = new MockRouter(priceOracle, yvUSD, address(borrowToken), address(borrowToken), SLIPPAGE_BPS);
-        vm.label(address(mockRouter), "MockRouter");
-
         // Recalculate constants for yvUSD market
         DEFAULT_ANNUAL_INTEREST_RATE = troveManager.min_annual_interest_rate() * 2;
         DEFAULT_TARGET_COLLATERAL_RATIO = troveManager.minimum_collateral_ratio() * 110 / 100;
@@ -79,8 +77,8 @@ contract AuctionTakerTests is Base {
         uint256 baseDebt = additionalCollateral * priceOracle.get_price() / ORACLE_PRICE_SCALE;
         uint256 flashLoanAmount = baseDebt;
 
-        // Buffer debt to account for slippage on the debt swap (2x slippage to ensure surplus after rounding)
-        uint256 debtAmount = baseDebt * BPS / (BPS - 2 * SLIPPAGE_BPS);
+        // Small buffer for Aave premium (no swap slippage since we deposit directly into vault)
+        uint256 debtAmount = baseDebt + baseDebt / 1000; // 0.1% buffer
 
         // Fund the lender with enough for both troves
         mintAndDepositIntoLender(userLender, debtAmount);
@@ -112,7 +110,9 @@ contract AuctionTakerTests is Base {
                 max_upfront_fee: type(uint256).max,
                 min_borrow_out: 0,
                 min_collateral_out: 0,
-                collateral_swap: ILeverageZapper.SwapData({router: address(mockRouter), data: abi.encode(address(borrowToken), yvUSD)}),
+                collateral_swap: ILeverageZapper.SwapData({
+                    router: yvUSD, data: abi.encodeWithSelector(IERC4626.deposit.selector, flashLoanAmount, address(leverageZapper))
+                }),
                 debt_swap: ILeverageZapper.SwapData({router: address(0), data: ""})
             })
         );
@@ -134,9 +134,13 @@ contract AuctionTakerTests is Base {
         assertEq(collateralToken.balanceOf(address(leverageZapper)), 0, "E4");
         assertEq(borrowToken.balanceOf(address(leverageZapper)), 0, "E5");
 
+        // Verify auction taker has no leftover tokens
+        assertEq(collateralToken.balanceOf(address(auctionTaker)), 0, "E6");
+        assertEq(borrowToken.balanceOf(address(auctionTaker)), 0, "E7");
+
         // Verify swept leftovers to borrower
-        assertEq(collateralToken.balanceOf(userBorrower), 0, "E6");
-        assertGt(borrowToken.balanceOf(userBorrower), 0, "E7");
+        assertEq(collateralToken.balanceOf(userBorrower), 0, "E8");
+        assertGt(borrowToken.balanceOf(userBorrower), 0, "E9");
     }
 
 }
