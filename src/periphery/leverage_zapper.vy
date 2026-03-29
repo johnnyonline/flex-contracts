@@ -5,6 +5,7 @@
 @license GNU AGPLv3
 @author Flex
 @notice Enables leveraged positions using Aave V3 flash loans and DEX aggregator swaps
+@dev The Aave V3 Pool address is hardcoded to the Ethereum mainnet deployment
 """
 
 from ethereum.ercs import IERC20
@@ -117,6 +118,8 @@ def open_leveraged_trove(data: OpenLeveragedData) -> uint256:
     """
     @notice Open a new leveraged Trove
     @dev After this call, the owner must call `accept_ownership` on the Trove Manager to claim the Trove
+    @dev If a redemption is triggered, an `auction_taker` should be provided.
+         Otherwise, auction proceeds will be sent to this contract and potentially be swept by someone else
     @param data The open leveraged Trove parameters
     @return The Trove ID
     """
@@ -210,6 +213,8 @@ def lever_up_trove(data: LeverUpData):
     @notice Add leverage to an existing Trove
     @dev Only callable by the Trove owner
     @dev User must call `trove_manager.transfer_ownership(trove_id, zapper)` before calling this
+    @dev If a redemption is triggered, an `auction_taker` should be provided.
+         Otherwise, auction proceeds will be sent to this contract and potentially be swept by someone else
     @param data The lever up parameters
     """
     # Cache the Trove Manager instance
