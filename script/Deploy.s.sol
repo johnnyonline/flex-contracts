@@ -4,6 +4,7 @@ pragma solidity 0.8.23;
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/ERC20.sol";
 import {IERC20Metadata} from "@openzeppelin/contracts/token/ERC20/extensions/IERC20Metadata.sol";
 
+import {IAuctionTaker} from "./interfaces/IAuctionTaker.sol";
 import {ICatFactory} from "./interfaces/ICatFactory.sol";
 import {IDaddy} from "./interfaces/IDaddy.sol";
 import {IDebtInFrontHelper} from "./interfaces/IDebtInFrontHelper.sol";
@@ -48,6 +49,7 @@ contract Deploy is Script {
     StrategyAprOracle public strategyAprOracle;
     IDebtInFrontHelper public debtInFrontHelper;
     ILeverageZapper public leverageZapper;
+    IAuctionTaker public auctionTaker;
 
     // Daddy
     IDaddy public daddy;
@@ -109,6 +111,7 @@ contract Deploy is Script {
             vm.label({account: address(strategyAprOracle), newLabel: "StrategyAprOracle"});
             vm.label({account: address(debtInFrontHelper), newLabel: "DebtInFrontHelper"});
             vm.label({account: address(leverageZapper), newLabel: "LeverageZapper"});
+            vm.label({account: address(auctionTaker), newLabel: "AuctionTaker"});
         } else {
             console2.log("---------------------------------");
             console2.log("Original Auction: ", originalAuction);
@@ -122,6 +125,7 @@ contract Deploy is Script {
             console2.log("Strategy APR Oracle: ", address(strategyAprOracle));
             console2.log("Debt In Front Helper: ", address(debtInFrontHelper));
             console2.log("Leverage Zapper: ", address(leverageZapper));
+            console2.log("Auction Taker: ", address(auctionTaker));
             console2.log("---------------------------------");
         }
 
@@ -166,6 +170,8 @@ contract Deploy is Script {
         );
         leverageZapper =
             ILeverageZapper(DEPLOYER.deployCreate2(keccak256(abi.encode(SALT, "leverageZapper")), abi.encodePacked(vm.getCode("leverage_zapper"))));
+        auctionTaker =
+            IAuctionTaker(DEPLOYER.deployCreate2(keccak256(abi.encode(SALT, "auctionTaker")), abi.encodePacked(vm.getCode("yv_auction_taker"))));
     }
 
 }

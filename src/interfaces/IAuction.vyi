@@ -34,6 +34,18 @@ struct InitializeParams:
 
 @external
 @view
+def buy_token() -> address:
+    ...
+
+
+@external
+@view
+def sell_token() -> address:
+    ...
+
+
+@external
+@view
 def auctions(auction_id: uint256) -> AuctionInfo:
     ...
 
@@ -72,4 +84,19 @@ def re_kick(
     starting_price: uint256,
     minimum_price: uint256,
 ):
+    ...
+
+
+# ============================================================================================
+# Take
+# ============================================================================================
+
+
+@external
+def take(
+    auction_id: uint256,
+    max_take_amount: uint256 = max_value(uint256),
+    receiver: address = msg.sender,
+    data: Bytes[10 ** 5] = empty(Bytes[10 ** 5]),
+) -> uint256:
     ...
