@@ -104,7 +104,7 @@ _MAX_SWAP_DATA_SIZE: constant(uint256) = 10 ** 4
 # Max flash loan callback data size
 _MAX_FLASHLOAN_CALLBACK_DATA_SIZE: constant(uint256) = 10 ** 5
 
-# Morpho (Ethereum mainnet)
+# Morpho
 _MORPHO: constant(IMorpho) = IMorpho(0xBBBBBbbBBb9cC5e90e3b3Af64bdAF62C37EEFFCb)
 
 
