@@ -10,8 +10,6 @@ contract LeverageZapperTests is Base {
 
     MockRouter public mockRouter;
 
-    address constant CRVUSD = 0xf939E0A03FB07F59A73314E73794Be0E57ac1b4E;
-
     uint256 constant SLIPPAGE_BPS = 50; // 0.5%
     uint256 constant BPS = 10_000;
 
@@ -24,11 +22,11 @@ contract LeverageZapperTests is Base {
         Base.setUp();
 
         // Deploy mock router
-        mockRouter = new MockRouter(priceOracle, address(collateralToken), address(borrowToken), CRVUSD, SLIPPAGE_BPS);
+        mockRouter = new MockRouter(priceOracle, address(collateralToken), address(borrowToken), address(borrowToken), SLIPPAGE_BPS);
         vm.label(address(mockRouter), "MockRouter");
 
         // Set fuzz bounds
-        maxCollateralFuzzAmount = 2 * COLLATERAL_TOKEN_PRECISION;
+        maxCollateralFuzzAmount = 100 * COLLATERAL_TOKEN_PRECISION;
         minCollateralFuzzAmount = minimumDebt * BORROW_TOKEN_PRECISION * ORACLE_PRICE_SCALE / priceOracle.get_price() * 2;
         maxLeverage = (minimumCollateralRatio / (minimumCollateralRatio - 100)) * 90 / 100;
     }
@@ -44,9 +42,9 @@ contract LeverageZapperTests is Base {
 
         uint256 additionalCollateral = _userCollateral * (_leverage - 1);
         uint256 baseDebt = additionalCollateral * priceOracle.get_price() / ORACLE_PRICE_SCALE;
-        uint256 flashLoanAmount = baseDebt * WAD / BORROW_TOKEN_PRECISION;
+        uint256 flashLoanAmount = baseDebt;
 
-        // Buffer debt to account for slippage on the debt swap (2x slippage to ensure surplus after rounding)
+        // Buffer debt to account for slippage on the collateral swap
         uint256 debtAmount = baseDebt * BPS / (BPS - 2 * SLIPPAGE_BPS);
 
         // Fund the lender
@@ -64,7 +62,7 @@ contract LeverageZapperTests is Base {
             ILeverageZapper.OpenLeveragedData({
                 owner: userBorrower,
                 trove_manager: address(troveManager),
-                flash_loan_token: CRVUSD,
+                flash_loan_token: address(borrowToken),
                 auction_taker: address(0),
                 owner_index: ownerIndex,
                 flash_loan_amount: flashLoanAmount,
@@ -76,8 +74,10 @@ contract LeverageZapperTests is Base {
                 max_upfront_fee: type(uint256).max,
                 min_borrow_out: 0,
                 min_collateral_out: 0,
-                collateral_swap: ILeverageZapper.SwapData({router: address(mockRouter), data: abi.encode(CRVUSD, address(collateralToken))}),
-                debt_swap: ILeverageZapper.SwapData({router: address(mockRouter), data: abi.encode(address(borrowToken), CRVUSD)})
+                collateral_swap: ILeverageZapper.SwapData({
+                    router: address(mockRouter), data: abi.encode(address(borrowToken), address(collateralToken))
+                }),
+                debt_swap: ILeverageZapper.SwapData({router: address(0), data: ""})
             })
         );
 
@@ -97,12 +97,10 @@ contract LeverageZapperTests is Base {
         // Verify zapper has no leftover tokens
         assertEq(collateralToken.balanceOf(address(leverageZapper)), 0, "E4");
         assertEq(borrowToken.balanceOf(address(leverageZapper)), 0, "E5");
-        assertEq(IERC20(CRVUSD).balanceOf(address(leverageZapper)), 0, "E6");
 
         // Verify swept leftovers to borrower
-        assertEq(collateralToken.balanceOf(userBorrower), 0, "E7");
-        assertEq(borrowToken.balanceOf(userBorrower), 0, "E8");
-        assertGt(IERC20(CRVUSD).balanceOf(userBorrower), 0, "E9");
+        assertEq(collateralToken.balanceOf(userBorrower), 0, "E6");
+        assertGt(borrowToken.balanceOf(userBorrower), 0, "E7");
 
         return troveId;
     }
@@ -122,9 +120,9 @@ contract LeverageZapperTests is Base {
 
         uint256 additionalCollateral = _userCollateral * (_leverage - 1);
         uint256 baseDebt = additionalCollateral * priceOracle.get_price() / ORACLE_PRICE_SCALE;
-        uint256 flashLoanAmount = baseDebt * WAD / BORROW_TOKEN_PRECISION;
+        uint256 flashLoanAmount = baseDebt;
 
-        // Buffer debt to account for slippage on the debt swap (2x slippage to ensure surplus after rounding)
+        // Buffer debt to account for slippage on the collateral swap
         uint256 debtAmount = baseDebt * BPS / (BPS - 2 * SLIPPAGE_BPS);
 
         // Fund the lender with enough for both troves
@@ -145,7 +143,7 @@ contract LeverageZapperTests is Base {
             ILeverageZapper.OpenLeveragedData({
                 owner: userBorrower,
                 trove_manager: address(troveManager),
-                flash_loan_token: CRVUSD,
+                flash_loan_token: address(borrowToken),
                 auction_taker: address(auctionTaker),
                 owner_index: block.timestamp,
                 flash_loan_amount: flashLoanAmount,
@@ -157,8 +155,10 @@ contract LeverageZapperTests is Base {
                 max_upfront_fee: type(uint256).max,
                 min_borrow_out: 0,
                 min_collateral_out: 0,
-                collateral_swap: ILeverageZapper.SwapData({router: address(mockRouter), data: abi.encode(CRVUSD, address(collateralToken))}),
-                debt_swap: ILeverageZapper.SwapData({router: address(mockRouter), data: abi.encode(address(borrowToken), CRVUSD)})
+                collateral_swap: ILeverageZapper.SwapData({
+                    router: address(mockRouter), data: abi.encode(address(borrowToken), address(collateralToken))
+                }),
+                debt_swap: ILeverageZapper.SwapData({router: address(0), data: ""})
             })
         );
 
@@ -178,12 +178,10 @@ contract LeverageZapperTests is Base {
         // Verify zapper has no leftover tokens
         assertEq(collateralToken.balanceOf(address(leverageZapper)), 0, "E4");
         assertEq(borrowToken.balanceOf(address(leverageZapper)), 0, "E5");
-        assertEq(IERC20(CRVUSD).balanceOf(address(leverageZapper)), 0, "E6");
 
         // Verify swept leftovers to borrower
-        assertEq(collateralToken.balanceOf(userBorrower), 0, "E7");
-        assertEq(borrowToken.balanceOf(userBorrower), 0, "E8");
-        assertGt(IERC20(CRVUSD).balanceOf(userBorrower), 0, "E9");
+        assertEq(collateralToken.balanceOf(userBorrower), 0, "E6");
+        assertGt(borrowToken.balanceOf(userBorrower), 0, "E7");
     }
 
     function test_closeLeveragedTrove(
@@ -195,8 +193,8 @@ contract LeverageZapperTests is Base {
         // Get trove debt
         uint256 troveDebt = troveManager.get_trove_debt_after_interest(troveId);
 
-        // Flash loan crvUSD to cover the debt (2x slippage buffer to ensure surplus after rounding)
-        uint256 closeFlashLoanAmount = troveDebt * WAD / BORROW_TOKEN_PRECISION * BPS / (BPS - 2 * SLIPPAGE_BPS);
+        // Flash loan borrow token to cover the debt (with slippage buffer for collateral swap)
+        uint256 closeFlashLoanAmount = troveDebt * BPS / (BPS - 2 * SLIPPAGE_BPS);
 
         // Transfer trove ownership to zapper
         vm.prank(userBorrower);
@@ -208,11 +206,13 @@ contract LeverageZapperTests is Base {
             ILeverageZapper.CloseLeveragedData({
                 owner: userBorrower,
                 trove_manager: address(troveManager),
-                flash_loan_token: CRVUSD,
+                flash_loan_token: address(borrowToken),
                 trove_id: troveId,
                 flash_loan_amount: closeFlashLoanAmount,
-                collateral_swap: ILeverageZapper.SwapData({router: address(mockRouter), data: abi.encode(address(collateralToken), CRVUSD)}),
-                debt_swap: ILeverageZapper.SwapData({router: address(mockRouter), data: abi.encode(CRVUSD, address(borrowToken))})
+                collateral_swap: ILeverageZapper.SwapData({
+                    router: address(mockRouter), data: abi.encode(address(collateralToken), address(borrowToken))
+                }),
+                debt_swap: ILeverageZapper.SwapData({router: address(0), data: ""})
             })
         );
 
@@ -225,12 +225,10 @@ contract LeverageZapperTests is Base {
         // Verify zapper has no leftover tokens
         assertEq(collateralToken.balanceOf(address(leverageZapper)), 0, "E3");
         assertEq(borrowToken.balanceOf(address(leverageZapper)), 0, "E4");
-        assertEq(IERC20(CRVUSD).balanceOf(address(leverageZapper)), 0, "E5");
 
-        // Verify user received value back (leftovers from slippage buffer)
-        assertEq(collateralToken.balanceOf(userBorrower), 0, "E6");
-        assertGt(borrowToken.balanceOf(userBorrower), 0, "E7");
-        assertGt(IERC20(CRVUSD).balanceOf(userBorrower), 0, "E8");
+        // Verify user received value back
+        assertEq(collateralToken.balanceOf(userBorrower), 0, "E5");
+        assertGt(borrowToken.balanceOf(userBorrower), 0, "E6");
     }
 
     function test_leverUpTrove(
@@ -245,13 +243,13 @@ contract LeverageZapperTests is Base {
 
         // Record state before lever up
         ITroveManager.Trove memory troveBefore = troveManager.troves(troveId);
-        uint256 crvusdBalanceBefore = IERC20(CRVUSD).balanceOf(userBorrower);
+        uint256 borrowBalanceBefore = borrowToken.balanceOf(userBorrower);
 
         // Compute flash loan for additional leverage
         uint256 additionalDebtBase = _userCollateral * _additionalLeverage * priceOracle.get_price() / ORACLE_PRICE_SCALE;
-        uint256 flashLoanAmount = additionalDebtBase * WAD / BORROW_TOKEN_PRECISION;
+        uint256 flashLoanAmount = additionalDebtBase;
 
-        // Buffer debt to account for slippage on the debt swap
+        // Buffer debt to account for slippage on the collateral swap
         uint256 debtAmount = additionalDebtBase * BPS / (BPS - 2 * SLIPPAGE_BPS);
 
         // Fund the lender with additional debt
@@ -267,7 +265,7 @@ contract LeverageZapperTests is Base {
             ILeverageZapper.LeverUpData({
                 owner: userBorrower,
                 trove_manager: address(troveManager),
-                flash_loan_token: CRVUSD,
+                flash_loan_token: address(borrowToken),
                 auction_taker: address(0),
                 trove_id: troveId,
                 flash_loan_amount: flashLoanAmount,
@@ -276,8 +274,10 @@ contract LeverageZapperTests is Base {
                 max_upfront_fee: type(uint256).max,
                 min_borrow_out: 0,
                 min_collateral_out: 0,
-                collateral_swap: ILeverageZapper.SwapData({router: address(mockRouter), data: abi.encode(CRVUSD, address(collateralToken))}),
-                debt_swap: ILeverageZapper.SwapData({router: address(mockRouter), data: abi.encode(address(borrowToken), CRVUSD)})
+                collateral_swap: ILeverageZapper.SwapData({
+                    router: address(mockRouter), data: abi.encode(address(borrowToken), address(collateralToken))
+                }),
+                debt_swap: ILeverageZapper.SwapData({router: address(0), data: ""})
             })
         );
 
@@ -294,10 +294,9 @@ contract LeverageZapperTests is Base {
         // Verify zapper has no leftover tokens
         assertEq(collateralToken.balanceOf(address(leverageZapper)), 0, "E3");
         assertEq(borrowToken.balanceOf(address(leverageZapper)), 0, "E4");
-        assertEq(IERC20(CRVUSD).balanceOf(address(leverageZapper)), 0, "E5");
 
-        // Verify user received crvUSD leftovers from slippage buffer
-        assertGt(IERC20(CRVUSD).balanceOf(userBorrower), crvusdBalanceBefore, "E6");
+        // Verify user received borrow token leftovers from slippage buffer
+        assertGt(borrowToken.balanceOf(userBorrower), borrowBalanceBefore, "E5");
     }
 
     function test_leverUpTroveWithCallback(
@@ -316,18 +315,17 @@ contract LeverageZapperTests is Base {
 
         // Record state before lever up
         ITroveManager.Trove memory troveBefore = troveManager.troves(troveId);
-        uint256 crvusdBalanceBefore = IERC20(CRVUSD).balanceOf(userBorrower);
+        uint256 borrowBalanceBefore = borrowToken.balanceOf(userBorrower);
 
         // Compute flash loan for additional leverage
         uint256 additionalDebtBase = _userCollateral * _additionalLeverage * priceOracle.get_price() / ORACLE_PRICE_SCALE;
-        uint256 flashLoanAmount = additionalDebtBase * WAD / BORROW_TOKEN_PRECISION;
+        uint256 flashLoanAmount = additionalDebtBase;
 
-        // Buffer debt to account for slippage on the debt swap
+        // Buffer debt to account for slippage on the collateral swap
         uint256 debtAmount = additionalDebtBase * BPS / (BPS - 2 * SLIPPAGE_BPS);
 
         // Exhaust lender liquidity by opening a trove from another user
         uint256 idle = borrowToken.balanceOf(address(lender));
-        console2.log("Idle liquidity before opening trove for callback:", idle);
         if (idle > 0) {
             uint256 extraCollateral = (idle * DEFAULT_TARGET_COLLATERAL_RATIO / BORROW_TOKEN_PRECISION) * ORACLE_PRICE_SCALE / priceOracle.get_price();
             mintAndOpenTrove(anotherUserBorrower, extraCollateral, idle, DEFAULT_ANNUAL_INTEREST_RATE);
@@ -344,7 +342,7 @@ contract LeverageZapperTests is Base {
             ILeverageZapper.LeverUpData({
                 owner: userBorrower,
                 trove_manager: address(troveManager),
-                flash_loan_token: CRVUSD,
+                flash_loan_token: address(borrowToken),
                 auction_taker: address(auctionTaker),
                 trove_id: troveId,
                 flash_loan_amount: flashLoanAmount,
@@ -353,8 +351,10 @@ contract LeverageZapperTests is Base {
                 max_upfront_fee: type(uint256).max,
                 min_borrow_out: 0,
                 min_collateral_out: 0,
-                collateral_swap: ILeverageZapper.SwapData({router: address(mockRouter), data: abi.encode(CRVUSD, address(collateralToken))}),
-                debt_swap: ILeverageZapper.SwapData({router: address(mockRouter), data: abi.encode(address(borrowToken), CRVUSD)})
+                collateral_swap: ILeverageZapper.SwapData({
+                    router: address(mockRouter), data: abi.encode(address(borrowToken), address(collateralToken))
+                }),
+                debt_swap: ILeverageZapper.SwapData({router: address(0), data: ""})
             })
         );
 
@@ -371,10 +371,9 @@ contract LeverageZapperTests is Base {
         // Verify zapper has no leftover tokens
         assertEq(collateralToken.balanceOf(address(leverageZapper)), 0, "E3");
         assertEq(borrowToken.balanceOf(address(leverageZapper)), 0, "E4");
-        assertEq(IERC20(CRVUSD).balanceOf(address(leverageZapper)), 0, "E5");
 
-        // Verify user received crvUSD leftovers from slippage buffer
-        assertGt(IERC20(CRVUSD).balanceOf(userBorrower), crvusdBalanceBefore, "E6");
+        // Verify user received borrow token leftovers from slippage buffer
+        assertGt(borrowToken.balanceOf(userBorrower), borrowBalanceBefore, "E5");
     }
 
     function test_leverDownTrove(
@@ -389,14 +388,13 @@ contract LeverageZapperTests is Base {
 
         // Record state before lever down
         ITroveManager.Trove memory troveBefore = troveManager.troves(troveId);
-        uint256 crvusdBalanceBefore = IERC20(CRVUSD).balanceOf(userBorrower);
+        uint256 borrowBalanceBefore = borrowToken.balanceOf(userBorrower);
 
         // Compute amounts for lever down
         uint256 collateralToRemove = _userCollateral * _leverageReduction;
 
         // Flash loan sized so that collateral sale covers it (with slippage buffer)
-        uint256 flashLoanAmount =
-            collateralToRemove * priceOracle.get_price() * WAD / (ORACLE_PRICE_SCALE * BORROW_TOKEN_PRECISION) * (BPS - 2 * SLIPPAGE_BPS) / BPS;
+        uint256 flashLoanAmount = collateralToRemove * priceOracle.get_price() / ORACLE_PRICE_SCALE * (BPS - 2 * SLIPPAGE_BPS) / BPS;
 
         // Transfer trove ownership to zapper
         vm.prank(userBorrower);
@@ -408,12 +406,14 @@ contract LeverageZapperTests is Base {
             ILeverageZapper.LeverDownData({
                 owner: userBorrower,
                 trove_manager: address(troveManager),
-                flash_loan_token: CRVUSD,
+                flash_loan_token: address(borrowToken),
                 trove_id: troveId,
                 flash_loan_amount: flashLoanAmount,
                 collateral_to_remove: collateralToRemove,
-                collateral_swap: ILeverageZapper.SwapData({router: address(mockRouter), data: abi.encode(address(collateralToken), CRVUSD)}),
-                debt_swap: ILeverageZapper.SwapData({router: address(mockRouter), data: abi.encode(CRVUSD, address(borrowToken))})
+                collateral_swap: ILeverageZapper.SwapData({
+                    router: address(mockRouter), data: abi.encode(address(collateralToken), address(borrowToken))
+                }),
+                debt_swap: ILeverageZapper.SwapData({router: address(0), data: ""})
             })
         );
 
@@ -431,12 +431,10 @@ contract LeverageZapperTests is Base {
         // Verify zapper has no leftover tokens
         assertEq(collateralToken.balanceOf(address(leverageZapper)), 0, "E4");
         assertEq(borrowToken.balanceOf(address(leverageZapper)), 0, "E5");
-        assertEq(IERC20(CRVUSD).balanceOf(address(leverageZapper)), 0, "E6");
 
         // Verify user received leftovers from slippage buffer
-        assertEq(collateralToken.balanceOf(userBorrower), 0, "E7");
-        assertGe(borrowToken.balanceOf(userBorrower), 0, "E8");
-        assertGt(IERC20(CRVUSD).balanceOf(userBorrower), crvusdBalanceBefore, "E9");
+        assertEq(collateralToken.balanceOf(userBorrower), 0, "E6");
+        assertGt(borrowToken.balanceOf(userBorrower), borrowBalanceBefore, "E7");
     }
 
 }
