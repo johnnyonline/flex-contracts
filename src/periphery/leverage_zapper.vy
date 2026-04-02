@@ -547,7 +547,7 @@ def _handle_lever_down(flash_loan_amount: uint256, data: Bytes[_MAX_FLASHLOAN_CA
 def _swap(swap: SwapData, token_in: address, amount_in: uint256):
     """
     @notice Execute a swap via a DEX aggregator router
-    @dev Skips if swap data is empty
+    @dev Skips if swap data is empty. Caller should encode slippage protection in the router calldata
     @param swap The swap parameters (router address + calldata)
     @param token_in The input token to approve
     @param amount_in The amount to approve for the swap
