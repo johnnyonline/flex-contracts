@@ -40,7 +40,7 @@ struct DeployParams:
     collateral_token: address  # address of the collateral token
     price_oracle: address  # address of the Price Oracle contract
     minimum_debt: uint256  # minimum borrowable amount, e.g., `500 * borrow_token_precision` for 500 tokens
-    safe_collateral_ratio: uint256  # target CR after partial liquidation, e.g., `115` for 115%. must be greater than `100% + max_liquidation_fee` to avoid underflow in the safe CR calculation
+    safe_collateral_ratio: uint256  # target CR after partial liquidation, e.g., `115` for 115%
     minimum_collateral_ratio: uint256  # minimum CR to avoid liquidation, e.g., `110` for 110%
     max_penalty_collateral_ratio: uint256  # CR at which max liquidation fee applies, e.g., `105` for 105%
     min_liquidation_fee: uint256  # minimum liquidation fee in hundredths of a percent, e.g., `50` for 0.5%
@@ -70,6 +70,13 @@ LENDER_FACTORY: public(immutable(ILenderFactory))
 
 # Version
 VERSION: public(constant(String[28])) = "1.0.0"
+
+# Validation constants
+_MIN_TOKEN_DECIMALS: constant(uint256) = 6
+_MAX_TOKEN_DECIMALS: constant(uint256) = 18
+_ONE_HUNDRED_PCT: constant(uint256) = 100
+_BPS: constant(uint256) = 10_000
+_WAD: constant(uint256) = 10 ** 18
 
 
 # ============================================================================================
@@ -116,6 +123,9 @@ def deploy(params: DeployParams) -> (address, address, address, address, address
     @return auction Address of the deployed Auction contract
     @return lender Address of the deployed Lender contract
     """
+    # Validate parameters
+    self._validate_params(params)
+
     # Compute the salt value
     salt: bytes32 = keccak256(abi_encode(msg.sender, params.salt, params.collateral_token, params.borrow_token))
 
@@ -199,3 +209,52 @@ def deploy(params: DeployParams) -> (address, address, address, address, address
 
     # Return addresses
     return (trove_manager, sorted_troves, dutch_desk, auction, lender)
+
+
+# ============================================================================================
+# Internal
+# ============================================================================================
+
+
+@internal
+@view
+def _validate_params(params: DeployParams):
+    """
+    @notice Validate deploy parameters to prevent bricked markets
+    @param params Deploy parameters struct
+    """
+    # Addresses
+    assert params.borrow_token != empty(address), "!borrow_token"
+    assert params.collateral_token != empty(address), "!collateral_token"
+    assert params.price_oracle != empty(address), "!price_oracle"
+    assert params.borrow_token != params.collateral_token, "!same_token"
+
+    # Token decimals
+    borrow_decimals: uint256 = convert(staticcall IERC20Detailed(params.borrow_token).decimals(), uint256)
+    collateral_decimals: uint256 = convert(staticcall IERC20Detailed(params.collateral_token).decimals(), uint256)
+    assert borrow_decimals >= _MIN_TOKEN_DECIMALS and borrow_decimals <= _MAX_TOKEN_DECIMALS, "!borrow_decimals"
+    assert collateral_decimals >= _MIN_TOKEN_DECIMALS and collateral_decimals <= _MAX_TOKEN_DECIMALS, "!collateral_decimals"
+
+    # Collateral ratios
+    assert params.safe_collateral_ratio > params.minimum_collateral_ratio, "!safe_cr"
+    assert params.minimum_collateral_ratio > params.max_penalty_collateral_ratio, "!min_cr"
+
+    # Liquidation fees
+    assert params.min_liquidation_fee <= params.max_liquidation_fee, "!liq_fee"
+    assert params.safe_collateral_ratio * _ONE_HUNDRED_PCT > _BPS + params.max_liquidation_fee, "!safe_cr_fee"
+    assert params.max_penalty_collateral_ratio * _ONE_HUNDRED_PCT >= _BPS + params.max_liquidation_fee, "!max_penalty_cr_fee"
+
+    # Debt
+    assert params.minimum_debt > 0, "!minimum_debt"
+
+    # Interest
+    assert params.upfront_interest_period > 0, "!upfront_interest_period"
+    assert params.interest_rate_adj_cooldown > 0, "!interest_rate_adj_cooldown"
+
+    # Auction
+    assert params.step_decay_rate < _BPS, "!step_decay_rate"
+    assert params.step_duration > 0, "!step_duration"
+    assert params.auction_length > 0, "!auction_length"
+    assert params.minimum_price_buffer_percentage > 0 and params.minimum_price_buffer_percentage <= _WAD, "!min_price_buffer"
+    assert params.starting_price_buffer_percentage >= params.minimum_price_buffer_percentage, "!start_price_buffer"
+    assert params.re_kick_starting_price_buffer_percentage >= params.minimum_price_buffer_percentage, "!re_kick_price_buffer"
