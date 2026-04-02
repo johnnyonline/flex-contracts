@@ -180,7 +180,6 @@ def deploy(params: DeployParams) -> (address, address, address, address, address
         lender=lender,
         price_oracle=params.price_oracle,
         auction=auction,
-        borrow_token=params.borrow_token,
         collateral_token=params.collateral_token,
         minimum_price_buffer_percentage=params.minimum_price_buffer_percentage,
         starting_price_buffer_percentage=params.starting_price_buffer_percentage,

@@ -40,7 +40,6 @@ contract DutchDeskTests is Base {
                 lender: address(lender),
                 price_oracle: address(priceOracle),
                 auction: address(auction),
-                borrow_token: address(borrowToken),
                 collateral_token: address(collateralToken),
                 minimum_price_buffer_percentage: minimumPriceBufferPercentage,
                 starting_price_buffer_percentage: startingPriceBufferPercentage,
