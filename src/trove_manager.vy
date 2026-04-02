@@ -767,7 +767,7 @@ def adjust_interest_rate(
     # Apply upfront fee on premature adjustments and check collateral ratio
     if block.timestamp < convert(trove.last_interest_rate_adj_time, uint256) + self.interest_rate_adj_cooldown:
         # Calculate the upfront fee and make sure the user is ok with it
-        upfront_fee = self._get_upfront_fee(new_debt, new_annual_interest_rate, max_upfront_fee)
+        upfront_fee = self._get_upfront_fee(new_debt, new_annual_interest_rate, max_upfront_fee, True)
 
         # Charge the upfront fee
         new_debt += upfront_fee
@@ -1405,22 +1405,24 @@ def _calculate_accrued_interest(weighted_debt: uint256, period: uint256) -> uint
 def _get_upfront_fee(
     debt_amount: uint256,
     annual_interest_rate: uint256,
-    max_upfront_fee: uint256 = max_value(uint256)
+    max_upfront_fee: uint256 = max_value(uint256),
+    is_existing_debt: bool = False,
 ) -> uint256:
     """
     @notice Get the upfront fee for borrowing a specified amount of debt at a given annual interest rate
     @dev Make sure the calculated fee does not exceed `max_upfront_fee`
     @dev The fee represents prepaid interest over upfront interest period using the system's average rate after the new debt
-    @param debt_amount The amount of debt to be borrowed
+    @param debt_amount The amount of debt to charge the fee on
     @param annual_interest_rate The annual interest rate for the debt
     @param max_upfront_fee The maximum upfront fee the caller is willing to pay
+    @param is_existing_debt True if debt_amount is already part of total_debt
     @return upfront_fee The calculated upfront fee
     """
     # Total debt after adding the new debt
-    new_total_debt: uint256 = self.total_debt + debt_amount
+    new_total_debt: uint256 = self.total_debt if is_existing_debt else self.total_debt + debt_amount
 
     # Total weighted debt after adding the new weighted debt
-    new_total_weighted_debt: uint256 = self.total_weighted_debt + (debt_amount * annual_interest_rate)
+    new_total_weighted_debt: uint256 = self.total_weighted_debt if is_existing_debt else self.total_weighted_debt + (debt_amount * annual_interest_rate)
 
     # Calculate the new average interest rate
     avg_interest_rate: uint256 = new_total_weighted_debt // new_total_debt
