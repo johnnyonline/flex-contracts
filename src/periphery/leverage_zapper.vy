@@ -126,6 +126,10 @@ def open_leveraged_trove(data: OpenLeveragedData) -> uint256:
     # Make sure the owner is non-zero
     assert data.owner != empty(address), "!owner"
 
+    # Prevent swap routers from targeting the Trove Manager
+    assert data.collateral_swap.router != data.trove_manager, "!router"
+    assert data.debt_swap.router != data.trove_manager, "!router"
+
     # Pull collateral from the caller
     collateral_token: address = staticcall ITroveManager(data.trove_manager).collateral_token()
     assert extcall IERC20(collateral_token).transferFrom(msg.sender, self, data.collateral_amount, default_return_value=True)
@@ -163,6 +167,10 @@ def close_leveraged_trove(data: CloseLeveragedData):
     @dev User must call `trove_manager.transfer_ownership(trove_id, zapper)` before calling this
     @param data The close leveraged Trove parameters
     """
+    # Prevent swap routers from targeting the Trove Manager
+    assert data.collateral_swap.router != data.trove_manager, "!router"
+    assert data.debt_swap.router != data.trove_manager, "!router"
+
     # Cache the Trove Manager instance
     trove_manager: ITroveManager = ITroveManager(data.trove_manager)
 
@@ -213,6 +221,10 @@ def lever_up_trove(data: LeverUpData):
          Otherwise, auction proceeds will be sent to this contract and potentially be swept by someone else
     @param data The lever up parameters
     """
+    # Prevent swap routers from targeting the Trove Manager
+    assert data.collateral_swap.router != data.trove_manager, "!router"
+    assert data.debt_swap.router != data.trove_manager, "!router"
+
     # Cache the Trove Manager instance
     trove_manager: ITroveManager = ITroveManager(data.trove_manager)
 
@@ -257,6 +269,10 @@ def lever_down_trove(data: LeverDownData):
     @dev User must call `trove_manager.transfer_ownership(trove_id, zapper)` before calling this
     @param data The lever down parameters
     """
+    # Prevent swap routers from targeting the Trove Manager
+    assert data.collateral_swap.router != data.trove_manager, "!router"
+    assert data.debt_swap.router != data.trove_manager, "!router"
+
     # Cache the Trove Manager instance
     trove_manager: ITroveManager = ITroveManager(data.trove_manager)
 
