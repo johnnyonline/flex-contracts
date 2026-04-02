@@ -191,10 +191,8 @@ contract AdjustRateTests is Base {
         uint256 _newAnnualInterestRate = DEFAULT_ANNUAL_INTEREST_RATE * 2; // 2%
 
         // Calculate second expected debt with interest accumulated
-        uint256 _interestOnFirstDebt =
-            _expectedDebt * DEFAULT_ANNUAL_INTEREST_RATE * (block.timestamp - _trove.last_debt_update_time) / (365 days * BORROW_TOKEN_PRECISION);
-        uint256 _secondExpectedDebt = troveManager.get_trove_debt_after_interest(_troveId)
-            + troveManager.get_upfront_fee(_expectedDebt + _interestOnFirstDebt, _newAnnualInterestRate);
+        uint256 _debtAfterInterest = troveManager.get_trove_debt_after_interest(_troveId);
+        uint256 _secondExpectedDebt = _debtAfterInterest + troveManager.get_upfront_fee(_debtAfterInterest, _newAnnualInterestRate, true);
 
         // Finally adjust the rate
         vm.prank(userBorrower);
@@ -547,13 +545,14 @@ contract AdjustRateTests is Base {
         // Calculate the maximum borrowable amount that would leave the trove at MCR
         uint256 _maxBorrowableAtMCR =
             ((_collateralNeeded * priceOracle.get_price() / ORACLE_PRICE_SCALE) * BORROW_TOKEN_PRECISION / troveManager.minimum_collateral_ratio())
-                * 995 / 1000;
+                * 998 / 1000;
 
-        // Open a trove
-        uint256 _troveId = mintAndOpenTrove(userBorrower, _collateralNeeded, _maxBorrowableAtMCR, DEFAULT_ANNUAL_INTEREST_RATE);
+        // Open a trove at max rate so the upfront fee on premature adjustment is large
+        uint256 _rate = troveManager.min_annual_interest_rate() * 20;
+        uint256 _troveId = mintAndOpenTrove(userBorrower, _collateralNeeded, _maxBorrowableAtMCR, _rate);
 
-        // Use max annual interest rate to increase the debt as much as possible
-        uint256 _newAnnualInterestRate = troveManager.max_annual_interest_rate(); // max rate
+        // Adjust to a different rate to trigger the premature adjustment fee
+        uint256 _newAnnualInterestRate = _rate - 1;
 
         vm.prank(userBorrower);
         vm.expectRevert("!minimum_collateral_ratio");

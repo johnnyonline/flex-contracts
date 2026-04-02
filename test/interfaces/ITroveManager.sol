@@ -106,6 +106,11 @@ interface ITroveManager {
         uint256 debt_amount,
         uint256 annual_interest_rate
     ) external view returns (uint256);
+    function get_upfront_fee(
+        uint256 debt_amount,
+        uint256 annual_interest_rate,
+        bool is_existing_debt
+    ) external view returns (uint256);
     function get_trove_debt_after_interest(
         uint256 trove_id
     ) external view returns (uint256);

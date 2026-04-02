@@ -252,15 +252,16 @@ def initialize(params: InitializeParams):
 
 @external
 @view
-def get_upfront_fee(debt_amount: uint256, annual_interest_rate: uint256) -> uint256:
+def get_upfront_fee(debt_amount: uint256, annual_interest_rate: uint256, is_existing_debt: bool = False) -> uint256:
     """
     @notice Get the upfront fee for borrowing a specified amount of debt at a given annual interest rate
     @dev The fee represents prepaid interest over upfront interest period using the system's average rate after the new debt
-    @param debt_amount The amount of debt to be borrowed
+    @param debt_amount The amount of debt to charge the fee on
     @param annual_interest_rate The annual interest rate for the debt
+    @param is_existing_debt True if debt_amount is already part of total_debt (e.g. rate adjustments)
     @return upfront_fee The calculated upfront fee
     """
-    return self._get_upfront_fee(debt_amount, annual_interest_rate)
+    return self._get_upfront_fee(debt_amount, annual_interest_rate, max_value(uint256), is_existing_debt)
 
 
 @external
