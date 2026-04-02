@@ -1216,9 +1216,6 @@ def _redeem(
     @param receiver Address to transfer the auction proceeds to
     @return Amount of collateral tokens that were redeemed
     """
-    # Accrue interest on the total debt
-    self._sync_total_debt()
-
     # Get the collateral price
     collateral_price: uint256 = staticcall self.price_oracle.get_price()
 
