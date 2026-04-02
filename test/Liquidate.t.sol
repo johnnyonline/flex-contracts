@@ -731,6 +731,11 @@ contract LiquidateTests is Base {
         liquidatorMock.liquidate(_nonExistentTroveId, type(uint256).max);
     }
 
+    function test_liquidateTrove_zeroTroveId() public {
+        vm.expectRevert("!active or zombie");
+        liquidatorMock.liquidate(0, type(uint256).max);
+    }
+
     function test_liquidateTrove_aboveMCR(
         uint256 _amount
     ) public {

@@ -978,9 +978,6 @@ def liquidate_trove(
     @param data The data to pass to the `receiver` callback. Defaults to empty
     @return The amount of liquidated collateral tokens
     """
-    # Make sure the trove ID is non-zero
-    assert trove_id != 0, "!trove_id"
-
     # Get the collateral price
     collateral_price: uint256 = staticcall self.price_oracle.get_price()
 
