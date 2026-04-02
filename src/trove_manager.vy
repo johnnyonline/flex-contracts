@@ -793,6 +793,14 @@ def adjust_interest_rate(
     trove.debt = new_debt
     trove.last_debt_update_time = convert(block.timestamp, uint64)
 
+    # Reinsert the Trove in the sorted list at its new position
+    extcall self.sorted_troves.re_insert(
+        trove_id,
+        new_annual_interest_rate,
+        prev_id,
+        next_id
+    )
+
     # Save changes to storage
     self.troves[trove_id] = trove
 
@@ -802,14 +810,6 @@ def adjust_interest_rate(
         0, # debt_decrease
         new_debt * new_annual_interest_rate, # weighted_debt_increase
         old_debt * old_annual_interest_rate, # weighted_debt_decrease
-    )
-
-    # Reinsert the Trove in the sorted list at its new position
-    extcall self.sorted_troves.re_insert(
-        trove_id,
-        new_annual_interest_rate,
-        prev_id,
-        next_id
     )
 
     # Emit event
