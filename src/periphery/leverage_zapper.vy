@@ -205,7 +205,7 @@ def lever_up_trove(data: LeverUpData):
     @dev Only callable by the Trove owner or an approved operator
     @dev The Zapper must be approved to operate on behalf of the Trove owner
     @dev If a redemption is triggered, an `auction_taker` should be provided.
-         Otherwise, auction proceeds will be sent to this contract and potentially be swept by someone else
+         Otherwise, auction proceeds will be sent to this contract and may be swept by someone else
     @param data The lever up parameters
     """
     # Prevent swap routers from targeting the Trove Manager
