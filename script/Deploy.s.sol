@@ -11,6 +11,7 @@ import {IDebtInFrontHelper} from "./interfaces/IDebtInFrontHelper.sol";
 import {IDeployer} from "./interfaces/IDeployer.sol";
 import {ILeverageZapper} from "./interfaces/ILeverageZapper.sol";
 import {IRegistry} from "./interfaces/IRegistry.sol";
+import {ISwapExecutor} from "./interfaces/ISwapExecutor.sol";
 
 import {LenderFactory} from "../src/lender/LenderFactory.sol";
 import {StrategyAprOracle} from "../src/lender/periphery/StrategyAprOracle.sol";
@@ -48,6 +49,7 @@ contract Deploy is Script {
     // Periphery
     StrategyAprOracle public strategyAprOracle;
     IDebtInFrontHelper public debtInFrontHelper;
+    ISwapExecutor public swapExecutor;
     ILeverageZapper public leverageZapper;
     IAuctionTaker public auctionTaker;
 
@@ -110,6 +112,7 @@ contract Deploy is Script {
             vm.label({account: address(registry), newLabel: "Registry"});
             vm.label({account: address(strategyAprOracle), newLabel: "StrategyAprOracle"});
             vm.label({account: address(debtInFrontHelper), newLabel: "DebtInFrontHelper"});
+            vm.label({account: address(swapExecutor), newLabel: "SwapExecutor"});
             vm.label({account: address(leverageZapper), newLabel: "LeverageZapper"});
             vm.label({account: address(auctionTaker), newLabel: "AuctionTaker"});
         } else {
@@ -124,6 +127,7 @@ contract Deploy is Script {
             console2.log("Registry: ", address(registry));
             console2.log("Strategy APR Oracle: ", address(strategyAprOracle));
             console2.log("Debt In Front Helper: ", address(debtInFrontHelper));
+            console2.log("Swap Executor: ", address(swapExecutor));
             console2.log("Leverage Zapper: ", address(leverageZapper));
             console2.log("Auction Taker: ", address(auctionTaker));
             console2.log("---------------------------------");
@@ -168,8 +172,13 @@ contract Deploy is Script {
         debtInFrontHelper = IDebtInFrontHelper(
             DEPLOYER.deployCreate2(keccak256(abi.encode(SALT, "debtInFrontHelper")), abi.encodePacked(vm.getCode("debt_in_front_helper")))
         );
-        leverageZapper =
-            ILeverageZapper(DEPLOYER.deployCreate2(keccak256(abi.encode(SALT, "leverageZapper")), abi.encodePacked(vm.getCode("leverage_zapper"))));
+        swapExecutor =
+            ISwapExecutor(DEPLOYER.deployCreate2(keccak256(abi.encode(SALT, "swapExecutor")), abi.encodePacked(vm.getCode("swap_executor"))));
+        leverageZapper = ILeverageZapper(
+            DEPLOYER.deployCreate2(
+                keccak256(abi.encode(SALT, "leverageZapper")), abi.encodePacked(vm.getCode("leverage_zapper"), abi.encode(address(swapExecutor)))
+            )
+        );
         auctionTaker =
             IAuctionTaker(DEPLOYER.deployCreate2(keccak256(abi.encode(SALT, "auctionTaker")), abi.encodePacked(vm.getCode("yv_auction_taker"))));
     }

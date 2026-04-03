@@ -98,6 +98,10 @@ contract LeverageZapperTests is Base {
         assertEq(collateralToken.balanceOf(userBorrower), 0, "E6");
         assertGt(borrowToken.balanceOf(userBorrower), 0, "E7");
 
+        // Verify swap executor has no leftover tokens
+        assertEq(collateralToken.balanceOf(address(swapExecutor)), 0, "E8");
+        assertEq(borrowToken.balanceOf(address(swapExecutor)), 0, "E9");
+
         return troveId;
     }
 
@@ -174,6 +178,10 @@ contract LeverageZapperTests is Base {
         // Verify swept leftovers to borrower
         assertEq(collateralToken.balanceOf(userBorrower), 0, "E6");
         assertGt(borrowToken.balanceOf(userBorrower), 0, "E7");
+
+        // Verify swap executor has no leftover tokens
+        assertEq(collateralToken.balanceOf(address(swapExecutor)), 0, "E8");
+        assertEq(borrowToken.balanceOf(address(swapExecutor)), 0, "E9");
     }
 
     function test_closeLeveragedTrove(
@@ -220,6 +228,10 @@ contract LeverageZapperTests is Base {
         // Verify user received value back
         assertEq(collateralToken.balanceOf(userBorrower), 0, "E5");
         assertGt(borrowToken.balanceOf(userBorrower), 0, "E6");
+
+        // Verify swap executor has no leftover tokens
+        assertEq(collateralToken.balanceOf(address(swapExecutor)), 0, "E7");
+        assertEq(borrowToken.balanceOf(address(swapExecutor)), 0, "E8");
     }
 
     function test_leverUpTrove(
@@ -283,6 +295,10 @@ contract LeverageZapperTests is Base {
 
         // Verify user received borrow token leftovers from slippage buffer
         assertGt(borrowToken.balanceOf(userBorrower), borrowBalanceBefore, "E5");
+
+        // Verify swap executor has no leftover tokens
+        assertEq(collateralToken.balanceOf(address(swapExecutor)), 0, "E6");
+        assertEq(borrowToken.balanceOf(address(swapExecutor)), 0, "E7");
     }
 
     function test_leverUpTroveWithCallback(
@@ -355,6 +371,10 @@ contract LeverageZapperTests is Base {
 
         // Verify user received borrow token leftovers from slippage buffer
         assertGt(borrowToken.balanceOf(userBorrower), borrowBalanceBefore, "E5");
+
+        // Verify swap executor has no leftover tokens
+        assertEq(collateralToken.balanceOf(address(swapExecutor)), 0, "E6");
+        assertEq(borrowToken.balanceOf(address(swapExecutor)), 0, "E7");
     }
 
     function test_leverDownTrove(
@@ -411,6 +431,10 @@ contract LeverageZapperTests is Base {
         // Verify user received leftovers from slippage buffer
         assertEq(collateralToken.balanceOf(userBorrower), 0, "E6");
         assertGt(borrowToken.balanceOf(userBorrower), borrowBalanceBefore, "E7");
+
+        // Verify swap executor has no leftover tokens
+        assertEq(collateralToken.balanceOf(address(swapExecutor)), 0, "E8");
+        assertEq(borrowToken.balanceOf(address(swapExecutor)), 0, "E9");
     }
 
     function test_closeLeveragedTrove_unapproved_reverts(
@@ -487,7 +511,15 @@ contract LeverageZapperTests is Base {
     }
 
     function test_openLeveragedTrove_zeroOwner_reverts() public {
-        vm.prank(userBorrower);
+        mintAndDepositIntoLender(userLender, troveManager.min_debt());
+
+        uint256 _collateral =
+            (troveManager.min_debt() * DEFAULT_TARGET_COLLATERAL_RATIO / BORROW_TOKEN_PRECISION) * ORACLE_PRICE_SCALE / priceOracle.get_price();
+        airdrop(address(collateralToken), userBorrower, _collateral);
+        uint256 _debtAmount = troveManager.min_debt();
+
+        vm.startPrank(userBorrower);
+        collateralToken.approve(address(leverageZapper), _collateral);
         vm.expectRevert("!owner");
         leverageZapper.open_leveraged_trove(
             ILeverageZapper.OpenLeveragedData({
@@ -496,41 +528,9 @@ contract LeverageZapperTests is Base {
                 flash_loan_token: address(borrowToken),
                 auction_taker: address(0),
                 owner_index: block.timestamp,
-                flash_loan_amount: 0,
-                collateral_amount: 0,
-                debt_amount: 0,
-                prev_id: 0,
-                next_id: 0,
-                annual_interest_rate: 0,
-                max_upfront_fee: 0,
-                min_borrow_out: 0,
-                min_collateral_out: 0,
-                collateral_swap: ILeverageZapper.SwapData({router: address(0), data: ""}),
-                debt_swap: ILeverageZapper.SwapData({router: address(0), data: ""})
-            })
-        );
-    }
-
-    function test_openLeveragedTrove_troveManagerAsOwner_reverts() public {
-        mintAndDepositIntoLender(userLender, troveManager.min_debt());
-
-        uint256 _collateral =
-            (troveManager.min_debt() * DEFAULT_TARGET_COLLATERAL_RATIO / BORROW_TOKEN_PRECISION) * ORACLE_PRICE_SCALE / priceOracle.get_price();
-        airdrop(address(collateralToken), userBorrower, _collateral);
-
-        vm.startPrank(userBorrower);
-        collateralToken.approve(address(leverageZapper), _collateral);
-        vm.expectRevert("!owner");
-        leverageZapper.open_leveraged_trove(
-            ILeverageZapper.OpenLeveragedData({
-                owner: address(troveManager),
-                trove_manager: address(troveManager),
-                flash_loan_token: address(borrowToken),
-                auction_taker: address(0),
-                owner_index: block.timestamp,
-                flash_loan_amount: troveManager.min_debt(),
+                flash_loan_amount: _debtAmount,
                 collateral_amount: _collateral,
-                debt_amount: troveManager.min_debt(),
+                debt_amount: _debtAmount,
                 prev_id: 0,
                 next_id: 0,
                 annual_interest_rate: DEFAULT_ANNUAL_INTEREST_RATE,
@@ -546,105 +546,40 @@ contract LeverageZapperTests is Base {
         vm.stopPrank();
     }
 
-    function test_openLeveragedTrove_routerTargetingTroveManager_reverts() public {
-        vm.prank(userBorrower);
-        vm.expectRevert("!router");
+    function test_openLeveragedTrove_troveManagerAsOwner_reverts() public {
+        mintAndDepositIntoLender(userLender, troveManager.min_debt());
+
+        uint256 _collateral =
+            (troveManager.min_debt() * DEFAULT_TARGET_COLLATERAL_RATIO / BORROW_TOKEN_PRECISION) * ORACLE_PRICE_SCALE / priceOracle.get_price();
+        airdrop(address(collateralToken), userBorrower, _collateral);
+        uint256 _debtAmount = troveManager.min_debt();
+
+        vm.startPrank(userBorrower);
+        collateralToken.approve(address(leverageZapper), _collateral);
+        vm.expectRevert("!owner");
         leverageZapper.open_leveraged_trove(
             ILeverageZapper.OpenLeveragedData({
-                owner: userBorrower,
+                owner: address(troveManager),
                 trove_manager: address(troveManager),
                 flash_loan_token: address(borrowToken),
                 auction_taker: address(0),
                 owner_index: block.timestamp,
-                flash_loan_amount: 0,
-                collateral_amount: 0,
-                debt_amount: 0,
+                flash_loan_amount: _debtAmount,
+                collateral_amount: _collateral,
+                debt_amount: _debtAmount,
                 prev_id: 0,
                 next_id: 0,
-                annual_interest_rate: 0,
-                max_upfront_fee: 0,
+                annual_interest_rate: DEFAULT_ANNUAL_INTEREST_RATE,
+                max_upfront_fee: type(uint256).max,
                 min_borrow_out: 0,
                 min_collateral_out: 0,
-                collateral_swap: ILeverageZapper.SwapData({router: address(troveManager), data: "0x"}),
+                collateral_swap: ILeverageZapper.SwapData({
+                    router: address(mockRouter), data: abi.encode(address(borrowToken), address(collateralToken))
+                }),
                 debt_swap: ILeverageZapper.SwapData({router: address(0), data: ""})
             })
         );
-    }
-
-    function test_closeLeveragedTrove_routerTargetingTroveManager_reverts(
-        uint256 _userCollateral,
-        uint256 _leverage
-    ) public {
-        uint256 troveId = test_openLeveragedTrove(_userCollateral, _leverage);
-
-        vm.prank(userBorrower);
-        troveManager.approve(address(leverageZapper), true);
-
-        vm.prank(userBorrower);
-        vm.expectRevert("!router");
-        leverageZapper.close_leveraged_trove(
-            ILeverageZapper.CloseLeveragedData({
-                trove_manager: address(troveManager),
-                flash_loan_token: address(borrowToken),
-                trove_id: troveId,
-                flash_loan_amount: 0,
-                collateral_swap: ILeverageZapper.SwapData({router: address(troveManager), data: "0x"}),
-                debt_swap: ILeverageZapper.SwapData({router: address(0), data: ""})
-            })
-        );
-    }
-
-    function test_leverUpTrove_routerTargetingTroveManager_reverts(
-        uint256 _userCollateral,
-        uint256 _leverage
-    ) public {
-        uint256 troveId = test_openLeveragedTrove(_userCollateral, _leverage);
-
-        vm.prank(userBorrower);
-        troveManager.approve(address(leverageZapper), true);
-
-        vm.prank(userBorrower);
-        vm.expectRevert("!router");
-        leverageZapper.lever_up_trove(
-            ILeverageZapper.LeverUpData({
-                trove_manager: address(troveManager),
-                flash_loan_token: address(borrowToken),
-                auction_taker: address(0),
-                trove_id: troveId,
-                flash_loan_amount: 0,
-                collateral_amount: 0,
-                debt_amount: 0,
-                max_upfront_fee: 0,
-                min_borrow_out: 0,
-                min_collateral_out: 0,
-                collateral_swap: ILeverageZapper.SwapData({router: address(troveManager), data: "0x"}),
-                debt_swap: ILeverageZapper.SwapData({router: address(0), data: ""})
-            })
-        );
-    }
-
-    function test_leverDownTrove_routerTargetingTroveManager_reverts(
-        uint256 _userCollateral,
-        uint256 _leverage
-    ) public {
-        uint256 troveId = test_openLeveragedTrove(_userCollateral, _leverage);
-
-        vm.prank(userBorrower);
-        troveManager.approve(address(leverageZapper), true);
-
-        vm.prank(userBorrower);
-        vm.expectRevert("!router");
-        leverageZapper.lever_down_trove(
-            ILeverageZapper.LeverDownData({
-                trove_manager: address(troveManager),
-                flash_loan_token: address(borrowToken),
-                trove_id: troveId,
-                flash_loan_amount: 0,
-                collateral_to_remove: 0,
-                collateral_swap: ILeverageZapper.SwapData({router: address(troveManager), data: "0x"}),
-                debt_swap: ILeverageZapper.SwapData({router: address(0), data: ""})
-            })
-        );
+        vm.stopPrank();
     }
 
     function test_closeLeveragedTrove_approvedOperator(

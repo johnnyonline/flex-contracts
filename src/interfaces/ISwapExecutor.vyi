@@ -1,0 +1,11 @@
+# @version 0.4.3
+
+
+@external
+def swap(
+    router: address,
+    data: Bytes[10 ** 4],
+    token_in: address,
+    token_out: address,
+):
+    ...
