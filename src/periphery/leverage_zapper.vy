@@ -57,7 +57,6 @@ struct OpenLeveragedData:
 
 
 struct CloseLeveragedData:
-    owner: address
     trove_manager: address
     flash_loan_token: address
     trove_id: uint256
@@ -67,7 +66,6 @@ struct CloseLeveragedData:
 
 
 struct LeverUpData:
-    owner: address
     trove_manager: address
     flash_loan_token: address
     auction_taker: address
@@ -83,7 +81,6 @@ struct LeverUpData:
 
 
 struct LeverDownData:
-    owner: address
     trove_manager: address
     flash_loan_token: address
     trove_id: uint256
@@ -117,15 +114,11 @@ _MORPHO: constant(IMorpho) = IMorpho(0xBBBBBbbBBb9cC5e90e3b3Af64bdAF62C37EEFFCb)
 def open_leveraged_trove(data: OpenLeveragedData) -> uint256:
     """
     @notice Open a new leveraged Trove
-    @dev After this call, the owner must call `accept_ownership` on the Trove Manager to claim the Trove
     @dev If a redemption is triggered, an `auction_taker` should be provided.
-         Otherwise, auction proceeds will be sent to this contract and potentially be swept by someone else
+         Otherwise, auction proceeds will be sent to this contract and may be swept by someone else
     @param data The open leveraged Trove parameters
     @return The Trove ID
     """
-    # Make sure the owner is non-zero
-    assert data.owner != empty(address), "!owner"
-
     # Prevent swap routers from targeting the Trove Manager
     assert data.collateral_swap.router != data.trove_manager, "!router"
     assert data.debt_swap.router != data.trove_manager, "!router"
@@ -144,9 +137,6 @@ def open_leveraged_trove(data: OpenLeveragedData) -> uint256:
     # Compute the Trove ID
     trove_id: uint256 = convert(keccak256(abi_encode(self, data.owner_index)), uint256)
 
-    # Transfer the Trove ownership to the owner
-    extcall ITroveManager(data.trove_manager).transfer_ownership(trove_id, data.owner)
-
     # Sweep any remaining flash loan tokens to caller
     self._sweep(data.flash_loan_token, msg.sender)
 
@@ -163,8 +153,8 @@ def open_leveraged_trove(data: OpenLeveragedData) -> uint256:
 def close_leveraged_trove(data: CloseLeveragedData):
     """
     @notice Close a leveraged Trove
-    @dev Only callable by the Trove owner
-    @dev User must call `trove_manager.transfer_ownership(trove_id, zapper)` before calling this
+    @dev Only callable by the Trove owner or an approved operator
+    @dev The Zapper must be approved to operate on behalf of the Trove owner
     @param data The close leveraged Trove parameters
     """
     # Prevent swap routers from targeting the Trove Manager
@@ -177,11 +167,8 @@ def close_leveraged_trove(data: CloseLeveragedData):
     # Get the Trove info
     trove: ITroveManager.Trove = staticcall trove_manager.troves(data.trove_id)
 
-    # Make sure the caller is the current Trove owner
-    assert trove.owner == msg.sender, "!owner"
-
-    # Accept Trove ownership
-    extcall trove_manager.accept_ownership(data.trove_id)
+    # Make sure the caller is the Trove owner or an approved operator
+    assert trove.owner == msg.sender or staticcall trove_manager.approved(trove.owner, msg.sender), "!owner"
 
     # Initiate flash loan
     extcall _MORPHO.flashLoan(
@@ -215,8 +202,8 @@ def close_leveraged_trove(data: CloseLeveragedData):
 def lever_up_trove(data: LeverUpData):
     """
     @notice Add leverage to an existing Trove
-    @dev Only callable by the Trove owner
-    @dev User must call `trove_manager.transfer_ownership(trove_id, zapper)` before calling this
+    @dev Only callable by the Trove owner or an approved operator
+    @dev The Zapper must be approved to operate on behalf of the Trove owner
     @dev If a redemption is triggered, an `auction_taker` should be provided.
          Otherwise, auction proceeds will be sent to this contract and potentially be swept by someone else
     @param data The lever up parameters
@@ -231,11 +218,8 @@ def lever_up_trove(data: LeverUpData):
     # Get the Trove info
     trove: ITroveManager.Trove = staticcall trove_manager.troves(data.trove_id)
 
-    # Make sure the caller is the current Trove owner
-    assert trove.owner == msg.sender, "!owner"
-
-    # Accept Trove ownership
-    extcall trove_manager.accept_ownership(data.trove_id)
+    # Make sure the caller is the Trove owner or an approved operator
+    assert trove.owner == msg.sender or staticcall trove_manager.approved(trove.owner, msg.sender), "!owner"
 
     # Pull collateral from the caller
     collateral_token: address = staticcall trove_manager.collateral_token()
@@ -248,9 +232,6 @@ def lever_up_trove(data: LeverUpData):
         data.flash_loan_amount,  # assets
         abi_encode(Operation.LEVER_UP, data),  # data
     )
-
-    # Transfer Trove ownership back to caller
-    extcall trove_manager.transfer_ownership(data.trove_id, msg.sender)
 
     # Sweep any remaining flash loan tokens to caller
     self._sweep(data.flash_loan_token, msg.sender)
@@ -265,8 +246,8 @@ def lever_up_trove(data: LeverUpData):
 def lever_down_trove(data: LeverDownData):
     """
     @notice Reduce leverage on an existing Trove
-    @dev Only callable by the Trove owner
-    @dev User must call `trove_manager.transfer_ownership(trove_id, zapper)` before calling this
+    @dev Only callable by the Trove owner or an approved operator
+    @dev The Zapper must be approved to operate on behalf of the Trove owner
     @param data The lever down parameters
     """
     # Prevent swap routers from targeting the Trove Manager
@@ -279,11 +260,8 @@ def lever_down_trove(data: LeverDownData):
     # Get the Trove info
     trove: ITroveManager.Trove = staticcall trove_manager.troves(data.trove_id)
 
-    # Make sure the caller is the current Trove owner
-    assert trove.owner == msg.sender, "!owner"
-
-    # Accept Trove ownership
-    extcall trove_manager.accept_ownership(data.trove_id)
+    # Make sure the caller is the Trove owner or an approved operator
+    assert trove.owner == msg.sender or staticcall trove_manager.approved(trove.owner, msg.sender), "!owner"
 
     # Initiate flash loan
     extcall _MORPHO.flashLoan(
@@ -291,9 +269,6 @@ def lever_down_trove(data: LeverDownData):
         data.flash_loan_amount,  # assets
         abi_encode(Operation.LEVER_DOWN, data),  # data
     )
-
-    # Transfer Trove ownership back to caller
-    extcall trove_manager.transfer_ownership(data.trove_id, msg.sender)
 
     # Get collateral and borrow tokens from the Trove Manager
     collateral_token: address = staticcall trove_manager.collateral_token()
@@ -398,6 +373,7 @@ def _handle_open(flash_loan_amount: uint256, data: Bytes[_MAX_FLASHLOAN_CALLBACK
         params.max_upfront_fee,
         params.min_borrow_out,
         params.min_collateral_out,
+        params.owner,
     )
 
     # Make sure our approval is always back to 0

@@ -35,6 +35,7 @@ abstract contract Base is Deploy, Test {
     address public userBorrower = address(69);
     address public anotherUserBorrower = address(555);
     address public liquidator = address(88);
+    address public operator = address(99);
 
     // Market parameters
     uint256 public minimumDebt = 500; // 500 tokens

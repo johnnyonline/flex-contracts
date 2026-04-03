@@ -56,4 +56,19 @@ contract TroveManagerTests is Base {
         );
     }
 
+    function test_approve(
+        address _operator
+    ) public {
+        vm.assume(_operator != address(0));
+        assertFalse(troveManager.approved(userBorrower, _operator), "E0");
+
+        vm.prank(userBorrower);
+        troveManager.approve(_operator, true);
+        assertTrue(troveManager.approved(userBorrower, _operator), "E1");
+
+        vm.prank(userBorrower);
+        troveManager.approve(_operator, false);
+        assertFalse(troveManager.approved(userBorrower, _operator), "E2");
+    }
+
 }

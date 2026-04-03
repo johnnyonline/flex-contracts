@@ -117,10 +117,6 @@ contract AuctionTakerTests is Base {
             })
         );
 
-        // Accept ownership
-        vm.prank(userBorrower);
-        troveManager.accept_ownership(troveId);
-
         // Verify trove
         ITroveManager.Trove memory trove = troveManager.troves(troveId);
         assertEq(trove.owner, userBorrower, "E0");
