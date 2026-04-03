@@ -486,6 +486,66 @@ contract LeverageZapperTests is Base {
         );
     }
 
+    function test_openLeveragedTrove_zeroOwner_reverts() public {
+        vm.prank(userBorrower);
+        vm.expectRevert("!owner");
+        leverageZapper.open_leveraged_trove(
+            ILeverageZapper.OpenLeveragedData({
+                owner: address(0),
+                trove_manager: address(troveManager),
+                flash_loan_token: address(borrowToken),
+                auction_taker: address(0),
+                owner_index: block.timestamp,
+                flash_loan_amount: 0,
+                collateral_amount: 0,
+                debt_amount: 0,
+                prev_id: 0,
+                next_id: 0,
+                annual_interest_rate: 0,
+                max_upfront_fee: 0,
+                min_borrow_out: 0,
+                min_collateral_out: 0,
+                collateral_swap: ILeverageZapper.SwapData({router: address(0), data: ""}),
+                debt_swap: ILeverageZapper.SwapData({router: address(0), data: ""})
+            })
+        );
+    }
+
+    function test_openLeveragedTrove_troveManagerAsOwner_reverts() public {
+        mintAndDepositIntoLender(userLender, troveManager.min_debt());
+
+        uint256 _collateral = (troveManager.min_debt() * DEFAULT_TARGET_COLLATERAL_RATIO / BORROW_TOKEN_PRECISION) * ORACLE_PRICE_SCALE
+            / priceOracle.get_price();
+        airdrop(address(collateralToken), userBorrower, _collateral);
+
+        vm.startPrank(userBorrower);
+        collateralToken.approve(address(leverageZapper), _collateral);
+        vm.expectRevert("!owner");
+        leverageZapper.open_leveraged_trove(
+            ILeverageZapper.OpenLeveragedData({
+                owner: address(troveManager),
+                trove_manager: address(troveManager),
+                flash_loan_token: address(borrowToken),
+                auction_taker: address(0),
+                owner_index: block.timestamp,
+                flash_loan_amount: troveManager.min_debt(),
+                collateral_amount: _collateral,
+                debt_amount: troveManager.min_debt(),
+                prev_id: 0,
+                next_id: 0,
+                annual_interest_rate: DEFAULT_ANNUAL_INTEREST_RATE,
+                max_upfront_fee: type(uint256).max,
+                min_borrow_out: 0,
+                min_collateral_out: 0,
+                collateral_swap: ILeverageZapper.SwapData({
+                    router: address(mockRouter), data: abi.encode(address(borrowToken), address(collateralToken))
+                }),
+                debt_swap: ILeverageZapper.SwapData({router: address(0), data: ""})
+            })
+        );
+        vm.stopPrank();
+    }
+
     function test_openLeveragedTrove_routerTargetingTroveManager_reverts() public {
         vm.prank(userBorrower);
         vm.expectRevert("!router");

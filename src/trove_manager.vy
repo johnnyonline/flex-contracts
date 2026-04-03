@@ -298,8 +298,10 @@ def approve(operator: address, approved: bool):
     @param operator The address to approve or revoke
     @param approved True to approve, False to revoke
     """
+    # Update approval mapping
     self.approved[msg.sender][operator] = approved
 
+    # Emit event
     log Approval(
         owner=msg.sender,
         operator=operator,
