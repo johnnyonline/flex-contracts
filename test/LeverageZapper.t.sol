@@ -514,8 +514,8 @@ contract LeverageZapperTests is Base {
     function test_openLeveragedTrove_troveManagerAsOwner_reverts() public {
         mintAndDepositIntoLender(userLender, troveManager.min_debt());
 
-        uint256 _collateral = (troveManager.min_debt() * DEFAULT_TARGET_COLLATERAL_RATIO / BORROW_TOKEN_PRECISION) * ORACLE_PRICE_SCALE
-            / priceOracle.get_price();
+        uint256 _collateral =
+            (troveManager.min_debt() * DEFAULT_TARGET_COLLATERAL_RATIO / BORROW_TOKEN_PRECISION) * ORACLE_PRICE_SCALE / priceOracle.get_price();
         airdrop(address(collateralToken), userBorrower, _collateral);
 
         vm.startPrank(userBorrower);
