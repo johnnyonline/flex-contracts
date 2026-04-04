@@ -66,6 +66,30 @@ interface ILeverageZapper {
     }
 
     // ============================================================================================
+    // Storage
+    // ============================================================================================
+
+    function routers(
+        address router
+    ) external view returns (bool);
+    function auction_takers(
+        address auction_taker
+    ) external view returns (bool);
+
+    // ============================================================================================
+    // Whitelist
+    // ============================================================================================
+
+    function set_router(
+        address router,
+        bool allowed
+    ) external;
+    function set_auction_taker(
+        address auction_taker,
+        bool allowed
+    ) external;
+
+    // ============================================================================================
     // External functions
     // ============================================================================================
 

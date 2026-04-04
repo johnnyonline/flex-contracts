@@ -176,7 +176,8 @@ contract Deploy is Script {
             ISwapExecutor(DEPLOYER.deployCreate2(keccak256(abi.encode(SALT, "swapExecutor")), abi.encodePacked(vm.getCode("swap_executor"))));
         leverageZapper = ILeverageZapper(
             DEPLOYER.deployCreate2(
-                keccak256(abi.encode(SALT, "leverageZapper")), abi.encodePacked(vm.getCode("leverage_zapper"), abi.encode(address(swapExecutor)))
+                keccak256(abi.encode(SALT, "leverageZapper")),
+                abi.encodePacked(vm.getCode("leverage_zapper"), abi.encode(address(daddy), address(registry), address(swapExecutor)))
             )
         );
         auctionTaker =

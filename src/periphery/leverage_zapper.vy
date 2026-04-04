@@ -11,10 +11,25 @@
 from ethereum.ercs import IERC20
 
 from ..interfaces import IMorpho
+from ..interfaces import IRegistry
 from ..interfaces import ISwapExecutor
 from ..interfaces import IZapperAuctionTaker
 from ..interfaces import IDutchDesk
 from ..interfaces import ITroveManager
+
+# ============================================================================================
+# Events
+# ============================================================================================
+
+
+event SetRouter:
+    router: indexed(address)
+    allowed: bool
+
+event SetAuctionTaker:
+    auction_taker: indexed(address)
+    allowed: bool
+
 
 # ============================================================================================
 # Flags
@@ -96,17 +111,27 @@ struct LeverDownData:
 # ============================================================================================
 
 
-# Swap Executor
+# Contracts
+DADDY: public(immutable(address))
+REGISTRY: public(immutable(IRegistry))
 SWAP_EXECUTOR: public(immutable(ISwapExecutor))
 
-# Max swap calldata size
+# Max calldata size
 _MAX_SWAP_DATA_SIZE: constant(uint256) = 10 ** 4
-
-# Max flash loan callback data size
 _MAX_FLASHLOAN_CALLBACK_DATA_SIZE: constant(uint256) = 10 ** 5
 
-# Morpho
+# Flash loan provider
 _MORPHO: constant(IMorpho) = IMorpho(0xBBBBBbbBBb9cC5e90e3b3Af64bdAF62C37EEFFCb)
+
+
+# ============================================================================================
+# Storage
+# ============================================================================================
+
+
+# Whitelists
+routers: public(HashMap[address, bool])
+auction_takers: public(HashMap[address, bool])
 
 
 # ============================================================================================
@@ -115,8 +140,63 @@ _MORPHO: constant(IMorpho) = IMorpho(0xBBBBBbbBBb9cC5e90e3b3Af64bdAF62C37EEFFCb)
 
 
 @deploy
-def __init__(swap_executor: address):
+def __init__(daddy: address, registry: address, swap_executor: address):
+    """
+    @notice Initialize the contract
+    @param daddy Address of the Daddy contract
+    @param registry Address of the Registry contract
+    @param swap_executor Address of the Swap Executor contract
+    """
+    DADDY = daddy
+    REGISTRY = IRegistry(registry)
     SWAP_EXECUTOR = ISwapExecutor(swap_executor)
+
+
+# ============================================================================================
+# Whitelist
+# ============================================================================================
+
+
+@external
+def set_router(router: address, allowed: bool):
+    """
+    @notice Whitelist or remove a swap router
+    @dev Only callable by Daddy
+    @param router The router address
+    @param allowed True to whitelist, False to remove
+    """
+    # Make sure the caller is Daddy
+    assert msg.sender == DADDY, "bad daddy"
+
+    # Update whitelist
+    self.routers[router] = allowed
+
+    # Emit event
+    log SetRouter(
+        router=router,
+        allowed=allowed,
+    )
+
+
+@external
+def set_auction_taker(auction_taker: address, allowed: bool):
+    """
+    @notice Whitelist or remove an Auction Taker
+    @dev Only callable by Daddy
+    @param auction_taker The Auction Taker address
+    @param allowed True to whitelist, False to remove
+    """
+    # Make sure the caller is Daddy
+    assert msg.sender == DADDY, "bad daddy"
+
+    # Update whitelist
+    self.auction_takers[auction_taker] = allowed
+
+    # Emit event
+    log SetAuctionTaker(
+        auction_taker=auction_taker,
+        allowed=allowed,
+    )
 
 
 # ============================================================================================
@@ -125,6 +205,7 @@ def __init__(swap_executor: address):
 
 
 @external
+@nonreentrant
 def open_leveraged_trove(data: OpenLeveragedData) -> uint256:
     """
     @notice Open a new leveraged Trove
@@ -133,6 +214,9 @@ def open_leveraged_trove(data: OpenLeveragedData) -> uint256:
     @param data The open leveraged Trove parameters
     @return The Trove ID
     """
+    # Validate input parameters
+    self._validate_params(data.trove_manager, data.collateral_swap.router, data.debt_swap.router, data.auction_taker)
+
     # Pull collateral from the caller
     collateral_token: address = staticcall ITroveManager(data.trove_manager).collateral_token()
     assert extcall IERC20(collateral_token).transferFrom(msg.sender, self, data.collateral_amount, default_return_value=True)
@@ -160,6 +244,7 @@ def open_leveraged_trove(data: OpenLeveragedData) -> uint256:
 
 
 @external
+@nonreentrant
 def close_leveraged_trove(data: CloseLeveragedData):
     """
     @notice Close a leveraged Trove
@@ -167,6 +252,9 @@ def close_leveraged_trove(data: CloseLeveragedData):
     @dev The Zapper must be approved to operate on behalf of the Trove owner
     @param data The close leveraged Trove parameters
     """
+    # Validate input parameters
+    self._validate_params(data.trove_manager, data.collateral_swap.router, data.debt_swap.router)
+
     # Cache the Trove Manager instance
     trove_manager: ITroveManager = ITroveManager(data.trove_manager)
 
@@ -205,6 +293,7 @@ def close_leveraged_trove(data: CloseLeveragedData):
 
 
 @external
+@nonreentrant
 def lever_up_trove(data: LeverUpData):
     """
     @notice Add leverage to an existing Trove
@@ -214,6 +303,9 @@ def lever_up_trove(data: LeverUpData):
          Otherwise, auction proceeds will be sent to this contract and may be swept by someone else
     @param data The lever up parameters
     """
+    # Validate input parameters
+    self._validate_params(data.trove_manager, data.collateral_swap.router, data.debt_swap.router, data.auction_taker)
+
     # Cache the Trove Manager instance
     trove_manager: ITroveManager = ITroveManager(data.trove_manager)
 
@@ -245,6 +337,7 @@ def lever_up_trove(data: LeverUpData):
 
 
 @external
+@nonreentrant
 def lever_down_trove(data: LeverDownData):
     """
     @notice Reduce leverage on an existing Trove
@@ -252,6 +345,9 @@ def lever_down_trove(data: LeverDownData):
     @dev The Zapper must be approved to operate on behalf of the Trove owner
     @param data The lever down parameters
     """
+    # Validate input parameters
+    self._validate_params(data.trove_manager, data.collateral_swap.router, data.debt_swap.router)
+
     # Cache the Trove Manager instance
     trove_manager: ITroveManager = ITroveManager(data.trove_manager)
 
@@ -531,6 +627,37 @@ def _handle_lever_down(flash_loan_amount: uint256, data: Bytes[_MAX_FLASHLOAN_CA
 # ============================================================================================
 # Internal helpers
 # ============================================================================================
+
+
+@internal
+@view
+def _validate_params(
+    trove_manager: address,
+    collateral_swap_router: address,
+    debt_swap_router: address,
+    auction_taker: address = empty(address),
+):
+    """
+    @notice Validate input parameters for the external functions
+    @param trove_manager The Trove Manager address
+    @param collateral_swap_router The collateral swap router address
+    @param debt_swap_router The debt swap router address
+    @param auction_taker The Auction Taker address
+    """
+    # Make sure the Trove Manager is endorsed
+    assert staticcall REGISTRY.market_status(trove_manager) == IRegistry.Status.ENDORSED, "!endorsed"
+
+    # If provided, make sure the collateral swap router is whitelisted
+    if collateral_swap_router != empty(address):
+        assert self.routers[collateral_swap_router], "!collateral_swap_router"
+    
+    # If provided, make sure the debt swap router is whitelisted
+    if debt_swap_router != empty(address):
+        assert self.routers[debt_swap_router], "!debt_swap_router"
+
+    # If provided, make sure the Auction Taker is whitelisted
+    if auction_taker != empty(address):
+        assert self.auction_takers[auction_taker], "!auction_taker"
 
 
 @internal
