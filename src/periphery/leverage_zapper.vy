@@ -398,7 +398,7 @@ def onMorphoFlashLoan(
     """
     # Sanity checks
     assert msg.sender == _MORPHO.address, "!caller"
-    assert len(data) > 4, "!data"
+    assert len(data) >= 32, "!data"
 
     # Decode operation type from the first 32 bytes
     operation: Operation = abi_decode(slice(data, 0, 32), Operation)
