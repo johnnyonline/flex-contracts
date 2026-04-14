@@ -350,7 +350,7 @@ def open_trove(
     assert debt_amount > 0, "!debt_amount"
 
     # Make sure the owner is valid
-    assert owner != empty(address) and owner != self, "!owner"
+    assert owner != empty(address) and owner != self and owner != self.lender, "!owner"
 
     # Make sure the annual interest rate is within bounds
     assert annual_interest_rate >= self.min_annual_interest_rate, "!min_annual_interest_rate"

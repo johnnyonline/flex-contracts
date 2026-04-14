@@ -1003,4 +1003,9 @@ contract OpenTroveTests is Base {
         troveManager.open_trove(block.timestamp, 1, 1, 0, 0, DEFAULT_ANNUAL_INTEREST_RATE, type(uint256).max, 0, 0, address(troveManager));
     }
 
+    function test_openTrove_lenderAsOwner_reverts() public {
+        vm.expectRevert("!owner");
+        troveManager.open_trove(block.timestamp, 1, 1, 0, 0, DEFAULT_ANNUAL_INTEREST_RATE, type(uint256).max, 0, 0, address(lender));
+    }
+
 }
