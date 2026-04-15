@@ -1,0 +1,12 @@
+# @version 0.4.3
+
+
+flag Status:
+    ENDORSED
+    UNENDORSED
+
+
+@external
+@view
+def market_status(trove_manager: address) -> Status:
+    ...

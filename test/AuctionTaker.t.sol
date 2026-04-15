@@ -58,6 +58,18 @@ contract AuctionTakerTests is Base {
         DEFAULT_ANNUAL_INTEREST_RATE = troveManager.min_annual_interest_rate() * 2;
         DEFAULT_TARGET_COLLATERAL_RATIO = troveManager.minimum_collateral_ratio() * 110 / 100;
 
+        // Endorse yvUSD market in registry
+        vm.prank(deployerAddress);
+        daddy.execute(address(registry), abi.encodeWithSelector(IRegistry.endorse.selector, address(troveManager)), 0, true);
+
+        // Whitelist mock router and auction taker
+        vm.startPrank(deployerAddress);
+        daddy.execute(address(leverageZapper), abi.encodeWithSelector(ILeverageZapper.set_router.selector, yvUSD, true), 0, true);
+        daddy.execute(
+            address(leverageZapper), abi.encodeWithSelector(ILeverageZapper.set_auction_taker.selector, address(auctionTaker), true), 0, true
+        );
+        vm.stopPrank();
+
         // Set fuzz bounds
         maxCollateralFuzzAmount = 10_000 * 1e6;
         minCollateralFuzzAmount = 600 * 1e6;
@@ -116,10 +128,6 @@ contract AuctionTakerTests is Base {
                 debt_swap: ILeverageZapper.SwapData({router: address(0), data: ""})
             })
         );
-
-        // Accept ownership
-        vm.prank(userBorrower);
-        troveManager.accept_ownership(troveId);
 
         // Verify trove
         ITroveManager.Trove memory trove = troveManager.troves(troveId);

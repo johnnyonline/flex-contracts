@@ -255,5 +255,7 @@ def _validate_params(params: DeployParams):
     assert params.step_duration > 0, "!step_duration"
     assert params.auction_length > 0, "!auction_length"
     assert params.minimum_price_buffer_percentage > 0 and params.minimum_price_buffer_percentage <= _WAD, "!min_price_buffer"
+    assert params.starting_price_buffer_percentage >= _WAD, "!start_price_buffer"
+    assert params.re_kick_starting_price_buffer_percentage >= _WAD, "!re_kick_price_buffer"
     assert params.starting_price_buffer_percentage >= params.minimum_price_buffer_percentage, "!start_price_buffer"
     assert params.re_kick_starting_price_buffer_percentage >= params.minimum_price_buffer_percentage, "!re_kick_price_buffer"

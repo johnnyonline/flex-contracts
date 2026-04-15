@@ -46,38 +46,37 @@ contract RemoveCollateralTests is Base {
         assertEq(_trove.last_debt_update_time, block.timestamp, "E3");
         assertEq(_trove.last_interest_rate_adj_time, block.timestamp, "E4");
         assertEq(_trove.owner, userBorrower, "E5");
-        assertEq(_trove.pending_owner, address(0), "E6");
-        assertEq(uint256(_trove.status), uint256(ITroveManager.Status.active), "E7");
+        assertEq(uint256(_trove.status), uint256(ITroveManager.Status.active), "E6");
         assertApproxEqRel(
             (_trove.collateral * priceOracle.get_price() / ORACLE_PRICE_SCALE) * BORROW_TOKEN_PRECISION / _trove.debt,
             DEFAULT_TARGET_COLLATERAL_RATIO,
             1e15,
-            "E8"
+            "E7"
         ); // 0.1%
 
         // Check sorted troves
-        assertFalse(sortedTroves.empty(), "E9");
-        assertEq(sortedTroves.size(), 1, "E10");
-        assertEq(sortedTroves.first(), _troveId, "E11");
-        assertEq(sortedTroves.last(), _troveId, "E12");
-        assertTrue(sortedTroves.contains(_troveId), "E13");
+        assertFalse(sortedTroves.empty(), "E8");
+        assertEq(sortedTroves.size(), 1, "E9");
+        assertEq(sortedTroves.first(), _troveId, "E10");
+        assertEq(sortedTroves.last(), _troveId, "E11");
+        assertTrue(sortedTroves.contains(_troveId), "E12");
 
         // Check balances
-        assertEq(collateralToken.balanceOf(address(troveManager)), _collateralNeeded, "E14");
-        assertEq(collateralToken.balanceOf(address(troveManager)), troveManager.collateral_balance(), "E15");
-        assertEq(borrowToken.balanceOf(address(troveManager)), 0, "E16");
-        assertEq(borrowToken.balanceOf(address(lender)), 0, "E17");
-        assertEq(borrowToken.balanceOf(userBorrower), _amount, "E18");
+        assertEq(collateralToken.balanceOf(address(troveManager)), _collateralNeeded, "E13");
+        assertEq(collateralToken.balanceOf(address(troveManager)), troveManager.collateral_balance(), "E14");
+        assertEq(borrowToken.balanceOf(address(troveManager)), 0, "E15");
+        assertEq(borrowToken.balanceOf(address(lender)), 0, "E16");
+        assertEq(borrowToken.balanceOf(userBorrower), _amount, "E17");
 
         // Check global info
-        assertEq(troveManager.total_debt(), _expectedDebt, "E19");
-        assertEq(troveManager.total_weighted_debt(), _expectedDebt * DEFAULT_ANNUAL_INTEREST_RATE, "E20");
-        assertEq(troveManager.collateral_balance(), _collateralNeeded, "E21");
-        assertEq(troveManager.zombie_trove_id(), 0, "E22");
+        assertEq(troveManager.total_debt(), _expectedDebt, "E18");
+        assertEq(troveManager.total_weighted_debt(), _expectedDebt * DEFAULT_ANNUAL_INTEREST_RATE, "E19");
+        assertEq(troveManager.collateral_balance(), _collateralNeeded, "E20");
+        assertEq(troveManager.zombie_trove_id(), 0, "E21");
 
         // Check dutch desk is empty
-        assertEq(borrowToken.balanceOf(address(dutchDesk)), 0, "E23");
-        assertEq(collateralToken.balanceOf(address(dutchDesk)), 0, "E24");
+        assertEq(borrowToken.balanceOf(address(dutchDesk)), 0, "E22");
+        assertEq(collateralToken.balanceOf(address(dutchDesk)), 0, "E23");
 
         // Finally remove collateral
         vm.prank(userBorrower);
@@ -233,6 +232,47 @@ contract RemoveCollateralTests is Base {
         vm.prank(userBorrower);
         vm.expectRevert("!minimum_collateral_ratio");
         troveManager.remove_collateral(_troveId, _maxCollateralToRemove);
+    }
+
+    function test_removeCollateral_approvedOperator(
+        uint256 _amount
+    ) public {
+        _amount = bound(_amount, troveManager.min_debt(), maxFuzzAmount);
+
+        mintAndDepositIntoLender(userLender, _amount);
+
+        uint256 _collateralNeeded =
+            (_amount * DEFAULT_TARGET_COLLATERAL_RATIO / BORROW_TOKEN_PRECISION) * ORACLE_PRICE_SCALE / priceOracle.get_price();
+        uint256 _troveId = mintAndOpenTrove(userBorrower, _collateralNeeded, _amount, DEFAULT_ANNUAL_INTEREST_RATE);
+
+        // Approve operator
+        vm.prank(userBorrower);
+        troveManager.approve(operator, true);
+
+        // Operator removes a small amount of collateral
+        uint256 _collateralToRemove = _collateralNeeded / 100; // 1%
+        vm.prank(operator);
+        troveManager.remove_collateral(_troveId, _collateralToRemove);
+
+        assertEq(troveManager.troves(_troveId).collateral, _collateralNeeded - _collateralToRemove, "E0");
+    }
+
+    function test_removeCollateral_unapprovedOperator_reverts(
+        uint256 _amount,
+        address _caller
+    ) public {
+        _amount = bound(_amount, troveManager.min_debt(), maxFuzzAmount);
+        vm.assume(_caller != userBorrower);
+
+        mintAndDepositIntoLender(userLender, _amount);
+
+        uint256 _collateralNeeded =
+            (_amount * DEFAULT_TARGET_COLLATERAL_RATIO / BORROW_TOKEN_PRECISION) * ORACLE_PRICE_SCALE / priceOracle.get_price();
+        uint256 _troveId = mintAndOpenTrove(userBorrower, _collateralNeeded, _amount, DEFAULT_ANNUAL_INTEREST_RATE);
+
+        vm.prank(_caller);
+        vm.expectRevert("!owner");
+        troveManager.remove_collateral(_troveId, minFuzzAmount);
     }
 
 }

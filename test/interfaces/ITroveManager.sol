@@ -31,7 +31,6 @@ interface ITroveManager {
         uint64 last_debt_update_time;
         uint64 last_interest_rate_adj_time;
         address owner;
-        address pending_owner;
         Status status;
     }
 
@@ -90,6 +89,12 @@ interface ITroveManager {
         uint256
     ) external view returns (Trove memory);
 
+    // Approvals
+    function approved(
+        address owner,
+        address operator
+    ) external view returns (bool);
+
     // ============================================================================================
     // Initialize
     // ============================================================================================
@@ -122,15 +127,12 @@ interface ITroveManager {
     function sync_total_debt() external returns (uint256);
 
     // ============================================================================================
-    // Ownership
+    // Approvals
     // ============================================================================================
 
-    function transfer_ownership(
-        uint256 trove_id,
-        address new_owner
-    ) external;
-    function accept_ownership(
-        uint256 trove_id
+    function approve(
+        address operator,
+        bool _approved
     ) external;
 
     // ============================================================================================
@@ -147,6 +149,18 @@ interface ITroveManager {
         uint256 max_upfront_fee,
         uint256 min_borrow_out,
         uint256 min_collateral_out
+    ) external returns (uint256);
+    function open_trove(
+        uint256 owner_index,
+        uint256 collateral_amount,
+        uint256 debt_amount,
+        uint256 upper_hint,
+        uint256 lower_hint,
+        uint256 annual_interest_rate,
+        uint256 max_upfront_fee,
+        uint256 min_borrow_out,
+        uint256 min_collateral_out,
+        address owner
     ) external returns (uint256);
 
     // ============================================================================================

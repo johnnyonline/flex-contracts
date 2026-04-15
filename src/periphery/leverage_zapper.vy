@@ -11,9 +11,25 @@
 from ethereum.ercs import IERC20
 
 from ..interfaces import IMorpho
+from ..interfaces import IRegistry
+from ..interfaces import ISwapExecutor
 from ..interfaces import IZapperAuctionTaker
 from ..interfaces import IDutchDesk
 from ..interfaces import ITroveManager
+
+# ============================================================================================
+# Events
+# ============================================================================================
+
+
+event SetRouter:
+    router: indexed(address)
+    allowed: bool
+
+event SetAuctionTaker:
+    auction_taker: indexed(address)
+    allowed: bool
+
 
 # ============================================================================================
 # Flags
@@ -57,7 +73,6 @@ struct OpenLeveragedData:
 
 
 struct CloseLeveragedData:
-    owner: address
     trove_manager: address
     flash_loan_token: address
     trove_id: uint256
@@ -67,7 +82,6 @@ struct CloseLeveragedData:
 
 
 struct LeverUpData:
-    owner: address
     trove_manager: address
     flash_loan_token: address
     auction_taker: address
@@ -83,7 +97,6 @@ struct LeverUpData:
 
 
 struct LeverDownData:
-    owner: address
     trove_manager: address
     flash_loan_token: address
     trove_id: uint256
@@ -98,14 +111,92 @@ struct LeverDownData:
 # ============================================================================================
 
 
-# Max swap calldata size
-_MAX_SWAP_DATA_SIZE: constant(uint256) = 10 ** 4
+# Contracts
+DADDY: public(immutable(address))
+REGISTRY: public(immutable(IRegistry))
+SWAP_EXECUTOR: public(immutable(ISwapExecutor))
 
-# Max flash loan callback data size
+# Max calldata size
+_MAX_SWAP_DATA_SIZE: constant(uint256) = 10 ** 4
 _MAX_FLASHLOAN_CALLBACK_DATA_SIZE: constant(uint256) = 10 ** 5
 
-# Morpho
+# Flash loan provider
 _MORPHO: constant(IMorpho) = IMorpho(0xBBBBBbbBBb9cC5e90e3b3Af64bdAF62C37EEFFCb)
+
+
+# ============================================================================================
+# Storage
+# ============================================================================================
+
+
+# Whitelists
+routers: public(HashMap[address, bool])
+auction_takers: public(HashMap[address, bool])
+
+
+# ============================================================================================
+# Constructor
+# ============================================================================================
+
+
+@deploy
+def __init__(daddy: address, registry: address, swap_executor: address):
+    """
+    @notice Initialize the contract
+    @param daddy Address of the Daddy contract
+    @param registry Address of the Registry contract
+    @param swap_executor Address of the Swap Executor contract
+    """
+    DADDY = daddy
+    REGISTRY = IRegistry(registry)
+    SWAP_EXECUTOR = ISwapExecutor(swap_executor)
+
+
+# ============================================================================================
+# Whitelist
+# ============================================================================================
+
+
+@external
+def set_router(router: address, allowed: bool):
+    """
+    @notice Whitelist or remove a swap router
+    @dev Only callable by Daddy
+    @param router The router address
+    @param allowed True to whitelist, False to remove
+    """
+    # Make sure the caller is Daddy
+    assert msg.sender == DADDY, "bad daddy"
+
+    # Update whitelist
+    self.routers[router] = allowed
+
+    # Emit event
+    log SetRouter(
+        router=router,
+        allowed=allowed,
+    )
+
+
+@external
+def set_auction_taker(auction_taker: address, allowed: bool):
+    """
+    @notice Whitelist or remove an Auction Taker
+    @dev Only callable by Daddy
+    @param auction_taker The Auction Taker address
+    @param allowed True to whitelist, False to remove
+    """
+    # Make sure the caller is Daddy
+    assert msg.sender == DADDY, "bad daddy"
+
+    # Update whitelist
+    self.auction_takers[auction_taker] = allowed
+
+    # Emit event
+    log SetAuctionTaker(
+        auction_taker=auction_taker,
+        allowed=allowed,
+    )
 
 
 # ============================================================================================
@@ -114,21 +205,17 @@ _MORPHO: constant(IMorpho) = IMorpho(0xBBBBBbbBBb9cC5e90e3b3Af64bdAF62C37EEFFCb)
 
 
 @external
+@nonreentrant
 def open_leveraged_trove(data: OpenLeveragedData) -> uint256:
     """
     @notice Open a new leveraged Trove
-    @dev After this call, the owner must call `accept_ownership` on the Trove Manager to claim the Trove
     @dev If a redemption is triggered, an `auction_taker` should be provided.
-         Otherwise, auction proceeds will be sent to this contract and potentially be swept by someone else
+         Otherwise, auction proceeds will be sent to this contract and may be swept by someone else
     @param data The open leveraged Trove parameters
     @return The Trove ID
     """
-    # Make sure the owner is non-zero
-    assert data.owner != empty(address), "!owner"
-
-    # Prevent swap routers from targeting the Trove Manager
-    assert data.collateral_swap.router != data.trove_manager, "!router"
-    assert data.debt_swap.router != data.trove_manager, "!router"
+    # Validate input parameters
+    self._validate_params(data.trove_manager, data.collateral_swap.router, data.debt_swap.router, data.auction_taker)
 
     # Pull collateral from the caller
     collateral_token: address = staticcall ITroveManager(data.trove_manager).collateral_token()
@@ -144,9 +231,6 @@ def open_leveraged_trove(data: OpenLeveragedData) -> uint256:
     # Compute the Trove ID
     trove_id: uint256 = convert(keccak256(abi_encode(self, data.owner_index)), uint256)
 
-    # Transfer the Trove ownership to the owner
-    extcall ITroveManager(data.trove_manager).transfer_ownership(trove_id, data.owner)
-
     # Sweep any remaining flash loan tokens to caller
     self._sweep(data.flash_loan_token, msg.sender)
 
@@ -160,16 +244,16 @@ def open_leveraged_trove(data: OpenLeveragedData) -> uint256:
 
 
 @external
+@nonreentrant
 def close_leveraged_trove(data: CloseLeveragedData):
     """
     @notice Close a leveraged Trove
-    @dev Only callable by the Trove owner
-    @dev User must call `trove_manager.transfer_ownership(trove_id, zapper)` before calling this
+    @dev Only callable by the Trove owner or an approved operator
+    @dev The Zapper must be approved to operate on behalf of the Trove owner
     @param data The close leveraged Trove parameters
     """
-    # Prevent swap routers from targeting the Trove Manager
-    assert data.collateral_swap.router != data.trove_manager, "!router"
-    assert data.debt_swap.router != data.trove_manager, "!router"
+    # Validate input parameters
+    self._validate_params(data.trove_manager, data.collateral_swap.router, data.debt_swap.router)
 
     # Cache the Trove Manager instance
     trove_manager: ITroveManager = ITroveManager(data.trove_manager)
@@ -177,11 +261,8 @@ def close_leveraged_trove(data: CloseLeveragedData):
     # Get the Trove info
     trove: ITroveManager.Trove = staticcall trove_manager.troves(data.trove_id)
 
-    # Make sure the caller is the current Trove owner
-    assert trove.owner == msg.sender, "!owner"
-
-    # Accept Trove ownership
-    extcall trove_manager.accept_ownership(data.trove_id)
+    # Make sure the caller is the Trove owner or an approved operator
+    assert trove.owner == msg.sender or staticcall trove_manager.approved(trove.owner, msg.sender), "!owner"
 
     # Initiate flash loan
     extcall _MORPHO.flashLoan(
@@ -212,18 +293,18 @@ def close_leveraged_trove(data: CloseLeveragedData):
 
 
 @external
+@nonreentrant
 def lever_up_trove(data: LeverUpData):
     """
     @notice Add leverage to an existing Trove
-    @dev Only callable by the Trove owner
-    @dev User must call `trove_manager.transfer_ownership(trove_id, zapper)` before calling this
+    @dev Only callable by the Trove owner or an approved operator
+    @dev The Zapper must be approved to operate on behalf of the Trove owner
     @dev If a redemption is triggered, an `auction_taker` should be provided.
-         Otherwise, auction proceeds will be sent to this contract and potentially be swept by someone else
+         Otherwise, auction proceeds will be sent to this contract and may be swept by someone else
     @param data The lever up parameters
     """
-    # Prevent swap routers from targeting the Trove Manager
-    assert data.collateral_swap.router != data.trove_manager, "!router"
-    assert data.debt_swap.router != data.trove_manager, "!router"
+    # Validate input parameters
+    self._validate_params(data.trove_manager, data.collateral_swap.router, data.debt_swap.router, data.auction_taker)
 
     # Cache the Trove Manager instance
     trove_manager: ITroveManager = ITroveManager(data.trove_manager)
@@ -231,11 +312,8 @@ def lever_up_trove(data: LeverUpData):
     # Get the Trove info
     trove: ITroveManager.Trove = staticcall trove_manager.troves(data.trove_id)
 
-    # Make sure the caller is the current Trove owner
-    assert trove.owner == msg.sender, "!owner"
-
-    # Accept Trove ownership
-    extcall trove_manager.accept_ownership(data.trove_id)
+    # Make sure the caller is the Trove owner or an approved operator
+    assert trove.owner == msg.sender or staticcall trove_manager.approved(trove.owner, msg.sender), "!owner"
 
     # Pull collateral from the caller
     collateral_token: address = staticcall trove_manager.collateral_token()
@@ -249,9 +327,6 @@ def lever_up_trove(data: LeverUpData):
         abi_encode(Operation.LEVER_UP, data),  # data
     )
 
-    # Transfer Trove ownership back to caller
-    extcall trove_manager.transfer_ownership(data.trove_id, msg.sender)
-
     # Sweep any remaining flash loan tokens to caller
     self._sweep(data.flash_loan_token, msg.sender)
 
@@ -262,16 +337,16 @@ def lever_up_trove(data: LeverUpData):
 
 
 @external
+@nonreentrant
 def lever_down_trove(data: LeverDownData):
     """
     @notice Reduce leverage on an existing Trove
-    @dev Only callable by the Trove owner
-    @dev User must call `trove_manager.transfer_ownership(trove_id, zapper)` before calling this
+    @dev Only callable by the Trove owner or an approved operator
+    @dev The Zapper must be approved to operate on behalf of the Trove owner
     @param data The lever down parameters
     """
-    # Prevent swap routers from targeting the Trove Manager
-    assert data.collateral_swap.router != data.trove_manager, "!router"
-    assert data.debt_swap.router != data.trove_manager, "!router"
+    # Validate input parameters
+    self._validate_params(data.trove_manager, data.collateral_swap.router, data.debt_swap.router)
 
     # Cache the Trove Manager instance
     trove_manager: ITroveManager = ITroveManager(data.trove_manager)
@@ -279,11 +354,8 @@ def lever_down_trove(data: LeverDownData):
     # Get the Trove info
     trove: ITroveManager.Trove = staticcall trove_manager.troves(data.trove_id)
 
-    # Make sure the caller is the current Trove owner
-    assert trove.owner == msg.sender, "!owner"
-
-    # Accept Trove ownership
-    extcall trove_manager.accept_ownership(data.trove_id)
+    # Make sure the caller is the Trove owner or an approved operator
+    assert trove.owner == msg.sender or staticcall trove_manager.approved(trove.owner, msg.sender), "!owner"
 
     # Initiate flash loan
     extcall _MORPHO.flashLoan(
@@ -291,9 +363,6 @@ def lever_down_trove(data: LeverDownData):
         data.flash_loan_amount,  # assets
         abi_encode(Operation.LEVER_DOWN, data),  # data
     )
-
-    # Transfer Trove ownership back to caller
-    extcall trove_manager.transfer_ownership(data.trove_id, msg.sender)
 
     # Get collateral and borrow tokens from the Trove Manager
     collateral_token: address = staticcall trove_manager.collateral_token()
@@ -329,7 +398,7 @@ def onMorphoFlashLoan(
     """
     # Sanity checks
     assert msg.sender == _MORPHO.address, "!caller"
-    assert len(data) > 4, "!data"
+    assert len(data) >= 32, "!data"
 
     # Decode operation type from the first 32 bytes
     operation: Operation = abi_decode(slice(data, 0, 32), Operation)
@@ -375,7 +444,7 @@ def _handle_open(flash_loan_amount: uint256, data: Bytes[_MAX_FLASHLOAN_CALLBACK
     borrow_token: address = staticcall trove_manager.borrow_token()
 
     # Flash loan token --> collateral
-    self._swap(params.collateral_swap, params.flash_loan_token, flash_loan_amount)
+    self._swap(params.collateral_swap, params.flash_loan_token, collateral_token, flash_loan_amount)
 
     # Get the available collateral
     available_collateral: uint256 = staticcall IERC20(collateral_token).balanceOf(self)
@@ -398,6 +467,7 @@ def _handle_open(flash_loan_amount: uint256, data: Bytes[_MAX_FLASHLOAN_CALLBACK
         params.max_upfront_fee,
         params.min_borrow_out,
         params.min_collateral_out,
+        params.owner,
     )
 
     # Make sure our approval is always back to 0
@@ -409,7 +479,7 @@ def _handle_open(flash_loan_amount: uint256, data: Bytes[_MAX_FLASHLOAN_CALLBACK
 
     # Borrow token --> flash loan token
     borrow_token_balance: uint256 = staticcall IERC20(borrow_token).balanceOf(self)
-    self._swap(params.debt_swap, borrow_token, borrow_token_balance)
+    self._swap(params.debt_swap, borrow_token, params.flash_loan_token, borrow_token_balance)
 
     return params.flash_loan_token
 
@@ -433,7 +503,7 @@ def _handle_close(flash_loan_amount: uint256, data: Bytes[_MAX_FLASHLOAN_CALLBAC
     borrow_token: address = staticcall trove_manager.borrow_token()
 
     # Flash loan token --> borrow token
-    self._swap(params.debt_swap, params.flash_loan_token, flash_loan_amount)
+    self._swap(params.debt_swap, params.flash_loan_token, borrow_token, flash_loan_amount)
 
     # Get the Trove debt after interest
     trove_debt: uint256 = staticcall trove_manager.get_trove_debt_after_interest(params.trove_id)
@@ -449,7 +519,7 @@ def _handle_close(flash_loan_amount: uint256, data: Bytes[_MAX_FLASHLOAN_CALLBAC
 
     # Collateral --> flash loan token
     collateral_balance: uint256 = staticcall IERC20(collateral_token).balanceOf(self)
-    self._swap(params.collateral_swap, collateral_token, collateral_balance)
+    self._swap(params.collateral_swap, collateral_token, params.flash_loan_token, collateral_balance)
 
     return params.flash_loan_token
 
@@ -473,7 +543,7 @@ def _handle_lever_up(flash_loan_amount: uint256, data: Bytes[_MAX_FLASHLOAN_CALL
     borrow_token: address = staticcall trove_manager.borrow_token()
 
     # Flash loan token --> collateral
-    self._swap(params.collateral_swap, params.flash_loan_token, flash_loan_amount)
+    self._swap(params.collateral_swap, params.flash_loan_token, collateral_token, flash_loan_amount)
 
     # Get the available collateral
     available_collateral: uint256 = staticcall IERC20(collateral_token).balanceOf(self)
@@ -506,7 +576,7 @@ def _handle_lever_up(flash_loan_amount: uint256, data: Bytes[_MAX_FLASHLOAN_CALL
 
     # Borrow token --> flash loan token
     borrow_token_balance: uint256 = staticcall IERC20(borrow_token).balanceOf(self)
-    self._swap(params.debt_swap, borrow_token, borrow_token_balance)
+    self._swap(params.debt_swap, borrow_token, params.flash_loan_token, borrow_token_balance)
 
     return params.flash_loan_token
 
@@ -530,7 +600,7 @@ def _handle_lever_down(flash_loan_amount: uint256, data: Bytes[_MAX_FLASHLOAN_CA
     borrow_token: address = staticcall trove_manager.borrow_token()
 
     # Flash loan token --> borrow token
-    self._swap(params.debt_swap, params.flash_loan_token, flash_loan_amount)
+    self._swap(params.debt_swap, params.flash_loan_token, borrow_token, flash_loan_amount)
 
     # Get the available borrow tokens
     available_borrow: uint256 = staticcall IERC20(borrow_token).balanceOf(self)
@@ -549,7 +619,7 @@ def _handle_lever_down(flash_loan_amount: uint256, data: Bytes[_MAX_FLASHLOAN_CA
 
     # Collateral --> flash loan token
     collateral_balance: uint256 = staticcall IERC20(collateral_token).balanceOf(self)
-    self._swap(params.collateral_swap, collateral_token, collateral_balance)
+    self._swap(params.collateral_swap, collateral_token, params.flash_loan_token, collateral_balance)
 
     return params.flash_loan_token
 
@@ -560,26 +630,55 @@ def _handle_lever_down(flash_loan_amount: uint256, data: Bytes[_MAX_FLASHLOAN_CA
 
 
 @internal
-def _swap(swap: SwapData, token_in: address, amount_in: uint256):
+@view
+def _validate_params(
+    trove_manager: address,
+    collateral_swap_router: address,
+    debt_swap_router: address,
+    auction_taker: address = empty(address),
+):
     """
-    @notice Execute a swap via a DEX aggregator router
+    @notice Validate input parameters for the external functions
+    @param trove_manager The Trove Manager address
+    @param collateral_swap_router The collateral swap router address
+    @param debt_swap_router The debt swap router address
+    @param auction_taker The Auction Taker address
+    """
+    # Make sure the Trove Manager is endorsed
+    assert staticcall REGISTRY.market_status(trove_manager) == IRegistry.Status.ENDORSED, "!endorsed"
+
+    # If provided, make sure the collateral swap router is whitelisted
+    if collateral_swap_router != empty(address):
+        assert self.routers[collateral_swap_router], "!collateral_swap_router"
+    
+    # If provided, make sure the debt swap router is whitelisted
+    if debt_swap_router != empty(address):
+        assert self.routers[debt_swap_router], "!debt_swap_router"
+
+    # If provided, make sure the Auction Taker is whitelisted
+    if auction_taker != empty(address):
+        assert self.auction_takers[auction_taker], "!auction_taker"
+
+
+@internal
+def _swap(swap: SwapData, token_in: address, token_out: address, amount_in: uint256):
+    """
+    @notice Execute a swap via the Swap Executor
     @dev Skips if swap data is empty. Caller should encode slippage protection in the router calldata
     @param swap The swap parameters (router address + calldata)
-    @param token_in The input token to approve
-    @param amount_in The amount to approve for the swap
+    @param token_in The input token
+    @param token_out The output token
+    @param amount_in The amount to swap
     """
     # Return early if no swap data
     if len(swap.data) == 0:
         return
 
-    # Approve input token to the router
-    assert extcall IERC20(token_in).approve(swap.router, amount_in, default_return_value=True)
+    # Transfer input tokens to the Swap Executor
+    assert extcall IERC20(token_in).transfer(SWAP_EXECUTOR.address, amount_in, default_return_value=True)
 
-    # Execute the swap
-    raw_call(swap.router, swap.data)
-
-    # Make sure our approval is always back to 0
-    assert extcall IERC20(token_in).approve(swap.router, 0, default_return_value=True)
+    # Execute the swap via the Swap Executor. Output tokens are sent back to this contract
+    extcall SWAP_EXECUTOR.swap(swap.router, swap.data, token_in, token_out)
 
 
 @internal

@@ -25,7 +25,6 @@ struct Trove:
     last_debt_update_time: uint64
     last_interest_rate_adj_time: uint64
     owner: address
-    pending_owner: address
     status: Status
 
 
@@ -87,6 +86,12 @@ def get_trove_debt_after_interest(trove_id: uint256) -> uint256:
     ...
 
 
+@external
+@view
+def approved(owner: address, operator: address) -> bool:
+    ...
+
+
 # ============================================================================================
 # Initialize
 # ============================================================================================
@@ -94,21 +99,6 @@ def get_trove_debt_after_interest(trove_id: uint256) -> uint256:
 
 @external
 def initialize(params: InitializeParams):
-    ...
-
-
-# ============================================================================================
-# Ownership
-# ============================================================================================
-
-
-@external
-def transfer_ownership(trove_id: uint256, new_owner: address):
-    ...
-
-
-@external
-def accept_ownership(trove_id: uint256):
     ...
 
 
@@ -128,6 +118,7 @@ def open_trove(
     max_upfront_fee: uint256,
     min_borrow_out: uint256,
     min_collateral_out: uint256,
+    owner: address = msg.sender,
 ) -> uint256:
     ...
 
