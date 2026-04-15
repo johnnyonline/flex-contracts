@@ -1,0 +1,6 @@
+# @version 0.4.3
+
+
+@external
+def redeem(shares: uint256, receiver: address, owner: address) -> uint256:
+    ...

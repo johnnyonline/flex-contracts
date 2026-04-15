@@ -55,7 +55,6 @@ struct InitializeParams:
     lender: address
     price_oracle: address
     auction: address
-    borrow_token: address
     collateral_token: address
     minimum_price_buffer_percentage: uint256
     starting_price_buffer_percentage: uint256

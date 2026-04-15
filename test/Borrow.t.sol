@@ -49,38 +49,37 @@ contract BorrowTests is Base {
         assertEq(_trove.last_debt_update_time, block.timestamp, "E3");
         assertEq(_trove.last_interest_rate_adj_time, block.timestamp, "E4");
         assertEq(_trove.owner, userBorrower, "E5");
-        assertEq(_trove.pending_owner, address(0), "E6");
-        assertEq(uint256(_trove.status), uint256(ITroveManager.Status.active), "E7");
+        assertEq(uint256(_trove.status), uint256(ITroveManager.Status.active), "E6");
         assertApproxEqRel(
             (_trove.collateral * priceOracle.get_price() / ORACLE_PRICE_SCALE) * BORROW_TOKEN_PRECISION / _trove.debt,
             DEFAULT_TARGET_COLLATERAL_RATIO * 2,
             1e15,
-            "E8"
+            "E7"
         ); // 0.1%
 
         // Check sorted troves
-        assertFalse(sortedTroves.empty(), "E9");
-        assertEq(sortedTroves.size(), 1, "E10");
-        assertEq(sortedTroves.first(), _troveId, "E11");
-        assertEq(sortedTroves.last(), _troveId, "E12");
-        assertTrue(sortedTroves.contains(_troveId), "E13");
+        assertFalse(sortedTroves.empty(), "E8");
+        assertEq(sortedTroves.size(), 1, "E9");
+        assertEq(sortedTroves.first(), _troveId, "E10");
+        assertEq(sortedTroves.last(), _troveId, "E11");
+        assertTrue(sortedTroves.contains(_troveId), "E12");
 
         // Check balances
-        assertEq(collateralToken.balanceOf(address(troveManager)), _collateralNeeded, "E14");
-        assertEq(collateralToken.balanceOf(address(troveManager)), troveManager.collateral_balance(), "E15");
-        assertEq(borrowToken.balanceOf(address(troveManager)), 0, "E16");
-        assertEq(borrowToken.balanceOf(address(lender)), _lendAmount - _borrowAmount, "E17");
-        assertEq(borrowToken.balanceOf(userBorrower), _borrowAmount, "E18");
+        assertEq(collateralToken.balanceOf(address(troveManager)), _collateralNeeded, "E13");
+        assertEq(collateralToken.balanceOf(address(troveManager)), troveManager.collateral_balance(), "E14");
+        assertEq(borrowToken.balanceOf(address(troveManager)), 0, "E15");
+        assertEq(borrowToken.balanceOf(address(lender)), _lendAmount - _borrowAmount, "E16");
+        assertEq(borrowToken.balanceOf(userBorrower), _borrowAmount, "E17");
 
         // Check global info
-        assertEq(troveManager.total_debt(), _expectedDebt, "E19");
-        assertEq(troveManager.total_weighted_debt(), _expectedDebt * DEFAULT_ANNUAL_INTEREST_RATE, "E20");
-        assertEq(troveManager.collateral_balance(), _collateralNeeded, "E21");
-        assertEq(troveManager.zombie_trove_id(), 0, "E22");
+        assertEq(troveManager.total_debt(), _expectedDebt, "E18");
+        assertEq(troveManager.total_weighted_debt(), _expectedDebt * DEFAULT_ANNUAL_INTEREST_RATE, "E19");
+        assertEq(troveManager.collateral_balance(), _collateralNeeded, "E20");
+        assertEq(troveManager.zombie_trove_id(), 0, "E21");
 
         // Check dutch desk is empty
-        assertEq(borrowToken.balanceOf(address(dutchDesk)), 0, "E23");
-        assertEq(collateralToken.balanceOf(address(dutchDesk)), 0, "E24");
+        assertEq(borrowToken.balanceOf(address(dutchDesk)), 0, "E22");
+        assertEq(collateralToken.balanceOf(address(dutchDesk)), 0, "E23");
 
         // Finally borrow more from the trove
         vm.prank(userBorrower);
@@ -96,45 +95,44 @@ contract BorrowTests is Base {
 
         // Check trove info
         _trove = troveManager.troves(_troveId);
-        assertEq(_trove.debt, _expectedDebt * 2, "E25");
-        assertEq(_trove.collateral, _collateralNeeded, "E26");
-        assertEq(_trove.annual_interest_rate, DEFAULT_ANNUAL_INTEREST_RATE, "E27");
-        assertEq(_trove.last_debt_update_time, block.timestamp, "E28");
-        assertEq(_trove.last_interest_rate_adj_time, block.timestamp, "E29");
-        assertEq(_trove.owner, userBorrower, "E30");
-        assertEq(_trove.pending_owner, address(0), "E31");
-        assertEq(uint256(_trove.status), uint256(ITroveManager.Status.active), "E32");
+        assertEq(_trove.debt, _expectedDebt * 2, "E24");
+        assertEq(_trove.collateral, _collateralNeeded, "E25");
+        assertEq(_trove.annual_interest_rate, DEFAULT_ANNUAL_INTEREST_RATE, "E26");
+        assertEq(_trove.last_debt_update_time, block.timestamp, "E27");
+        assertEq(_trove.last_interest_rate_adj_time, block.timestamp, "E28");
+        assertEq(_trove.owner, userBorrower, "E29");
+        assertEq(uint256(_trove.status), uint256(ITroveManager.Status.active), "E30");
         assertApproxEqRel(
             (_trove.collateral * priceOracle.get_price() / ORACLE_PRICE_SCALE) * BORROW_TOKEN_PRECISION / _trove.debt,
             DEFAULT_TARGET_COLLATERAL_RATIO,
             1e15,
-            "E33"
+            "E31"
         ); // 0.1%
 
         // Check sorted troves
-        assertFalse(sortedTroves.empty(), "E34");
-        assertEq(sortedTroves.size(), 1, "E35");
-        assertEq(sortedTroves.first(), _troveId, "E36");
-        assertEq(sortedTroves.last(), _troveId, "E37");
-        assertTrue(sortedTroves.contains(_troveId), "E38");
+        assertFalse(sortedTroves.empty(), "E32");
+        assertEq(sortedTroves.size(), 1, "E33");
+        assertEq(sortedTroves.first(), _troveId, "E34");
+        assertEq(sortedTroves.last(), _troveId, "E35");
+        assertTrue(sortedTroves.contains(_troveId), "E36");
 
         // Check balances
-        assertEq(collateralToken.balanceOf(address(troveManager)), _collateralNeeded, "E39");
-        assertEq(collateralToken.balanceOf(address(troveManager)), troveManager.collateral_balance(), "E40");
-        assertEq(collateralToken.balanceOf(address(userBorrower)), 0, "E41");
-        assertEq(borrowToken.balanceOf(address(troveManager)), 0, "E42");
-        assertGe(borrowToken.balanceOf(address(lender)), 0, "E43");
-        assertEq(borrowToken.balanceOf(userBorrower), _totalBorrowAmount, "E44");
+        assertEq(collateralToken.balanceOf(address(troveManager)), _collateralNeeded, "E37");
+        assertEq(collateralToken.balanceOf(address(troveManager)), troveManager.collateral_balance(), "E38");
+        assertEq(collateralToken.balanceOf(address(userBorrower)), 0, "E39");
+        assertEq(borrowToken.balanceOf(address(troveManager)), 0, "E40");
+        assertGe(borrowToken.balanceOf(address(lender)), 0, "E41");
+        assertEq(borrowToken.balanceOf(userBorrower), _totalBorrowAmount, "E42");
 
         // Check global info
-        assertEq(troveManager.total_debt(), _expectedDebt * 2, "E45");
-        assertEq(troveManager.total_weighted_debt(), _expectedDebt * 2 * DEFAULT_ANNUAL_INTEREST_RATE, "E46");
-        assertEq(troveManager.collateral_balance(), _collateralNeeded, "E47");
-        assertEq(troveManager.zombie_trove_id(), 0, "E48");
+        assertEq(troveManager.total_debt(), _expectedDebt * 2, "E43");
+        assertEq(troveManager.total_weighted_debt(), _expectedDebt * 2 * DEFAULT_ANNUAL_INTEREST_RATE, "E44");
+        assertEq(troveManager.collateral_balance(), _collateralNeeded, "E45");
+        assertEq(troveManager.zombie_trove_id(), 0, "E46");
 
         // Check dutch desk is empty
-        assertEq(borrowToken.balanceOf(address(dutchDesk)), 0, "E49");
-        assertEq(collateralToken.balanceOf(address(dutchDesk)), 0, "E50");
+        assertEq(borrowToken.balanceOf(address(dutchDesk)), 0, "E47");
+        assertEq(collateralToken.balanceOf(address(dutchDesk)), 0, "E48");
     }
 
     // 1. lend
@@ -168,37 +166,36 @@ contract BorrowTests is Base {
         assertEq(_trove.last_debt_update_time, block.timestamp, "E3");
         assertEq(_trove.last_interest_rate_adj_time, block.timestamp, "E4");
         assertEq(_trove.owner, userBorrower, "E5");
-        assertEq(_trove.pending_owner, address(0), "E6");
-        assertEq(uint256(_trove.status), uint256(ITroveManager.Status.active), "E7");
+        assertEq(uint256(_trove.status), uint256(ITroveManager.Status.active), "E6");
         assertGt(
             (_trove.collateral * priceOracle.get_price() / ORACLE_PRICE_SCALE) * BORROW_TOKEN_PRECISION / _trove.debt,
             DEFAULT_TARGET_COLLATERAL_RATIO,
-            "E8"
+            "E7"
         );
 
         // Check sorted troves
-        assertFalse(sortedTroves.empty(), "E9");
-        assertEq(sortedTroves.size(), 1, "E10");
-        assertEq(sortedTroves.first(), _troveId, "E11");
-        assertEq(sortedTroves.last(), _troveId, "E12");
-        assertTrue(sortedTroves.contains(_troveId), "E13");
+        assertFalse(sortedTroves.empty(), "E8");
+        assertEq(sortedTroves.size(), 1, "E9");
+        assertEq(sortedTroves.first(), _troveId, "E10");
+        assertEq(sortedTroves.last(), _troveId, "E11");
+        assertTrue(sortedTroves.contains(_troveId), "E12");
 
         // Check balances
-        assertEq(collateralToken.balanceOf(address(troveManager)), _collateralNeeded, "E14");
-        assertEq(collateralToken.balanceOf(address(troveManager)), troveManager.collateral_balance(), "E15");
-        assertEq(borrowToken.balanceOf(address(troveManager)), 0, "E16");
-        assertEq(borrowToken.balanceOf(address(lender)), _lendAmount - troveManager.min_debt(), "E17");
-        assertEq(borrowToken.balanceOf(userBorrower), troveManager.min_debt(), "E18");
+        assertEq(collateralToken.balanceOf(address(troveManager)), _collateralNeeded, "E13");
+        assertEq(collateralToken.balanceOf(address(troveManager)), troveManager.collateral_balance(), "E14");
+        assertEq(borrowToken.balanceOf(address(troveManager)), 0, "E15");
+        assertEq(borrowToken.balanceOf(address(lender)), _lendAmount - troveManager.min_debt(), "E16");
+        assertEq(borrowToken.balanceOf(userBorrower), troveManager.min_debt(), "E17");
 
         // Check global info
-        assertEq(troveManager.total_debt(), _expectedDebt, "E19");
-        assertEq(troveManager.total_weighted_debt(), _expectedDebt * DEFAULT_ANNUAL_INTEREST_RATE, "E20");
-        assertEq(troveManager.collateral_balance(), _collateralNeeded, "E21");
-        assertEq(troveManager.zombie_trove_id(), 0, "E22");
+        assertEq(troveManager.total_debt(), _expectedDebt, "E18");
+        assertEq(troveManager.total_weighted_debt(), _expectedDebt * DEFAULT_ANNUAL_INTEREST_RATE, "E19");
+        assertEq(troveManager.collateral_balance(), _collateralNeeded, "E20");
+        assertEq(troveManager.zombie_trove_id(), 0, "E21");
 
         // Check dutch desk is empty
-        assertEq(borrowToken.balanceOf(address(dutchDesk)), 0, "E23");
-        assertEq(collateralToken.balanceOf(address(dutchDesk)), 0, "E24");
+        assertEq(borrowToken.balanceOf(address(dutchDesk)), 0, "E22");
+        assertEq(collateralToken.balanceOf(address(dutchDesk)), 0, "E23");
 
         // Calculate expected debt after second borrow
         uint256 _secondExpectedDebt = _expectedDebt + _borrowAmount + troveManager.get_upfront_fee(_borrowAmount, DEFAULT_ANNUAL_INTEREST_RATE);
@@ -217,45 +214,44 @@ contract BorrowTests is Base {
 
         // Check trove info
         _trove = troveManager.troves(_troveId);
-        assertEq(_trove.debt, _secondExpectedDebt, "E25");
-        assertEq(_trove.collateral, _collateralNeeded, "E26");
-        assertEq(_trove.annual_interest_rate, DEFAULT_ANNUAL_INTEREST_RATE, "E27");
-        assertEq(_trove.last_debt_update_time, block.timestamp, "E28");
-        assertEq(_trove.last_interest_rate_adj_time, block.timestamp, "E29");
-        assertEq(_trove.owner, userBorrower, "E30");
-        assertEq(_trove.pending_owner, address(0), "E31");
-        assertEq(uint256(_trove.status), uint256(ITroveManager.Status.active), "E32");
+        assertEq(_trove.debt, _secondExpectedDebt, "E24");
+        assertEq(_trove.collateral, _collateralNeeded, "E25");
+        assertEq(_trove.annual_interest_rate, DEFAULT_ANNUAL_INTEREST_RATE, "E26");
+        assertEq(_trove.last_debt_update_time, block.timestamp, "E27");
+        assertEq(_trove.last_interest_rate_adj_time, block.timestamp, "E28");
+        assertEq(_trove.owner, userBorrower, "E29");
+        assertEq(uint256(_trove.status), uint256(ITroveManager.Status.active), "E30");
         assertApproxEqRel(
             (_trove.collateral * priceOracle.get_price() / ORACLE_PRICE_SCALE) * BORROW_TOKEN_PRECISION / _trove.debt,
             DEFAULT_TARGET_COLLATERAL_RATIO,
             1e15,
-            "E33"
+            "E31"
         ); // 0.1%
 
         // Check sorted troves
-        assertFalse(sortedTroves.empty(), "E34");
-        assertEq(sortedTroves.size(), 1, "E35");
-        assertEq(sortedTroves.first(), _troveId, "E36");
-        assertEq(sortedTroves.last(), _troveId, "E37");
-        assertTrue(sortedTroves.contains(_troveId), "E38");
+        assertFalse(sortedTroves.empty(), "E32");
+        assertEq(sortedTroves.size(), 1, "E33");
+        assertEq(sortedTroves.first(), _troveId, "E34");
+        assertEq(sortedTroves.last(), _troveId, "E35");
+        assertTrue(sortedTroves.contains(_troveId), "E36");
 
         // Check balances
-        assertEq(collateralToken.balanceOf(address(troveManager)), _collateralNeeded, "E39");
-        assertEq(collateralToken.balanceOf(address(troveManager)), troveManager.collateral_balance(), "E40");
-        assertEq(collateralToken.balanceOf(address(userBorrower)), 0, "E41");
-        assertEq(borrowToken.balanceOf(address(troveManager)), 0, "E42");
-        assertGe(borrowToken.balanceOf(address(lender)), 0, "E43");
-        assertEq(borrowToken.balanceOf(userBorrower), _lendAmount, "E44");
+        assertEq(collateralToken.balanceOf(address(troveManager)), _collateralNeeded, "E37");
+        assertEq(collateralToken.balanceOf(address(troveManager)), troveManager.collateral_balance(), "E38");
+        assertEq(collateralToken.balanceOf(address(userBorrower)), 0, "E39");
+        assertEq(borrowToken.balanceOf(address(troveManager)), 0, "E40");
+        assertGe(borrowToken.balanceOf(address(lender)), 0, "E41");
+        assertEq(borrowToken.balanceOf(userBorrower), _lendAmount, "E42");
 
         // Check global info
-        assertEq(troveManager.total_debt(), _secondExpectedDebt, "E45");
-        assertEq(troveManager.total_weighted_debt(), _secondExpectedDebt * DEFAULT_ANNUAL_INTEREST_RATE, "E46");
-        assertEq(troveManager.collateral_balance(), _collateralNeeded, "E47");
-        assertEq(troveManager.zombie_trove_id(), 0, "E48");
+        assertEq(troveManager.total_debt(), _secondExpectedDebt, "E43");
+        assertEq(troveManager.total_weighted_debt(), _secondExpectedDebt * DEFAULT_ANNUAL_INTEREST_RATE, "E44");
+        assertEq(troveManager.collateral_balance(), _collateralNeeded, "E45");
+        assertEq(troveManager.zombie_trove_id(), 0, "E46");
 
         // Check dutch desk is empty
-        assertEq(borrowToken.balanceOf(address(dutchDesk)), 0, "E49");
-        assertEq(collateralToken.balanceOf(address(dutchDesk)), 0, "E50");
+        assertEq(borrowToken.balanceOf(address(dutchDesk)), 0, "E47");
+        assertEq(collateralToken.balanceOf(address(dutchDesk)), 0, "E48");
     }
 
     // 1. lend
@@ -291,38 +287,37 @@ contract BorrowTests is Base {
         assertEq(_trove.last_debt_update_time, block.timestamp, "E3");
         assertEq(_trove.last_interest_rate_adj_time, block.timestamp, "E4");
         assertEq(_trove.owner, userBorrower, "E5");
-        assertEq(_trove.pending_owner, address(0), "E6");
-        assertEq(uint256(_trove.status), uint256(ITroveManager.Status.active), "E7");
+        assertEq(uint256(_trove.status), uint256(ITroveManager.Status.active), "E6");
         assertApproxEqRel(
             (_trove.collateral * priceOracle.get_price() / ORACLE_PRICE_SCALE) * BORROW_TOKEN_PRECISION / _trove.debt,
             DEFAULT_TARGET_COLLATERAL_RATIO,
             1e15,
-            "E8"
+            "E7"
         ); // 0.1%
 
         // Check sorted troves
-        assertFalse(sortedTroves.empty(), "E9");
-        assertEq(sortedTroves.size(), 1, "E10");
-        assertEq(sortedTroves.first(), _troveId, "E11");
-        assertEq(sortedTroves.last(), _troveId, "E12");
-        assertTrue(sortedTroves.contains(_troveId), "E13");
+        assertFalse(sortedTroves.empty(), "E8");
+        assertEq(sortedTroves.size(), 1, "E9");
+        assertEq(sortedTroves.first(), _troveId, "E10");
+        assertEq(sortedTroves.last(), _troveId, "E11");
+        assertTrue(sortedTroves.contains(_troveId), "E12");
 
         // Check balances
-        assertEq(collateralToken.balanceOf(address(troveManager)), _collateralNeeded, "E14");
-        assertEq(collateralToken.balanceOf(address(troveManager)), troveManager.collateral_balance(), "E15");
-        assertEq(borrowToken.balanceOf(address(troveManager)), 0, "E16");
-        assertEq(borrowToken.balanceOf(address(lender)), _amount - _halfAmount, "E17");
-        assertEq(borrowToken.balanceOf(userBorrower), _halfAmount, "E18");
+        assertEq(collateralToken.balanceOf(address(troveManager)), _collateralNeeded, "E13");
+        assertEq(collateralToken.balanceOf(address(troveManager)), troveManager.collateral_balance(), "E14");
+        assertEq(borrowToken.balanceOf(address(troveManager)), 0, "E15");
+        assertEq(borrowToken.balanceOf(address(lender)), _amount - _halfAmount, "E16");
+        assertEq(borrowToken.balanceOf(userBorrower), _halfAmount, "E17");
 
         // Check global info
-        assertEq(troveManager.total_debt(), _expectedDebt, "E19");
-        assertEq(troveManager.total_weighted_debt(), _expectedDebt * DEFAULT_ANNUAL_INTEREST_RATE, "E20");
-        assertEq(troveManager.collateral_balance(), _collateralNeeded, "E21");
-        assertEq(troveManager.zombie_trove_id(), 0, "E22");
+        assertEq(troveManager.total_debt(), _expectedDebt, "E18");
+        assertEq(troveManager.total_weighted_debt(), _expectedDebt * DEFAULT_ANNUAL_INTEREST_RATE, "E19");
+        assertEq(troveManager.collateral_balance(), _collateralNeeded, "E20");
+        assertEq(troveManager.zombie_trove_id(), 0, "E21");
 
         // Check dutch desk is empty
-        assertEq(borrowToken.balanceOf(address(dutchDesk)), 0, "E23");
-        assertEq(collateralToken.balanceOf(address(dutchDesk)), 0, "E24");
+        assertEq(borrowToken.balanceOf(address(dutchDesk)), 0, "E22");
+        assertEq(collateralToken.balanceOf(address(dutchDesk)), 0, "E23");
 
         // Higher rate for 2nd borrower so he can't redeem the first
         uint256 _higherRate = DEFAULT_ANNUAL_INTEREST_RATE * 2;
@@ -333,44 +328,43 @@ contract BorrowTests is Base {
 
         // Check trove info
         _trove = troveManager.troves(_secondTroveId);
-        assertEq(_trove.debt, _secondExpectedDebt, "E25");
-        assertEq(_trove.collateral, _collateralNeeded * 2, "E26");
-        assertEq(_trove.annual_interest_rate, _higherRate, "E27");
-        assertEq(_trove.last_debt_update_time, block.timestamp, "E28");
-        assertEq(_trove.last_interest_rate_adj_time, block.timestamp, "E29");
-        assertEq(_trove.owner, anotherUserBorrower, "E30");
-        assertEq(_trove.pending_owner, address(0), "E31");
-        assertEq(uint256(_trove.status), uint256(ITroveManager.Status.active), "E32");
+        assertEq(_trove.debt, _secondExpectedDebt, "E24");
+        assertEq(_trove.collateral, _collateralNeeded * 2, "E25");
+        assertEq(_trove.annual_interest_rate, _higherRate, "E26");
+        assertEq(_trove.last_debt_update_time, block.timestamp, "E27");
+        assertEq(_trove.last_interest_rate_adj_time, block.timestamp, "E28");
+        assertEq(_trove.owner, anotherUserBorrower, "E29");
+        assertEq(uint256(_trove.status), uint256(ITroveManager.Status.active), "E30");
         assertApproxEqRel(
             (_trove.collateral * priceOracle.get_price() / ORACLE_PRICE_SCALE) * BORROW_TOKEN_PRECISION / _trove.debt,
             DEFAULT_TARGET_COLLATERAL_RATIO * 2,
             1e15,
-            "E33"
+            "E31"
         ); // 0.1%
 
         // Check sorted troves
-        assertFalse(sortedTroves.empty(), "E34");
-        assertEq(sortedTroves.size(), 2, "E35");
-        assertEq(sortedTroves.first(), _secondTroveId, "E36");
-        assertEq(sortedTroves.last(), _troveId, "E37");
-        assertTrue(sortedTroves.contains(_secondTroveId), "E38");
+        assertFalse(sortedTroves.empty(), "E32");
+        assertEq(sortedTroves.size(), 2, "E33");
+        assertEq(sortedTroves.first(), _secondTroveId, "E34");
+        assertEq(sortedTroves.last(), _troveId, "E35");
+        assertTrue(sortedTroves.contains(_secondTroveId), "E36");
 
         // Check balances
-        assertEq(collateralToken.balanceOf(address(troveManager)), _collateralNeeded * 3, "E39");
-        assertEq(collateralToken.balanceOf(address(troveManager)), troveManager.collateral_balance(), "E40");
-        assertEq(borrowToken.balanceOf(address(troveManager)), 0, "E41");
-        assertApproxEqAbs(borrowToken.balanceOf(address(lender)), 0, 1, "E42");
-        assertEq(borrowToken.balanceOf(userBorrower), _halfAmount, "E43");
+        assertEq(collateralToken.balanceOf(address(troveManager)), _collateralNeeded * 3, "E37");
+        assertEq(collateralToken.balanceOf(address(troveManager)), troveManager.collateral_balance(), "E38");
+        assertEq(borrowToken.balanceOf(address(troveManager)), 0, "E39");
+        assertApproxEqAbs(borrowToken.balanceOf(address(lender)), 0, 1, "E40");
+        assertEq(borrowToken.balanceOf(userBorrower), _halfAmount, "E41");
 
         // Check global info
-        assertEq(troveManager.total_debt(), _expectedDebt + _secondExpectedDebt, "E44");
-        assertEq(troveManager.total_weighted_debt(), _expectedDebt * DEFAULT_ANNUAL_INTEREST_RATE + _secondExpectedDebt * _higherRate, "E45");
-        assertEq(troveManager.collateral_balance(), _collateralNeeded * 3, "E46");
-        assertEq(troveManager.zombie_trove_id(), 0, "E47");
+        assertEq(troveManager.total_debt(), _expectedDebt + _secondExpectedDebt, "E42");
+        assertEq(troveManager.total_weighted_debt(), _expectedDebt * DEFAULT_ANNUAL_INTEREST_RATE + _secondExpectedDebt * _higherRate, "E43");
+        assertEq(troveManager.collateral_balance(), _collateralNeeded * 3, "E44");
+        assertEq(troveManager.zombie_trove_id(), 0, "E45");
 
         // Check dutch desk is empty
-        assertEq(borrowToken.balanceOf(address(dutchDesk)), 0, "E48");
-        assertEq(collateralToken.balanceOf(address(dutchDesk)), 0, "E49");
+        assertEq(borrowToken.balanceOf(address(dutchDesk)), 0, "E46");
+        assertEq(collateralToken.balanceOf(address(dutchDesk)), 0, "E47");
 
         uint256 _expectedCollateralAfterRedemption = _collateralNeeded - (_expectedDebt * ORACLE_PRICE_SCALE / priceOracle.get_price());
         uint256 _secondBorrowAmount = _halfAmount * 101 / 100; // borrow a bit more to wipe out the first borrower
@@ -390,25 +384,25 @@ contract BorrowTests is Base {
         uint256 _expectedTime = block.timestamp;
 
         // Check an auction was created (nonce incremented)
-        assertEq(dutchDesk.nonce(), 1, "E50");
+        assertEq(dutchDesk.nonce(), 1, "E48");
 
         // Auction should be active
-        assertTrue(auction.is_active(0), "E51");
+        assertTrue(auction.is_active(0), "E49");
 
         // Check collateral is in auction
         uint256 _auctionAvailable = auction.get_available_amount(0);
-        assertGt(_auctionAvailable, 0, "E52");
+        assertGt(_auctionAvailable, 0, "E50");
 
         // Check starting price is set correctly (with buffer)
         assertApproxEqAbs(
             auction.auctions(0).starting_price,
             _auctionAvailable * priceOracle.get_price(false) / WAD * dutchDesk.starting_price_buffer_percentage() / COLLATERAL_TOKEN_PRECISION,
             3,
-            "E53"
+            "E51"
         );
 
         // Check minimum price is set correctly (with buffer)
-        assertEq(auction.auctions(0).minimum_price, priceOracle.get_price(false) * dutchDesk.minimum_price_buffer_percentage() / WAD, "E54");
+        assertEq(auction.auctions(0).minimum_price, priceOracle.get_price(false) * dutchDesk.minimum_price_buffer_percentage() / WAD, "E52");
 
         // Take the auction
         takeAuction(0);
@@ -417,45 +411,44 @@ contract BorrowTests is Base {
 
         // Check trove info
         _trove = troveManager.troves(_secondTroveId);
-        assertEq(_trove.debt, _secondExpectedDebt + _secondExpectedDebt2, "E55");
-        assertEq(_trove.collateral, _collateralNeeded * 2, "E56");
-        assertEq(_trove.annual_interest_rate, _higherRate, "E57");
-        assertEq(_trove.last_debt_update_time, _expectedTime, "E58");
-        assertEq(_trove.last_interest_rate_adj_time, _expectedTime, "E59");
-        assertEq(_trove.owner, anotherUserBorrower, "E60");
-        assertEq(_trove.pending_owner, address(0), "E61");
-        assertEq(uint256(_trove.status), uint256(ITroveManager.Status.active), "E62");
+        assertEq(_trove.debt, _secondExpectedDebt + _secondExpectedDebt2, "E53");
+        assertEq(_trove.collateral, _collateralNeeded * 2, "E54");
+        assertEq(_trove.annual_interest_rate, _higherRate, "E55");
+        assertEq(_trove.last_debt_update_time, _expectedTime, "E56");
+        assertEq(_trove.last_interest_rate_adj_time, _expectedTime, "E57");
+        assertEq(_trove.owner, anotherUserBorrower, "E58");
+        assertEq(uint256(_trove.status), uint256(ITroveManager.Status.active), "E59");
         assertApproxEqRel(
             (_trove.collateral * priceOracle.get_price() / ORACLE_PRICE_SCALE) * BORROW_TOKEN_PRECISION / _trove.debt,
             DEFAULT_TARGET_COLLATERAL_RATIO,
             8e15,
-            "E63"
+            "E60"
         ); // 0.8%. Slightly worse CR due to increased second borrow amount
 
         // Check sorted troves
-        assertFalse(sortedTroves.empty(), "E64");
-        assertEq(sortedTroves.size(), 1, "E65");
-        assertEq(sortedTroves.first(), _secondTroveId, "E66");
-        assertEq(sortedTroves.last(), _secondTroveId, "E67");
-        assertTrue(sortedTroves.contains(_secondTroveId), "E68");
+        assertFalse(sortedTroves.empty(), "E61");
+        assertEq(sortedTroves.size(), 1, "E62");
+        assertEq(sortedTroves.first(), _secondTroveId, "E63");
+        assertEq(sortedTroves.last(), _secondTroveId, "E64");
+        assertTrue(sortedTroves.contains(_secondTroveId), "E65");
 
         // Check balances
-        assertEq(collateralToken.balanceOf(address(troveManager)), _expectedCollateralAfterRedemption + _collateralNeeded * 2, "E69");
-        assertEq(collateralToken.balanceOf(address(troveManager)), troveManager.collateral_balance(), "E70");
-        assertEq(collateralToken.balanceOf(address(anotherUserBorrower)), 0, "E71");
-        assertEq(borrowToken.balanceOf(address(troveManager)), 0, "E72");
-        assertGe(borrowToken.balanceOf(address(lender)), 0, "E73");
-        assertApproxEqRel(borrowToken.balanceOf(anotherUserBorrower), _amount, 25e15, "E74"); // 2.5%. Pays slippage due to the redemption
+        assertEq(collateralToken.balanceOf(address(troveManager)), _expectedCollateralAfterRedemption + _collateralNeeded * 2, "E66");
+        assertEq(collateralToken.balanceOf(address(troveManager)), troveManager.collateral_balance(), "E67");
+        assertEq(collateralToken.balanceOf(address(anotherUserBorrower)), 0, "E68");
+        assertEq(borrowToken.balanceOf(address(troveManager)), 0, "E69");
+        assertGe(borrowToken.balanceOf(address(lender)), 0, "E70");
+        assertApproxEqRel(borrowToken.balanceOf(anotherUserBorrower), _amount, 25e15, "E71"); // 2.5%. Pays slippage due to the redemption
 
         // Check global info
-        assertEq(troveManager.total_debt(), _secondExpectedDebt + _secondExpectedDebt2, "E75");
-        assertEq(troveManager.total_weighted_debt(), (_secondExpectedDebt + _secondExpectedDebt2) * _higherRate, "E76");
-        assertEq(troveManager.collateral_balance(), _expectedCollateralAfterRedemption + _collateralNeeded * 2, "E77");
-        assertEq(troveManager.zombie_trove_id(), 0, "E78");
+        assertEq(troveManager.total_debt(), _secondExpectedDebt + _secondExpectedDebt2, "E72");
+        assertEq(troveManager.total_weighted_debt(), (_secondExpectedDebt + _secondExpectedDebt2) * _higherRate, "E73");
+        assertEq(troveManager.collateral_balance(), _expectedCollateralAfterRedemption + _collateralNeeded * 2, "E74");
+        assertEq(troveManager.zombie_trove_id(), 0, "E75");
 
         // Check dutch desk is empty
-        assertEq(borrowToken.balanceOf(address(dutchDesk)), 0, "E79");
-        assertEq(collateralToken.balanceOf(address(dutchDesk)), 0, "E80");
+        assertEq(borrowToken.balanceOf(address(dutchDesk)), 0, "E76");
+        assertEq(collateralToken.balanceOf(address(dutchDesk)), 0, "E77");
     }
 
     function test_borrowFromActiveTrove_zeroDebt(
@@ -910,6 +903,47 @@ contract BorrowTests is Base {
             0, // min_borrow_out
             type(uint256).max // min_collateral_out higher than what can be redeemed
         );
+    }
+
+    function test_borrow_approvedOperator(
+        uint256 _amount
+    ) public {
+        _amount = bound(_amount, troveManager.min_debt() * 2, maxFuzzAmount);
+
+        mintAndDepositIntoLender(userLender, _amount);
+
+        uint256 _collateralNeeded =
+            (_amount * DEFAULT_TARGET_COLLATERAL_RATIO / BORROW_TOKEN_PRECISION) * ORACLE_PRICE_SCALE / priceOracle.get_price();
+        uint256 _troveId = mintAndOpenTrove(userBorrower, _collateralNeeded, _amount / 2, DEFAULT_ANNUAL_INTEREST_RATE);
+
+        // Approve operator
+        vm.prank(userBorrower);
+        troveManager.approve(operator, true);
+
+        // Operator borrows
+        uint256 _borrowAmount = _amount / 4;
+        vm.prank(operator);
+        troveManager.borrow(_troveId, _borrowAmount, type(uint256).max, 0, 0);
+
+        assertGt(troveManager.troves(_troveId).debt, _amount / 2, "E0");
+    }
+
+    function test_borrow_unapprovedOperator_reverts(
+        uint256 _amount,
+        address _caller
+    ) public {
+        _amount = bound(_amount, troveManager.min_debt(), maxFuzzAmount);
+        vm.assume(_caller != userBorrower);
+
+        mintAndDepositIntoLender(userLender, _amount);
+
+        uint256 _collateralNeeded =
+            (_amount * DEFAULT_TARGET_COLLATERAL_RATIO / BORROW_TOKEN_PRECISION) * ORACLE_PRICE_SCALE / priceOracle.get_price();
+        uint256 _troveId = mintAndOpenTrove(userBorrower, _collateralNeeded, _amount, DEFAULT_ANNUAL_INTEREST_RATE);
+
+        vm.prank(_caller);
+        vm.expectRevert("!owner");
+        troveManager.borrow(_troveId, minFuzzAmount, type(uint256).max, 0, 0);
     }
 
 }

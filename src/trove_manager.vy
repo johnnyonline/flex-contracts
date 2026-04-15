@@ -22,15 +22,10 @@ from interfaces import ISortedTroves
 # ============================================================================================
 
 
-event PendingOwnershipTransfer:
-    trove_id: indexed(uint256)
-    old_owner: indexed(address)
-    new_owner: indexed(address)
-
-event OwnershipTransferred:
-    trove_id: indexed(uint256)
-    old_owner: indexed(address)
-    new_owner: indexed(address)
+event Approval:
+    owner: indexed(address)
+    operator: indexed(address)
+    approved: bool
 
 event OpenTrove:
     trove_id: indexed(uint256)
@@ -124,7 +119,6 @@ struct Trove:
     last_debt_update_time: uint64
     last_interest_rate_adj_time: uint64
     owner: address
-    pending_owner: address
     status: Status
 
 
@@ -195,6 +189,9 @@ last_debt_update_time: public(uint256)  # last timestamp when `total_debt` and `
 collateral_balance: public(uint256)  # total collateral tokens currently held by the contract
 troves: public(HashMap[uint256, Trove])  # Trove ID --> Trove info
 
+# Approvals
+approved: public(HashMap[address, HashMap[address, bool]])  # owner --> operator --> approved
+
 
 # ============================================================================================
 # Initialize
@@ -252,15 +249,16 @@ def initialize(params: InitializeParams):
 
 @external
 @view
-def get_upfront_fee(debt_amount: uint256, annual_interest_rate: uint256) -> uint256:
+def get_upfront_fee(debt_amount: uint256, annual_interest_rate: uint256, is_existing_debt: bool = False) -> uint256:
     """
     @notice Get the upfront fee for borrowing a specified amount of debt at a given annual interest rate
     @dev The fee represents prepaid interest over upfront interest period using the system's average rate after the new debt
-    @param debt_amount The amount of debt to be borrowed
+    @param debt_amount The amount of debt to charge the fee on
     @param annual_interest_rate The annual interest rate for the debt
+    @param is_existing_debt True if debt_amount is already part of total_debt (e.g. rate adjustments)
     @return upfront_fee The calculated upfront fee
     """
-    return self._get_upfront_fee(debt_amount, annual_interest_rate)
+    return self._get_upfront_fee(debt_amount, annual_interest_rate, max_value(uint256), is_existing_debt)
 
 
 @external
@@ -289,68 +287,25 @@ def sync_total_debt() -> uint256:
 
 
 # ============================================================================================
-# Ownership
+# Approvals
 # ============================================================================================
 
 
 @external
-def transfer_ownership(trove_id: uint256, new_owner: address):
+def approve(operator: address, approved: bool):
     """
-    @notice Starts the ownership transfer of a Trove to a new owner
-    @dev Only callable by the current `owner`
-    @dev Replaces the pending transfer if there is one
-    @dev New owner must call `accept_ownership` to finalize the transfer
-    @param trove_id Unique identifier of the Trove
-    @param new_owner The address of the new owner
+    @notice Approve or revoke an operator to act on all Troves owned by the caller
+    @param operator The address to approve or revoke
+    @param approved True to approve, False to revoke
     """
-    # Cache Trove info
-    trove: Trove = self.troves[trove_id]
-
-    # Make sure the caller is the owner of the Trove
-    assert trove.owner == msg.sender, "!owner"
-
-    # Set the pending owner
-    trove.pending_owner = new_owner
-
-    # Save changes to storage
-    self.troves[trove_id] = trove
+    # Update approval mapping
+    self.approved[msg.sender][operator] = approved
 
     # Emit event
-    log PendingOwnershipTransfer(
-        trove_id=trove_id,
-        old_owner=msg.sender,
-        new_owner=new_owner
-    )
-
-
-@external
-def accept_ownership(trove_id: uint256):
-    """
-    @notice Accept ownership of a Trove
-    @dev Only callable by the current `pending_owner`
-    @param trove_id Unique identifier of the Trove
-    """
-    # Cache Trove info
-    trove: Trove = self.troves[trove_id]
-
-    # Make sure the caller is the pending owner of the Trove
-    assert trove.pending_owner == msg.sender, "!pending_owner"
-
-    # Cache the old owner for event
-    old_owner: address = trove.owner
-
-    # Set the new owner and clear the pending owner
-    trove.owner = trove.pending_owner
-    trove.pending_owner = empty(address)
-
-    # Save changes to storage
-    self.troves[trove_id] = trove
-
-    # Emit event
-    log OwnershipTransferred(
-        trove_id=trove_id,
-        old_owner=old_owner,
-        new_owner=msg.sender
+    log Approval(
+        owner=msg.sender,
+        operator=operator,
+        approved=approved,
     )
 
 
@@ -370,10 +325,10 @@ def open_trove(
     max_upfront_fee: uint256,
     min_borrow_out: uint256,
     min_collateral_out: uint256,
+    owner: address = msg.sender,
 ) -> uint256:
     """
     @notice Open a new Trove with specified collateral, debt, and interest rate
-    @dev Caller will become the owner of the Trove
     @dev Caller must approve this contract to transfer collateral tokens on its behalf before calling
     @dev Trove debt increases by `debt_amount` plus the upfront fee. Tokens from idle liquidity arrive
          atomically; any shortfall is redeemed from other troves and airdropped on auction settlement.
@@ -387,11 +342,15 @@ def open_trove(
     @param max_upfront_fee Maximum upfront fee the caller is willing to pay
     @param min_borrow_out Minimum borrow tokens received atomically from idle liquidity
     @param min_collateral_out Minimum amount of collateral tokens to be redeemed
+    @param owner The address that will own the Trove. Defaults to msg.sender
     @return trove_id Unique identifier for the new Trove
     """
     # Make sure collateral and debt amounts are non-zero
     assert collateral_amount > 0, "!collateral_amount"
     assert debt_amount > 0, "!debt_amount"
+
+    # Make sure the owner is valid
+    assert owner != empty(address) and owner != self and owner != self.lender, "!owner"
 
     # Make sure the annual interest rate is within bounds
     assert annual_interest_rate >= self.min_annual_interest_rate, "!min_annual_interest_rate"
@@ -430,8 +389,7 @@ def open_trove(
         annual_interest_rate=annual_interest_rate,
         last_debt_update_time=convert(block.timestamp, uint64),
         last_interest_rate_adj_time=convert(block.timestamp, uint64),
-        owner=msg.sender,
-        pending_owner=empty(address),
+        owner=owner,
         status=Status.ACTIVE
     )
 
@@ -463,7 +421,7 @@ def open_trove(
     # Emit event
     log OpenTrove(
         trove_id=trove_id,
-        trove_owner=msg.sender,
+        trove_owner=owner,
         collateral_amount=collateral_amount,
         debt_amount=debt_amount,
         upfront_fee=upfront_fee,
@@ -482,7 +440,7 @@ def open_trove(
 def add_collateral(trove_id: uint256, collateral_amount: uint256):
     """
     @notice Add collateral to an existing Trove
-    @dev Only callable by the Trove owner
+    @dev Only callable by the Trove owner or an approved operator
     @dev Caller must approve this contract to transfer collateral tokens on its behalf before calling
     @param trove_id Unique identifier of the Trove
     @param collateral_amount Amount of collateral tokens to add
@@ -493,8 +451,8 @@ def add_collateral(trove_id: uint256, collateral_amount: uint256):
     # Cache Trove info
     trove: Trove = self.troves[trove_id]
 
-    # Make sure the caller is the owner of the Trove
-    assert trove.owner == msg.sender, "!owner"
+    # Make sure the caller is the owner or an approved operator
+    assert trove.owner == msg.sender or self.approved[trove.owner][msg.sender], "!owner"
 
     # Make sure the Trove is active
     assert trove.status == Status.ACTIVE, "!active"
@@ -511,7 +469,7 @@ def add_collateral(trove_id: uint256, collateral_amount: uint256):
     # Emit event
     log AddCollateral(
         trove_id=trove_id,
-        trove_owner=msg.sender,
+        trove_owner=trove.owner,
         collateral_amount=collateral_amount
     )
 
@@ -520,7 +478,7 @@ def add_collateral(trove_id: uint256, collateral_amount: uint256):
 def remove_collateral(trove_id: uint256, collateral_amount: uint256):
     """
     @notice Remove collateral from an existing Trove
-    @dev Only callable by the Trove owner
+    @dev Only callable by the Trove owner or an approved operator
     @param trove_id Unique identifier of the Trove
     @param collateral_amount Amount of collateral tokens to remove
     """
@@ -530,8 +488,8 @@ def remove_collateral(trove_id: uint256, collateral_amount: uint256):
     # Cache Trove info
     trove: Trove = self.troves[trove_id]
 
-    # Make sure the caller is the owner of the Trove
-    assert trove.owner == msg.sender, "!owner"
+    # Make sure the caller is the owner or an approved operator
+    assert trove.owner == msg.sender or self.approved[trove.owner][msg.sender], "!owner"
 
     # Make sure the Trove is active
     assert trove.status == Status.ACTIVE, "!active"
@@ -566,7 +524,7 @@ def remove_collateral(trove_id: uint256, collateral_amount: uint256):
     # Emit event
     log RemoveCollateral(
         trove_id=trove_id,
-        trove_owner=msg.sender,
+        trove_owner=trove.owner,
         collateral_amount=collateral_amount
     )
 
@@ -581,7 +539,7 @@ def borrow(
 ):
     """
     @notice Borrow more tokens from an existing Trove
-    @dev Only callable by the Trove owner
+    @dev Only callable by the Trove owner or an approved operator
     @dev Trove debt increases by `debt_amount` plus the upfront fee. Tokens from idle liquidity arrive
          atomically; any shortfall is redeemed from other troves and airdropped on auction settlement.
          Total delivered can be less than requested if lender liquidity or redeemable collateral are insufficient
@@ -597,8 +555,8 @@ def borrow(
     # Cache Trove info
     trove: Trove = self.troves[trove_id]
 
-    # Make sure the caller is the owner of the Trove
-    assert trove.owner == msg.sender, "!owner"
+    # Make sure the caller is the owner or an approved operator
+    assert trove.owner == msg.sender or self.approved[trove.owner][msg.sender], "!owner"
 
     # Make sure the Trove is active
     assert trove.status == Status.ACTIVE, "!active"
@@ -653,7 +611,7 @@ def borrow(
     # Emit event
     log Borrow(
         trove_id=trove_id,
-        trove_owner=msg.sender,
+        trove_owner=trove.owner,
         debt_amount=new_debt,
         upfront_fee=upfront_fee
     )
@@ -663,7 +621,7 @@ def borrow(
 def repay(trove_id: uint256, debt_amount: uint256):
     """
     @notice Repay part of the debt of an existing Trove
-    @dev Only callable by the Trove owner
+    @dev Only callable by the Trove owner or an approved operator
     @dev Caller must approve this contract to transfer borrow tokens on its behalf before calling
     @param trove_id Unique identifier of the Trove
     @param debt_amount Amount of debt to repay
@@ -674,8 +632,8 @@ def repay(trove_id: uint256, debt_amount: uint256):
     # Cache Trove info
     trove: Trove = self.troves[trove_id]
 
-    # Make sure the caller is the owner of the Trove
-    assert trove.owner == msg.sender, "!owner"
+    # Make sure the caller is the owner or an approved operator
+    assert trove.owner == msg.sender or self.approved[trove.owner][msg.sender], "!owner"
 
     # Make sure the Trove is active
     assert trove.status == Status.ACTIVE, "!active"
@@ -716,7 +674,7 @@ def repay(trove_id: uint256, debt_amount: uint256):
     # Emit event
     log Repay(
         trove_id=trove_id,
-        trove_owner=msg.sender,
+        trove_owner=trove.owner,
         debt_amount=debt_to_repay
     )
 
@@ -731,7 +689,7 @@ def adjust_interest_rate(
 ):
     """
     @notice Adjust the annual interest rate of an existing Trove
-    @dev Only callable by the Trove owner
+    @dev Only callable by the Trove owner or an approved operator
     @param trove_id Unique identifier of the Trove
     @param new_annual_interest_rate New fixed annual interest rate to pay on the debt
     @param prev_id ID of previous Trove for the new insert position
@@ -745,8 +703,8 @@ def adjust_interest_rate(
     # Cache Trove info
     trove: Trove = self.troves[trove_id]
 
-    # Make sure the caller is the owner of the Trove
-    assert trove.owner == msg.sender, "!owner"
+    # Make sure the caller is the owner or an approved operator
+    assert trove.owner == msg.sender or self.approved[trove.owner][msg.sender], "!owner"
 
     # Make sure the Trove is active
     assert trove.status == Status.ACTIVE, "!active"
@@ -767,7 +725,7 @@ def adjust_interest_rate(
     # Apply upfront fee on premature adjustments and check collateral ratio
     if block.timestamp < convert(trove.last_interest_rate_adj_time, uint256) + self.interest_rate_adj_cooldown:
         # Calculate the upfront fee and make sure the user is ok with it
-        upfront_fee = self._get_upfront_fee(new_debt, new_annual_interest_rate, max_upfront_fee)
+        upfront_fee = self._get_upfront_fee(new_debt, new_annual_interest_rate, max_upfront_fee, True)
 
         # Charge the upfront fee
         new_debt += upfront_fee
@@ -793,6 +751,14 @@ def adjust_interest_rate(
     trove.debt = new_debt
     trove.last_debt_update_time = convert(block.timestamp, uint64)
 
+    # Reinsert the Trove in the sorted list at its new position
+    extcall self.sorted_troves.re_insert(
+        trove_id,
+        new_annual_interest_rate,
+        prev_id,
+        next_id
+    )
+
     # Save changes to storage
     self.troves[trove_id] = trove
 
@@ -804,18 +770,10 @@ def adjust_interest_rate(
         old_debt * old_annual_interest_rate, # weighted_debt_decrease
     )
 
-    # Reinsert the Trove in the sorted list at its new position
-    extcall self.sorted_troves.re_insert(
-        trove_id,
-        new_annual_interest_rate,
-        prev_id,
-        next_id
-    )
-
     # Emit event
     log AdjustInterestRate(
         trove_id=trove_id,
-        trove_owner=msg.sender,
+        trove_owner=trove.owner,
         new_annual_interest_rate=new_annual_interest_rate,
         upfront_fee=upfront_fee
     )
@@ -830,15 +788,15 @@ def adjust_interest_rate(
 def close_trove(trove_id: uint256):
     """
     @notice Close an existing Trove by repaying all its debt and withdrawing all its collateral
-    @dev Only callable by the Trove owner
+    @dev Only callable by the Trove owner or an approved operator
     @dev Caller must approve this contract to transfer borrow tokens on its behalf before calling
     @param trove_id Unique identifier of the Trove
     """
     # Cache Trove info
     trove: Trove = self.troves[trove_id]
 
-    # Make sure the caller is the owner of the Trove
-    assert trove.owner == msg.sender, "!owner"
+    # Make sure the caller is the owner or an approved operator
+    assert trove.owner == msg.sender or self.approved[trove.owner][msg.sender], "!owner"
 
     # Make sure the Trove is active
     assert trove.status == Status.ACTIVE, "!active"
@@ -879,7 +837,7 @@ def close_trove(trove_id: uint256):
     # Emit event
     log CloseTrove(
         trove_id=trove_id,
-        trove_owner=msg.sender,
+        trove_owner=trove.owner,
         collateral_amount=old_trove.collateral,
         debt_amount=trove_debt_after_interest
     )
@@ -889,15 +847,15 @@ def close_trove(trove_id: uint256):
 def close_zombie_trove(trove_id: uint256):
     """
     @notice Close a zombie Trove by repaying all its debt (if it has any) and withdrawing all its collateral
-    @dev Only callable by the Trove owner
+    @dev Only callable by the Trove owner or an approved operator
     @dev If non-zero debt, caller must approve this contract to transfer borrow tokens on its behalf before calling
     @param trove_id Unique identifier of the Trove
     """
     # Cache Trove info
     trove: Trove = self.troves[trove_id]
 
-    # Make sure the caller is the owner of the Trove
-    assert trove.owner == msg.sender, "!owner"
+    # Make sure the caller is the owner or an approved operator
+    assert trove.owner == msg.sender or self.approved[trove.owner][msg.sender], "!owner"
 
     # Make sure the Trove is zombie
     assert trove.status == Status.ZOMBIE, "!zombie"
@@ -943,7 +901,7 @@ def close_zombie_trove(trove_id: uint256):
     # Emit event
     log CloseZombieTrove(
         trove_id=trove_id,
-        trove_owner=msg.sender,
+        trove_owner=trove.owner,
         collateral_amount=old_trove.collateral,
         debt_amount=trove_debt_after_interest
     )
@@ -978,9 +936,6 @@ def liquidate_trove(
     @param data The data to pass to the `receiver` callback. Defaults to empty
     @return The amount of liquidated collateral tokens
     """
-    # Make sure the trove ID is non-zero
-    assert trove_id != 0, "!trove_id"
-
     # Get the collateral price
     collateral_price: uint256 = staticcall self.price_oracle.get_price()
 
@@ -1216,9 +1171,6 @@ def _redeem(
     @param receiver Address to transfer the auction proceeds to
     @return Amount of collateral tokens that were redeemed
     """
-    # Accrue interest on the total debt
-    self._sync_total_debt()
-
     # Get the collateral price
     collateral_price: uint256 = staticcall self.price_oracle.get_price()
 
@@ -1411,22 +1363,24 @@ def _calculate_accrued_interest(weighted_debt: uint256, period: uint256) -> uint
 def _get_upfront_fee(
     debt_amount: uint256,
     annual_interest_rate: uint256,
-    max_upfront_fee: uint256 = max_value(uint256)
+    max_upfront_fee: uint256 = max_value(uint256),
+    is_existing_debt: bool = False,
 ) -> uint256:
     """
     @notice Get the upfront fee for borrowing a specified amount of debt at a given annual interest rate
     @dev Make sure the calculated fee does not exceed `max_upfront_fee`
     @dev The fee represents prepaid interest over upfront interest period using the system's average rate after the new debt
-    @param debt_amount The amount of debt to be borrowed
+    @param debt_amount The amount of debt to charge the fee on
     @param annual_interest_rate The annual interest rate for the debt
     @param max_upfront_fee The maximum upfront fee the caller is willing to pay
+    @param is_existing_debt True if debt_amount is already part of total_debt
     @return upfront_fee The calculated upfront fee
     """
     # Total debt after adding the new debt
-    new_total_debt: uint256 = self.total_debt + debt_amount
+    new_total_debt: uint256 = self.total_debt if is_existing_debt else self.total_debt + debt_amount
 
     # Total weighted debt after adding the new weighted debt
-    new_total_weighted_debt: uint256 = self.total_weighted_debt + (debt_amount * annual_interest_rate)
+    new_total_weighted_debt: uint256 = self.total_weighted_debt if is_existing_debt else self.total_weighted_debt + (debt_amount * annual_interest_rate)
 
     # Calculate the new average interest rate
     avg_interest_rate: uint256 = new_total_weighted_debt // new_total_debt

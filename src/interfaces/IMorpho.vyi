@@ -8,9 +8,8 @@
 
 @external
 def flashLoan(
-    receiver: address,
     token: address,
-    amount: uint256,
+    assets: uint256,
     data: Bytes[10 ** 5],
-) -> bool:
+):
     ...
