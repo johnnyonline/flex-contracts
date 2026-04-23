@@ -68,7 +68,7 @@ contract Deploy is Script {
     // IERC20 public collateralToken = IERC20(0xBF319dDC2Edc1Eb6FDf9910E39b37Be221C8805F); // yvcrvUSD-2
 
     // CREATE2 salt
-    bytes32 public constant SALT = bytes32(uint256(420420));
+    bytes32 public constant SALT = bytes32(uint256(0));
 
     // CREATE2 deployer
     IDeployer public DEPLOYER = IDeployer(0xba5Ed099633D3B313e4D5F7bdc1305d3c28ba5Ed);

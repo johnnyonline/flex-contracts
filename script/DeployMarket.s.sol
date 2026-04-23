@@ -20,9 +20,9 @@ contract DeployMarket is Script {
     address public constant COLLATERAL_TOKEN = address(0x696d02Db93291651ED510704c9b286841d506987); // yvUSD
 
     // Deployed contracts
-    ICatFactory public constant FACTORY = ICatFactory(0x7488CCBe472267398420f62673926343a32A27b7);
-    IDaddy public constant DADDY = IDaddy(0xf190BBA1f5Db12AC0A3EE65ADBf5BFe52Ed2f4A7);
-    IRegistry public constant REGISTRY = IRegistry(0x686725E618742071D52966e90ca4727B506bC5f1);
+    ICatFactory public constant FACTORY = ICatFactory(0x609CbB93c1F02552967A5C457047a13e6b70B6d5);
+    IDaddy public constant DADDY = IDaddy(0x4e8341C77c94cCE982AB96d92BB28D69f4638290);
+    IRegistry public constant REGISTRY = IRegistry(0xA6D5efF88aB2D192db11A32912c346c8c0AFe125);
 
     function run() public {
         uint256 _pk = vm.envUint("DEPLOYER_PRIVATE_KEY");
