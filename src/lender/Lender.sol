@@ -83,6 +83,18 @@ contract Lender is BaseHooks {
     }
 
     // ============================================================================================
+    // Disable health check
+    // ============================================================================================
+
+    /// @notice Bypasses the health check for the next report
+    /// @dev Only callable by the Trove Manager. The Trove Manager calls this immediately before
+    ///      triggering a report after an underwater Trove liquidation, so PPS drops atomically
+    function disableHealthCheck() external {
+        require(msg.sender == address(TROVE_MANAGER), "!trove manager");
+        doHealthCheck = false;
+    }
+
+    // ============================================================================================
     // Internal mutative functions
     // ============================================================================================
 
