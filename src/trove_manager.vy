@@ -839,7 +839,7 @@ def close_trove(trove_id: uint256):
     # Emit event
     log CloseTrove(
         trove_id=trove_id,
-        trove_owner=trove.owner,
+        trove_owner=old_trove.owner,
         collateral_amount=old_trove.collateral,
         debt_amount=trove_debt_after_interest
     )
@@ -903,7 +903,7 @@ def close_zombie_trove(trove_id: uint256):
     # Emit event
     log CloseZombieTrove(
         trove_id=trove_id,
-        trove_owner=trove.owner,
+        trove_owner=old_trove.owner,
         collateral_amount=old_trove.collateral,
         debt_amount=trove_debt_after_interest
     )
