@@ -39,4 +39,10 @@ interface ILender is IBaseHealthCheck {
         uint256 _depositLimit
     ) external;
 
+    // ============================================================================================
+    // Disable health check
+    // ============================================================================================
+
+    function disableHealthCheck() external;
+
 }

@@ -971,6 +971,8 @@ contract LiquidateTests is Base {
         // Cache state before liquidation
         uint256 _troveDebtAfterInterest = troveManager.get_trove_debt_after_interest(_troveId);
         uint256 _lenderBalanceBefore = borrowToken.balanceOf(address(lender));
+        uint256 _totalAssetsBefore = lender.totalAssets();
+        uint256 _ppsBefore = lender.pricePerShare();
 
         // Compute expected debt_to_repay: collateral value / (1 + max_fee)
         uint256 _collateralInBorrow = _trove.collateral * _price / ORACLE_PRICE_SCALE;
@@ -1001,6 +1003,10 @@ contract LiquidateTests is Base {
 
         // Full debt was cleared from total_debt (bad debt socialized — only one trove, so total_debt is 0)
         assertEq(troveManager.total_debt(), 0, "E9");
+
+        // Atomic PPS drop: totalAssets and pricePerShare dropped in the same tx as the liquidation
+        assertLt(lender.totalAssets(), _totalAssetsBefore, "E10");
+        assertLt(lender.pricePerShare(), _ppsBefore, "E11");
     }
 
     // Redeem all collateral from an underwater trove (CR ≈ 90%), then liquidate the 0-collateral zombie
@@ -1037,6 +1043,10 @@ contract LiquidateTests is Base {
         assertApproxEqAbs(_troveAfterRedeem.collateral, 0, COLLATERAL_TOKEN_PRECISION, "E1");
         assertGt(_troveAfterRedeem.debt, 0, "E2");
 
+        // Snapshot PPS/totalAssets before the liquidation
+        uint256 _totalAssetsBefore = lender.totalAssets();
+        uint256 _ppsBefore = lender.pricePerShare();
+
         // Liquidate the zombie trove directly (no callback)
         troveManager.liquidate_trove(_troveId, type(uint256).max, liquidator, "");
 
@@ -1045,6 +1055,58 @@ contract LiquidateTests is Base {
         assertEq(uint256(_troveAfterLiq.status), uint256(ITroveManager.Status.liquidated), "E3");
         assertEq(_troveAfterLiq.debt, 0, "E4");
         assertEq(_troveAfterLiq.collateral, 0, "E5");
+
+        // Atomic PPS drop: remaining debt on the zombie is socialized as a loss on the Lender
+        assertLt(lender.totalAssets(), _totalAssetsBefore, "E6");
+        assertLt(lender.pricePerShare(), _ppsBefore, "E7");
+    }
+
+    // Underwater liquidation must atomically drop the Lender's totalAssets and PPS in the same tx
+    // so depositors/withdrawers can't exit at a stale (inflated) PPS after bad debt is socialized
+    function test_liquidateTrove_underwater_reportsLossAtomically(
+        uint256 _amount
+    ) public {
+        _amount = bound(_amount, troveManager.min_debt(), maxFuzzAmount);
+
+        mintAndDepositIntoLender(userLender, _amount);
+
+        uint256 _collateralNeeded =
+            (_amount * DEFAULT_TARGET_COLLATERAL_RATIO / BORROW_TOKEN_PRECISION) * ORACLE_PRICE_SCALE / priceOracle.get_price();
+        uint256 _troveId = mintAndOpenTrove(userBorrower, _collateralNeeded, _amount, DEFAULT_ANNUAL_INTEREST_RATE);
+        ITroveManager.Trove memory _trove = troveManager.troves(_troveId);
+
+        // Drop price to push CR below 100% (bad debt)
+        uint256 _price = 98 * troveManager.one_pct() * _trove.debt * ORACLE_PRICE_SCALE / (_trove.collateral * BORROW_TOKEN_PRECISION);
+        vm.mockCall(address(priceOracle), abi.encodeWithSelector(IPriceOracleScaled.get_price.selector), abi.encode(_price));
+        vm.mockCall(
+            address(priceOracle),
+            abi.encodeWithSelector(IPriceOracleNotScaled.get_price.selector, false),
+            abi.encode(_price * COLLATERAL_TOKEN_PRECISION * WAD / (ORACLE_PRICE_SCALE * BORROW_TOKEN_PRECISION))
+        );
+
+        // Snapshot totalAssets and PPS before liquidation
+        uint256 _totalAssetsBefore = lender.totalAssets();
+        uint256 _ppsBefore = lender.pricePerShare();
+
+        // Liquidate the underwater trove
+        liquidate(_troveId);
+
+        // totalAssets and PPS must drop in the same tx as the liquidation
+        assertLt(lender.totalAssets(), _totalAssetsBefore, "E0");
+        assertLt(lender.pricePerShare(), _ppsBefore, "E1");
+
+        // Health check is auto-re-enabled after the report (BaseHealthCheck behavior)
+        assertTrue(lender.doHealthCheck(), "E2");
+    }
+
+    // Only the Trove Manager can disable the health check on the Lender
+    function test_disableHealthCheck_onlyTroveManager_reverts(
+        address _caller
+    ) public {
+        vm.assume(_caller != address(troveManager));
+        vm.prank(_caller);
+        vm.expectRevert("!trove manager");
+        lender.disableHealthCheck();
     }
 
 }

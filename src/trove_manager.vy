@@ -12,6 +12,8 @@ from ethereum.ercs import IERC20Detailed
 
 from snekmate.utils import math
 
+from interfaces import IKeeper
+from interfaces import ILender
 from interfaces import ITaker
 from interfaces import IDutchDesk
 from interfaces import IPriceOracle
@@ -1024,7 +1026,8 @@ def liquidate_trove(
     # If so, force full liquidation: the liquidator pays the collateral value minus
     # the liquidation fee (keeping the fee as profit), gets all the collateral,
     # and the entire debt is cleared from the system
-    if collateral_with_fee > trove.collateral:
+    is_underwater: bool = collateral_with_fee > trove.collateral
+    if is_underwater:
         is_full_liquidation = True
         debt_to_repay = trove_collateral_in_borrow * borrow_token_precision // (borrow_token_precision + liquidation_fee_pct)
 
@@ -1119,6 +1122,13 @@ def liquidate_trove(
 
     # Pull the borrow tokens from caller and transfer them to the Lender contract
     assert extcall self.borrow_token.transferFrom(msg.sender, self.lender, debt_to_repay, default_return_value=True)
+
+    # In a bad debt scenario, trigger a report so the Lender's PPS reflects the loss atomically
+    if is_underwater:
+        lender: ILender = ILender(self.lender)
+        keeper: IKeeper = IKeeper(staticcall lender.keeper())
+        extcall lender.disableHealthCheck()
+        extcall keeper.report(lender.address)
 
     # Emit event
     log LiquidateTrove(
