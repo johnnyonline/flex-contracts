@@ -70,6 +70,12 @@ contract CloseTroveTests is Base {
         assertEq(borrowToken.balanceOf(address(dutchDesk)), 0, "E22");
         assertEq(collateralToken.balanceOf(address(dutchDesk)), 0, "E23");
 
+        // Skip time so we dont revert on same block close
+        skip(1);
+
+        // Factor in the skip time
+        _expectedDebt = troveManager.get_trove_debt_after_interest(_troveId);
+
         // Airdrop the the expected debt to the borrower
         airdrop(address(borrowToken), userBorrower, _expectedDebt);
 
@@ -107,7 +113,7 @@ contract CloseTroveTests is Base {
         assertEq(borrowToken.balanceOf(userBorrower), 0, "E41");
 
         // Check global info
-        assertEq(troveManager.total_debt(), 0, "E42");
+        assertApproxEqAbs(troveManager.total_debt(), 0, 1, "E42");
         assertEq(troveManager.total_weighted_debt(), 0, "E43");
         assertEq(troveManager.collateral_balance(), 0, "E44");
         assertEq(troveManager.zombie_trove_id(), 0, "E45");
@@ -187,6 +193,9 @@ contract CloseTroveTests is Base {
         vm.prank(userBorrower);
         troveManager.approve(operator, true);
 
+        // Skip time so we dont revert on same block close
+        skip(1);
+
         // Airdrop borrow tokens to operator to repay
         uint256 _debt = troveManager.get_trove_debt_after_interest(_troveId);
         airdrop(address(borrowToken), operator, _debt);
@@ -216,6 +225,71 @@ contract CloseTroveTests is Base {
         vm.prank(_caller);
         vm.expectRevert("!owner");
         troveManager.close_trove(_troveId);
+    }
+
+    // Open and close in the same block should revert
+    function test_closeTrove_sameBlockAsOpen_reverts(
+        uint256 _amount
+    ) public {
+        _amount = bound(_amount, troveManager.min_debt(), maxFuzzAmount);
+
+        mintAndDepositIntoLender(userLender, _amount);
+
+        uint256 _collateralNeeded =
+            (_amount * DEFAULT_TARGET_COLLATERAL_RATIO / BORROW_TOKEN_PRECISION) * ORACLE_PRICE_SCALE / priceOracle.get_price();
+        uint256 _troveId = mintAndOpenTrove(userBorrower, _collateralNeeded, _amount, DEFAULT_ANNUAL_INTEREST_RATE);
+
+        // Closing in the same block as the open should revert
+        vm.prank(userBorrower);
+        vm.expectRevert("same block");
+        troveManager.close_trove(_troveId);
+
+        // Advancing one second is enough to make `last_interest_rate_adj_time != block.timestamp`
+        skip(1);
+
+        // Airdrop the debt to the borrower so the close attempt isn't blocked by approvals
+        uint256 _debt = troveManager.get_trove_debt_after_interest(_troveId);
+        airdrop(address(borrowToken), userBorrower, _debt);
+
+        // Now the close should succeed
+        vm.startPrank(userBorrower);
+        borrowToken.approve(address(troveManager), _debt);
+        troveManager.close_trove(_troveId);
+        vm.stopPrank();
+
+        assertEq(uint256(troveManager.troves(_troveId).status), uint256(ITroveManager.Status.closed), "E0");
+    }
+
+    // Adjusting the rate and closing in the same block should revert
+    function test_closeTrove_sameBlockAsAdjustRate_reverts(
+        uint256 _amount
+    ) public {
+        _amount = bound(_amount, troveManager.min_debt(), maxFuzzAmount);
+
+        mintAndDepositIntoLender(userLender, _amount);
+
+        uint256 _collateralNeeded =
+            (_amount * DEFAULT_TARGET_COLLATERAL_RATIO / BORROW_TOKEN_PRECISION) * ORACLE_PRICE_SCALE / priceOracle.get_price();
+        uint256 _troveId = mintAndOpenTrove(userBorrower, _collateralNeeded, _amount, DEFAULT_ANNUAL_INTEREST_RATE);
+
+        // Move past the cooldown so we can adjust the rate without paying an upfront fee
+        skip(troveManager.interest_rate_adj_cooldown());
+
+        // Adjusting the rate refreshes `last_interest_rate_adj_time` to `block.timestamp`
+        uint256 _newRate = DEFAULT_ANNUAL_INTEREST_RATE * 2;
+        vm.prank(userBorrower);
+        troveManager.adjust_interest_rate(_troveId, _newRate, 0, 0, 0);
+
+        // Airdrop the debt to the borrower so the close attempt isn't blocked by approvals
+        uint256 _debt = troveManager.get_trove_debt_after_interest(_troveId);
+        airdrop(address(borrowToken), userBorrower, _debt);
+
+        // Closing in the same block as the rate adjustment should revert
+        vm.startPrank(userBorrower);
+        borrowToken.approve(address(troveManager), _debt);
+        vm.expectRevert("same block");
+        troveManager.close_trove(_troveId);
+        vm.stopPrank();
     }
 
 }

@@ -102,6 +102,9 @@ contract SortedTrovesTests is Base {
 
         assertEq(sortedTroves.size(), 10, "E0");
 
+        // Skip time so we dont revert on same block close
+        skip(1);
+
         // Remove troves one by one
         for (uint256 i = 0; i < 10; i++) {
             uint256 _troveId = _troveIds[i];
@@ -110,7 +113,7 @@ contract SortedTrovesTests is Base {
 
             // Close the trove (which removes it from sorted list)
             address _owner = address(uint160(i + 1));
-            uint256 _debtToRepay = troveManager.troves(_troveId).debt;
+            uint256 _debtToRepay = troveManager.get_trove_debt_after_interest(_troveId);
             airdrop(address(borrowToken), _owner, _debtToRepay);
             vm.startPrank(_owner);
             borrowToken.approve(address(troveManager), _debtToRepay);

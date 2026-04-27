@@ -210,6 +210,9 @@ contract LeverageZapperTests is Base {
         // Flash loan borrow token to cover the debt (with slippage buffer for collateral swap)
         uint256 closeFlashLoanAmount = troveDebt * BPS / (BPS - 2 * SLIPPAGE_BPS);
 
+        // Skip time so we dont revert on same block close
+        skip(1);
+
         // Approve zapper to operate on behalf of the borrower
         vm.prank(userBorrower);
         troveManager.approve(address(leverageZapper), true);
@@ -616,6 +619,9 @@ contract LeverageZapperTests is Base {
         troveManager.approve(operator, true);
         troveManager.approve(address(leverageZapper), true);
         vm.stopPrank();
+
+        // Skip time so we dont revert on same block close
+        skip(1);
 
         // Operator closes the trove on behalf of the owner
         vm.prank(operator);

@@ -90,6 +90,9 @@ contract LaggingOracleValueExtractionPOC is Base {
         deal(address(collateralToken), userBorrower, collateralToken.balanceOf(userBorrower) - _auctionCollateral);
         airdrop(address(borrowToken), userBorrower, _auctionCollateralMarketValue, true); // add to balance
 
+        // Skip time so we dont revert on same block close
+        skip(1);
+
         // Attacker closes their trove using proceeds from selling auction collateral
         uint256 _attackerDebt = troveManager.get_trove_debt_after_interest(_attackerTroveId);
 
