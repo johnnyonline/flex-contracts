@@ -25,7 +25,7 @@ contract TroveManagerTests is Base {
         assertEq(troveManager.max_liquidation_fee(), maxLiquidationFee * BORROW_TOKEN_PRECISION / 100 / 100, "E12");
         assertEq(troveManager.upfront_interest_period(), upfrontInterestPeriod, "E13");
         assertEq(troveManager.interest_rate_adj_cooldown(), interestRateAdjCooldown, "E14");
-        assertEq(troveManager.min_annual_interest_rate(), BORROW_TOKEN_PRECISION / 100 / 2, "E15"); // 0.5%
+        assertEq(troveManager.min_annual_interest_rate(), BORROW_TOKEN_PRECISION / 100 / 10, "E15"); // 0.1%
         assertEq(troveManager.max_annual_interest_rate(), 250 * BORROW_TOKEN_PRECISION / 100, "E16"); // 250%
         assertEq(troveManager.zombie_trove_id(), 0, "E17");
         assertEq(troveManager.total_debt(), 0, "E18");

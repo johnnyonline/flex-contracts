@@ -541,7 +541,7 @@ contract AdjustRateTests is Base {
                 * 998 / 1000;
 
         // Open a trove at max rate so the upfront fee on premature adjustment is large
-        uint256 _rate = troveManager.min_annual_interest_rate() * 20;
+        uint256 _rate = troveManager.min_annual_interest_rate() * 100;
         uint256 _troveId = mintAndOpenTrove(userBorrower, _collateralNeeded, _maxBorrowableAtMCR, _rate);
 
         // Adjust to a different rate to trigger the premature adjustment fee

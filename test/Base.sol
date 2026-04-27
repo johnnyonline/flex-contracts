@@ -132,7 +132,7 @@ abstract contract Base is Deploy, Test {
         // Set up "constants" for tests
         BORROW_TOKEN_PRECISION = 10 ** IERC20Metadata(address(borrowToken)).decimals();
         COLLATERAL_TOKEN_PRECISION = 10 ** IERC20Metadata(address(collateralToken)).decimals();
-        DEFAULT_ANNUAL_INTEREST_RATE = troveManager.min_annual_interest_rate() * 2; // 1%
+        DEFAULT_ANNUAL_INTEREST_RATE = troveManager.min_annual_interest_rate() * 10; // 1%
         DEFAULT_TARGET_COLLATERAL_RATIO = troveManager.minimum_collateral_ratio() * 110 / 100; // 10% above MCR
 
         // Make sure Lender's deposit limit does not interfere with tests

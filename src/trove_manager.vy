@@ -237,7 +237,7 @@ def initialize(params: InitializeParams):
     self.max_liquidation_fee = params.max_liquidation_fee * one_hundredth_pct
     self.upfront_interest_period = params.upfront_interest_period
     self.interest_rate_adj_cooldown = params.interest_rate_adj_cooldown
-    self.min_annual_interest_rate = one_pct // 2  # 0.5%
+    self.min_annual_interest_rate = one_pct // 10  # 0.1%
     self.max_annual_interest_rate = 250 * one_pct  # 250%
 
     # Max approve the collateral token to the dutch desk
