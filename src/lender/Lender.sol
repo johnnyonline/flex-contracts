@@ -124,7 +124,7 @@ contract Lender is BaseHooks {
     }
 
     /// @inheritdoc BaseStrategy
-    function _harvestAndReport() internal override returns (uint256 /*_totalAssets*/) {
+    function _harvestAndReport() internal override returns (uint256) {
         // Total assets is whatever idle asset we have + the latest total debt figure from the Trove Manager
         return asset.balanceOf(address(this)) + TROVE_MANAGER.sync_total_debt();
     }
