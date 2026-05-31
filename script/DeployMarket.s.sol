@@ -17,7 +17,7 @@ contract DeployMarket is Script {
 
     // Parameters
     address public constant BORROW_TOKEN = address(0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48); // USDC
-    address public constant COLLATERAL_TOKEN = address(0x696d02Db93291651ED510704c9b286841d506987); // yvUSD
+    address public constant COLLATERAL_TOKEN = address(0xcf62F905562626CfcDD2261162a51fd02Fc9c5b6); // sfrxUSD
 
     // Deployed contracts
     ICatFactory public constant FACTORY = ICatFactory(0xe2c4a5C2AB1ed5745D206B33cc0abf0A5D34753d);
@@ -33,7 +33,7 @@ contract DeployMarket is Script {
         vm.startBroadcast(_pk);
 
         // Deploy price oracle
-        address _priceOracle = deployCode("yvusd_to_usdc_oracle");
+        address _priceOracle = deployCode("sfrxusd_to_usdc_oracle");
 
         // Deploy market
         (address _troveManager, address _sortedTroves, address _dutchDesk, address _auction, address _lender) = FACTORY.deploy(
