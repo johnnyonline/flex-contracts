@@ -13,6 +13,7 @@ contract PriceOracleTests is Base {
         uint256 _price = priceOracle.get_price(false);
         console2.log("_price:", _price);
         assertGt(_price, 0);
+        console2.log("_price (scaled):", priceOracle.get_price(true));
     }
 
 }

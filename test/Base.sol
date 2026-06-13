@@ -74,7 +74,7 @@ abstract contract Base is Deploy, Test {
             vm.selectFork(vm.createFork(vm.envString("ETH_RPC_URL")));
         } else {
             // uint256 _blockNumber = 24_449_313; // cache state for faster tests
-            uint256 _blockNumber = 24_541_660; // cache state for faster tests
+            uint256 _blockNumber = 25310966; // cache state for faster tests
             vm.selectFork(vm.createFork(vm.envString("ETH_RPC_URL"), _blockNumber));
         }
 
@@ -82,7 +82,7 @@ abstract contract Base is Deploy, Test {
         run();
 
         // Deploy price oracle
-        priceOracle = IPriceOracle(deployCode("yvweth2_to_usdc_oracle"));
+        priceOracle = IPriceOracle(deployCode("siusd_to_usdc_oracle"));
 
         // Deploy market
         (address _troveManager, address _sortedTroves, address _dutchDesk, address _auction, address _lender) = catFactory.deploy(

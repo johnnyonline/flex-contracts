@@ -17,7 +17,7 @@ contract DeployMarket is Script {
 
     // Parameters
     address public constant BORROW_TOKEN = address(0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48); // USDC
-    address public constant COLLATERAL_TOKEN = address(0x696d02Db93291651ED510704c9b286841d506987); // yvUSD
+    address public constant COLLATERAL_TOKEN = address(0xDBDC1Ef57537E34680B898E1FEBD3D68c7389bCB); // siUSD
 
     // Deployed contracts
     ICatFactory public constant FACTORY = ICatFactory(0xe2c4a5C2AB1ed5745D206B33cc0abf0A5D34753d);
@@ -33,7 +33,7 @@ contract DeployMarket is Script {
         vm.startBroadcast(_pk);
 
         // Deploy price oracle
-        address _priceOracle = deployCode("yvusd_to_usdc_oracle");
+        address _priceOracle = deployCode("siusd_to_usdc_oracle");
 
         // Deploy market
         (address _troveManager, address _sortedTroves, address _dutchDesk, address _auction, address _lender) = FACTORY.deploy(
@@ -59,11 +59,11 @@ contract DeployMarket is Script {
             })
         );
 
-        // Accept Lender management
-        DADDY.execute(address(_lender), abi.encodeWithSelector(ITokenizedStrategy.acceptManagement.selector), 0, true);
+        // // Accept Lender management
+        // DADDY.execute(address(_lender), abi.encodeWithSelector(ITokenizedStrategy.acceptManagement.selector), 0, true);
 
-        // Endorse market
-        DADDY.execute(address(REGISTRY), abi.encodeWithSelector(IRegistry.endorse.selector, _troveManager), 0, true);
+        // // Endorse market
+        // DADDY.execute(address(REGISTRY), abi.encodeWithSelector(IRegistry.endorse.selector, _troveManager), 0, true);
 
         console2.log("---------------------------------");
         console2.log("Trove Manager: ", _troveManager);
