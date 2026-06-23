@@ -241,9 +241,14 @@ def open_leveraged_trove(data: OpenLeveragedData) -> uint256:
     # self._validate_params(data.trove_manager, data.collateral_swap.router, data.debt_swap.router, data.auction_taker)
     self._validate_params(data.trove_manager, data.collateral_swap.router, data.debt_swap.router, data.auction_taker, data.taker_swap.router)
     assert data.taker_funding <= data.flash_loan_amount, "!taker_funding"
-    # NG: funding is forwarded in flash_loan_token but the taker pays the auction in borrow_token, so they must match when funding is used
+    # NG: funding is forwarded in flash_loan_token; the taker can only use it to pay the auction (whose
+    # buy_token is the borrow token) if it is the borrow token (paid directly) or the collateral token
+    # (swapped together with the redeemed collateral). Any other flash token can't fund the take.
     if data.taker_funding > 0:
-        assert data.flash_loan_token == staticcall ITroveManager(data.trove_manager).borrow_token(), "!flash_loan_token"
+        assert (
+            data.flash_loan_token == staticcall ITroveManager(data.trove_manager).borrow_token()
+            or data.flash_loan_token == staticcall ITroveManager(data.trove_manager).collateral_token()
+        ), "!flash_loan_token"
     # NG end
 
     # Pull collateral from the caller
@@ -342,9 +347,14 @@ def lever_up_trove(data: LeverUpData):
     # self._validate_params(data.trove_manager, data.collateral_swap.router, data.debt_swap.router, data.auction_taker)
     self._validate_params(data.trove_manager, data.collateral_swap.router, data.debt_swap.router, data.auction_taker, data.taker_swap.router)
     assert data.taker_funding <= data.flash_loan_amount, "!taker_funding"
-    # NG: funding is forwarded in flash_loan_token but the taker pays the auction in borrow_token, so they must match when funding is used
+    # NG: funding is forwarded in flash_loan_token; the taker can only use it to pay the auction (whose
+    # buy_token is the borrow token) if it is the borrow token (paid directly) or the collateral token
+    # (swapped together with the redeemed collateral). Any other flash token can't fund the take.
     if data.taker_funding > 0:
-        assert data.flash_loan_token == staticcall ITroveManager(data.trove_manager).borrow_token(), "!flash_loan_token"
+        assert (
+            data.flash_loan_token == staticcall ITroveManager(data.trove_manager).borrow_token()
+            or data.flash_loan_token == staticcall ITroveManager(data.trove_manager).collateral_token()
+        ), "!flash_loan_token"
     # NG end
 
     # Cache the Trove Manager instance
@@ -499,6 +509,12 @@ def _handle_open(flash_loan_amount: uint256, data: Bytes[_MAX_FLASHLOAN_CALLBACK
     # Get the available collateral
     available_collateral: uint256 = staticcall IERC20(collateral_token).balanceOf(self)
 
+    # NG: when flashing the collateral token, hold the taker funding (same token) back from the deposit
+    # so it can be forwarded to the taker; otherwise it would all be deposited into the trove
+    if params.flash_loan_token == collateral_token:
+        available_collateral -= params.taker_funding
+    # NG end
+
     # Approve spending of the collateral by the Trove Manager
     assert extcall IERC20(collateral_token).approve(params.trove_manager, available_collateral, default_return_value=True)
 
@@ -613,6 +629,12 @@ def _handle_lever_up(flash_loan_amount: uint256, data: Bytes[_MAX_FLASHLOAN_CALL
 
     # Get the available collateral
     available_collateral: uint256 = staticcall IERC20(collateral_token).balanceOf(self)
+
+    # NG: when flashing the collateral token, hold the taker funding (same token) back from the deposit
+    # so it can be forwarded to the taker; otherwise it would all be deposited into the trove
+    if params.flash_loan_token == collateral_token:
+        available_collateral -= params.taker_funding
+    # NG end
 
     # Approve spending of the collateral by the Trove Manager
     assert extcall IERC20(collateral_token).approve(params.trove_manager, available_collateral, default_return_value=True)

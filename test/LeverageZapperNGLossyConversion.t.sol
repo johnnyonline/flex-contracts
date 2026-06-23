@@ -21,11 +21,11 @@ import "forge-std/Test.sol";
 contract LeverageZapperNGLossyConversionTests is Test {
 
     // Tokens
-    IERC20 public borrowToken = IERC20(0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48); // USDC
-    IERC20 public collateralToken = IERC20(0xb45ad160634c528Cc3D2926d9807104FA3157305); // sDOLA
+    IERC20 public borrowToken = IERC20(0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2); // WETH
+    IERC20 public collateralToken = IERC20(0x7f39C581F595B53c5cb19bD0b3f8dA6c935E2Ca0); // wstETH
 
-    // Morpho oracle for the collateral/borrow pair
-    address public constant MORPHO_ORACLE = 0xE661712f6bf8b7E444484DB428f495D7D4ecE3A3;
+    // Morpho oracle for the collateral/borrow pair (wstETH/WETH)
+    address public constant MORPHO_ORACLE = 0xbD60A6770b27E084E8617335ddE769241B0e71D8;
 
     // Prod core (already deployed at the fork block)
     ICatFactory public constant CAT_FACTORY = ICatFactory(0xe2c4a5C2AB1ed5745D206B33cc0abf0A5D34753d);
@@ -34,7 +34,7 @@ contract LeverageZapperNGLossyConversionTests is Test {
 
     uint256 public constant BPS = 10_000;
     uint256 public constant ORACLE_PRICE_SCALE = 1e36;
-    uint256 public constant SLIPPAGE_BPS = 15; // ~ real sDOLA->USDC impact (Enso: ~10-15bps); keeps buffers tight
+    uint256 public constant SLIPPAGE_BPS = 15; // simulated lossy collateral<->borrow swap via MockRouter (wstETH/WETH is ~1:1 in reality)
     uint256 public constant MINIMUM_COLLATERAL_RATIO = 110; // 110%
 
     // Contracts
@@ -82,7 +82,7 @@ contract LeverageZapperNGLossyConversionTests is Test {
                 borrow_token: address(borrowToken),
                 collateral_token: address(collateralToken),
                 price_oracle: address(priceOracle),
-                minimum_debt: 500,
+                minimum_debt: 1,
                 safe_collateral_ratio: 120,
                 minimum_collateral_ratio: MINIMUM_COLLATERAL_RATIO,
                 max_penalty_collateral_ratio: 105,
@@ -126,12 +126,12 @@ contract LeverageZapperNGLossyConversionTests is Test {
         BORROW_TOKEN_PRECISION = 10 ** IERC20Metadata(address(borrowToken)).decimals();
         COLLATERAL_TOKEN_PRECISION = 10 ** IERC20Metadata(address(collateralToken)).decimals();
         MIN_RATE = troveManager.min_annual_interest_rate();
-        LENDER_FUNDS = 5_000_000 * BORROW_TOKEN_PRECISION;
+        LENDER_FUNDS = 10_000 * BORROW_TOKEN_PRECISION;
         DUST = BORROW_TOKEN_PRECISION / 100; // 0.01 borrow token
 
         // Set fuzz bounds (base collateral kept above min_debt; leverage capped below the MCR limit)
         minCollateralFuzzAmount = _collateralForDebt(troveManager.min_debt()) * 10;
-        maxCollateralFuzzAmount = 50_000 * COLLATERAL_TOKEN_PRECISION;
+        maxCollateralFuzzAmount = 100 * COLLATERAL_TOKEN_PRECISION;
         maxLeverage = (MINIMUM_COLLATERAL_RATIO / (MINIMUM_COLLATERAL_RATIO - 100)) * 70 / 100;
     }
 
@@ -298,6 +298,61 @@ contract LeverageZapperNGLossyConversionTests is Test {
                 })
             })
         );
+    }
+
+    function test_openLeveragedTrove_noIdle_flashCollateral(
+        uint256 _userCollateral,
+        uint256 _leverage
+    ) public {
+        _userCollateral = bound(_userCollateral, minCollateralFuzzAmount, maxCollateralFuzzAmount);
+        _leverage = bound(_leverage, 2, maxLeverage);
+
+        // Fund the lender (borrow token), then drain all idle with a big low-rate trove (the redemption target)
+        _mintAndDepositIntoLender(userLender, LENDER_FUNDS);
+        _drainIdle(MIN_RATE);
+
+        // Flash the COLLATERAL token directly (Morpho holds wstETH) so there is NO acquisition swap.
+        // Over-borrow to cover the redemption-recovery + repayment swaps, and fund the taker in collateral
+        // (carved from the flash); the taker swaps the redeemed + funding collateral to pay the auction.
+        uint256 additionalCollateral = _userCollateral * (_leverage - 1);
+        uint256 baseDebt = _collateralValue(additionalCollateral);
+        uint256 debtAmount = baseDebt * BPS / (BPS - 100) + DUST;
+        uint256 takerFunding = additionalCollateral * 100 / BPS; // collateral (== flash token)
+
+        _airdrop(address(collateralToken), userBorrower, _userCollateral);
+        vm.prank(userBorrower);
+        collateralToken.approve(address(zapper), _userCollateral);
+
+        vm.prank(userBorrower);
+        uint256 troveId = zapper.open_leveraged_trove(
+            ILeverageZapperNG.OpenLeveragedData({
+                owner: userBorrower,
+                trove_manager: address(troveManager),
+                flash_loan_token: address(collateralToken), // flash the collateral, not the borrow token
+                auction_taker: auctionTaker,
+                owner_index: ++_ownerIndex,
+                flash_loan_amount: additionalCollateral + takerFunding,
+                collateral_amount: _userCollateral,
+                debt_amount: debtAmount,
+                prev_id: 0,
+                next_id: 0,
+                annual_interest_rate: MIN_RATE * 20,
+                max_upfront_fee: type(uint256).max,
+                min_borrow_out: 0,
+                min_collateral_out: 0,
+                collateral_swap: ILeverageZapperNG.SwapData({router: address(0), data: ""}), // no acquisition swap
+                debt_swap: ILeverageZapperNG.SwapData({router: address(mockRouter), data: abi.encode(address(borrowToken), address(collateralToken))}), // borrow -> collateral to repay the flash
+                taker_funding: takerFunding,
+                taker_swap: ILeverageZapperNG.SwapData({router: address(mockRouter), data: abi.encode(address(collateralToken), address(borrowToken))})
+            })
+        );
+
+        // Verify trove opened at the target leverage (collateral flashed directly => no acquisition slippage)
+        ITroveManager.Trove memory trove = troveManager.troves(troveId);
+        assertEq(trove.owner, userBorrower, "E0");
+        assertEq(uint256(trove.status), uint256(ITroveManager.Status.active), "E1");
+        assertApproxEqRel(trove.collateral, _userCollateral * _leverage, 1e15, "E2"); // ~exact, no acquisition slippage
+        _assertNoLeftovers();
     }
 
     // ============================================================================================

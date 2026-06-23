@@ -92,7 +92,7 @@ def takeAuction(auction: address, auction_id: uint256, swap_router: address, swa
     buy_token: address = staticcall IAuction(auction).buy_token()
     sell_token: address = staticcall IAuction(auction).sell_token()
 
-    # Set the transient guard so only this auction can invoke our callback
+    # Only this auction may invoke takeCallback - stops the swap router reentering it to drain funding
     self._active_auction = auction
 
     # Take the full auction amount with callback
