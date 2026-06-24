@@ -1,33 +1,21 @@
 # @version 0.4.3
 
 """
-@title Leverage Zapper
+@title Leverage Zapper NG
 @license GNU AGPLv3
 @author Flex
 @notice Enables leveraged positions using Morpho flash loans and DEX aggregator swaps
 @dev The Morpho contract address is hardcoded to the Ethereum mainnet deployment
+@dev Differs from leverage_zapper.vy: open/lever_up add `taker_funding` + `taker_swap` to settle a
+     redemption-kicked auction atomically on lossy collateral<-->borrow markets
 """
-
-# NG: ----------------------------------------------------------------------------------------
-# NG: Next-gen fork of leverage_zapper.vy. Every delta vs the original is wrapped in
-# NG: `# NG:` / `# NG end` markers, with the original lines left commented out directly above.
-# NG: Summary: open/lever_up gain `taker_funding` (USDC forwarded to the auction
-# NG: taker) and `taker_swap` (collateral->borrow swap calldata the taker runs in-callback), so
-# NG: redemption auctions settle atomically on lossy collateral<->borrow markets (e.g. sfrxUSD/USDC).
-# NG: With taker_funding=0 + empty taker_swap, behaviour matches the original. close/lever_down untouched.
-# NG: Taker funding requires flash_loan_token == borrow_token (asserted): funding is sent in flash_loan_token
-# NG: but the taker pays the auction in borrow_token. flash!=borrow still works without funding (debt_swap).
-# NG: ----------------------------------------------------------------------------------------
 
 from ethereum.ercs import IERC20
 
 from ..interfaces import IMorpho
 from ..interfaces import IRegistry
 from ..interfaces import ISwapExecutor
-# NG: swap the auction-taker interface for the NG one (takeAuction now carries the swap)
-# from ..interfaces import IZapperAuctionTaker
 from ..interfaces import IZapperAuctionTakerNG
-# NG end
 from ..interfaces import IDutchDesk
 from ..interfaces import ITroveManager
 
@@ -74,6 +62,7 @@ struct OpenLeveragedData:
     auction_taker: address
     owner_index: uint256
     flash_loan_amount: uint256
+    taker_funding: uint256
     collateral_amount: uint256
     debt_amount: uint256
     prev_id: uint256
@@ -84,10 +73,7 @@ struct OpenLeveragedData:
     min_collateral_out: uint256
     collateral_swap: SwapData
     debt_swap: SwapData
-    # NG: USDC funding forwarded to the taker + the collateral->borrow swap it runs in-callback
-    taker_funding: uint256
     taker_swap: SwapData
-    # NG end
 
 
 struct CloseLeveragedData:
@@ -105,6 +91,7 @@ struct LeverUpData:
     auction_taker: address
     trove_id: uint256
     flash_loan_amount: uint256
+    taker_funding: uint256
     collateral_amount: uint256
     debt_amount: uint256
     max_upfront_fee: uint256
@@ -112,10 +99,7 @@ struct LeverUpData:
     min_collateral_out: uint256
     collateral_swap: SwapData
     debt_swap: SwapData
-    # NG: USDC funding forwarded to the taker + the collateral->borrow swap it runs in-callback
-    taker_funding: uint256
     taker_swap: SwapData
-    # NG end
 
 
 struct LeverDownData:
@@ -237,19 +221,17 @@ def open_leveraged_trove(data: OpenLeveragedData) -> uint256:
     @return The Trove ID
     """
     # Validate input parameters
-    # NG: also pass+validate the taker swap router, and bound the taker funding by the flash loan
-    # self._validate_params(data.trove_manager, data.collateral_swap.router, data.debt_swap.router, data.auction_taker)
-    self._validate_params(data.trove_manager, data.collateral_swap.router, data.debt_swap.router, data.auction_taker, data.taker_swap.router)
+    self._validate_params(data.trove_manager, data.collateral_swap.router, data.debt_swap.router, data.taker_swap.router, data.auction_taker)
+
+    # Make sure the taker funding is not more than the flash loan amount
     assert data.taker_funding <= data.flash_loan_amount, "!taker_funding"
-    # NG: funding is forwarded in flash_loan_token; the taker can only use it to pay the auction (whose
-    # buy_token is the borrow token) if it is the borrow token (paid directly) or the collateral token
-    # (swapped together with the redeemed collateral). Any other flash token can't fund the take.
+
+    # If funding the taker, make sure the flash loan token is the borrow or collateral token
     if data.taker_funding > 0:
         assert (
             data.flash_loan_token == staticcall ITroveManager(data.trove_manager).borrow_token()
             or data.flash_loan_token == staticcall ITroveManager(data.trove_manager).collateral_token()
         ), "!flash_loan_token"
-    # NG end
 
     # Pull collateral from the caller
     collateral_token: address = staticcall ITroveManager(data.trove_manager).collateral_token()
@@ -268,10 +250,9 @@ def open_leveraged_trove(data: OpenLeveragedData) -> uint256:
     # Sweep any remaining flash loan tokens to caller
     self._sweep(data.flash_loan_token, msg.sender)
 
-    # NG: also sweep any unswapped collateral the taker returned (partial-fill remainder) to the caller
+    # If not the flash loan token, sweep any remaining collateral tokens to caller
     if collateral_token != data.flash_loan_token:
         self._sweep(collateral_token, msg.sender)
-    # NG end
 
     # Return the Trove ID
     return trove_id
@@ -343,19 +324,17 @@ def lever_up_trove(data: LeverUpData):
     @param data The lever up parameters
     """
     # Validate input parameters
-    # NG: also pass+validate the taker swap router, and bound the taker funding by the flash loan
-    # self._validate_params(data.trove_manager, data.collateral_swap.router, data.debt_swap.router, data.auction_taker)
-    self._validate_params(data.trove_manager, data.collateral_swap.router, data.debt_swap.router, data.auction_taker, data.taker_swap.router)
+    self._validate_params(data.trove_manager, data.collateral_swap.router, data.debt_swap.router, data.taker_swap.router, data.auction_taker)
+
+    # Make sure the taker funding is not more than the flash loan amount
     assert data.taker_funding <= data.flash_loan_amount, "!taker_funding"
-    # NG: funding is forwarded in flash_loan_token; the taker can only use it to pay the auction (whose
-    # buy_token is the borrow token) if it is the borrow token (paid directly) or the collateral token
-    # (swapped together with the redeemed collateral). Any other flash token can't fund the take.
+
+    # If funding the taker, make sure the flash loan token is the borrow or collateral token
     if data.taker_funding > 0:
         assert (
             data.flash_loan_token == staticcall ITroveManager(data.trove_manager).borrow_token()
             or data.flash_loan_token == staticcall ITroveManager(data.trove_manager).collateral_token()
         ), "!flash_loan_token"
-    # NG end
 
     # Cache the Trove Manager instance
     trove_manager: ITroveManager = ITroveManager(data.trove_manager)
@@ -381,10 +360,9 @@ def lever_up_trove(data: LeverUpData):
     # Sweep any remaining flash loan tokens to caller
     self._sweep(data.flash_loan_token, msg.sender)
 
-    # NG: also sweep any unswapped collateral the taker returned (partial-fill remainder) to the caller
+    # If not the flash loan token, sweep any remaining collateral tokens to caller
     if collateral_token != data.flash_loan_token:
         self._sweep(collateral_token, msg.sender)
-    # NG end
 
 
 # ============================================================================================
@@ -500,20 +478,14 @@ def _handle_open(flash_loan_amount: uint256, data: Bytes[_MAX_FLASHLOAN_CALLBACK
     borrow_token: address = staticcall trove_manager.borrow_token()
 
     # Flash loan token --> collateral
-    # NG: only swap (flash_loan_amount - taker_funding) into collateral; the retained taker_funding stays
-    # NG: as flash/borrow token to fund the auction taker on lossy markets (taker_funding=0 => unchanged)
-    # self._swap(params.collateral_swap, params.flash_loan_token, collateral_token, flash_loan_amount)
     self._swap(params.collateral_swap, params.flash_loan_token, collateral_token, flash_loan_amount - params.taker_funding)
-    # NG end
 
     # Get the available collateral
     available_collateral: uint256 = staticcall IERC20(collateral_token).balanceOf(self)
 
-    # NG: when flashing the collateral token, hold the taker funding (same token) back from the deposit
-    # so it can be forwarded to the taker; otherwise it would all be deposited into the trove
+    # If flashloaned the collateral token, don't deposit the taker funding so it can be forwarded to the taker
     if params.flash_loan_token == collateral_token:
         available_collateral -= params.taker_funding
-    # NG end
 
     # Approve spending of the collateral by the Trove Manager
     assert extcall IERC20(collateral_token).approve(params.trove_manager, available_collateral, default_return_value=True)
@@ -541,19 +513,17 @@ def _handle_open(flash_loan_amount: uint256, data: Bytes[_MAX_FLASHLOAN_CALLBACK
 
     # Take the auction if one was kicked and an auction taker was provided
     if params.auction_taker != empty(address) and staticcall dutch_desk.nonce() > nonce_before:
-        # NG: forward the funding to the taker, then pass the collateral->borrow swap so it can
-        # NG: convert the redeemed collateral and settle the just-kicked auction at the starting price.
-        # NG: funding + auction proceeds round-trip back here (taker returns leftover to msg.sender).
-        # extcall IZapperAuctionTaker(params.auction_taker).takeAuction(staticcall dutch_desk.auction(), nonce_before)
+        # If provided, fund the auction taker
         if params.taker_funding > 0:
             assert extcall IERC20(params.flash_loan_token).transfer(params.auction_taker, params.taker_funding, default_return_value=True)
+
+        # Take the auction
         extcall IZapperAuctionTakerNG(params.auction_taker).takeAuction(
             staticcall dutch_desk.auction(),
             nonce_before,
             params.taker_swap.router,
             params.taker_swap.data,
         )
-        # NG end
 
     # Borrow token --> flash loan token
     borrow_token_balance: uint256 = staticcall IERC20(borrow_token).balanceOf(self)
@@ -621,20 +591,14 @@ def _handle_lever_up(flash_loan_amount: uint256, data: Bytes[_MAX_FLASHLOAN_CALL
     borrow_token: address = staticcall trove_manager.borrow_token()
 
     # Flash loan token --> collateral
-    # NG: only swap (flash_loan_amount - taker_funding) into collateral; the retained taker_funding stays
-    # NG: as flash/borrow token to fund the auction taker on lossy markets (taker_funding=0 => unchanged)
-    # self._swap(params.collateral_swap, params.flash_loan_token, collateral_token, flash_loan_amount)
     self._swap(params.collateral_swap, params.flash_loan_token, collateral_token, flash_loan_amount - params.taker_funding)
-    # NG end
 
     # Get the available collateral
     available_collateral: uint256 = staticcall IERC20(collateral_token).balanceOf(self)
 
-    # NG: when flashing the collateral token, hold the taker funding (same token) back from the deposit
-    # so it can be forwarded to the taker; otherwise it would all be deposited into the trove
+    # If flashloaned the collateral token, don't deposit the taker funding so it can be forwarded to the taker
     if params.flash_loan_token == collateral_token:
         available_collateral -= params.taker_funding
-    # NG end
 
     # Approve spending of the collateral by the Trove Manager
     assert extcall IERC20(collateral_token).approve(params.trove_manager, available_collateral, default_return_value=True)
@@ -660,19 +624,17 @@ def _handle_lever_up(flash_loan_amount: uint256, data: Bytes[_MAX_FLASHLOAN_CALL
 
     # Take the auction if one was kicked and an auction taker was provided
     if params.auction_taker != empty(address) and staticcall dutch_desk.nonce() > nonce_before:
-        # NG: forward the funding to the taker, then pass the collateral->borrow swap so it can
-        # NG: convert the redeemed collateral and settle the just-kicked auction at the starting price.
-        # NG: funding + auction proceeds round-trip back here (taker returns leftover to msg.sender).
-        # extcall IZapperAuctionTaker(params.auction_taker).takeAuction(staticcall dutch_desk.auction(), nonce_before)
+        # If provided, fund the auction taker
         if params.taker_funding > 0:
             assert extcall IERC20(params.flash_loan_token).transfer(params.auction_taker, params.taker_funding, default_return_value=True)
+
+        # Take the auction
         extcall IZapperAuctionTakerNG(params.auction_taker).takeAuction(
             staticcall dutch_desk.auction(),
             nonce_before,
             params.taker_swap.router,
             params.taker_swap.data,
         )
-        # NG end
 
     # Borrow token --> flash loan token
     borrow_token_balance: uint256 = staticcall IERC20(borrow_token).balanceOf(self)
@@ -735,16 +697,15 @@ def _validate_params(
     trove_manager: address,
     collateral_swap_router: address,
     debt_swap_router: address,
-    auction_taker: address = empty(address),
-    # NG: taker swap router (collateral->borrow swap the auction taker runs); empty on close/lever_down
     taker_swap_router: address = empty(address),
-    # NG end
+    auction_taker: address = empty(address),
 ):
     """
     @notice Validate input parameters for the external functions
     @param trove_manager The Trove Manager address
     @param collateral_swap_router The collateral swap router address
     @param debt_swap_router The debt swap router address
+    @param taker_swap_router The taker swap router address
     @param auction_taker The Auction Taker address
     """
     # Make sure the Trove Manager is endorsed
@@ -758,14 +719,13 @@ def _validate_params(
     if debt_swap_router != empty(address):
         assert self.routers[debt_swap_router], "!debt_swap_router"
 
+    # If provided, make sure the taker swap router is whitelisted
+    if taker_swap_router != empty(address):
+        assert self.routers[taker_swap_router], "!taker_swap_router"
+
     # If provided, make sure the Auction Taker is whitelisted
     if auction_taker != empty(address):
         assert self.auction_takers[auction_taker], "!auction_taker"
-
-    # NG: if provided, make sure the taker swap router is whitelisted (same `routers` whitelist as the others)
-    if taker_swap_router != empty(address):
-        assert self.routers[taker_swap_router], "!taker_swap_router"
-    # NG end
 
 
 @internal

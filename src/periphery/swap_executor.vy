@@ -26,11 +26,10 @@ _MAX_SWAP_DATA_SIZE: constant(uint256) = 10 ** 4
 @external
 def swap(router: address, data: Bytes[_MAX_SWAP_DATA_SIZE], token_in: address, token_out: address):
     """
-    @notice Execute a swap and transfer the output tokens (and any unspent input) back to the caller
+    @notice Execute a swap and transfer the output tokens and any unspent input back to the caller
     @dev Caller must transfer input tokens to this contract before calling
     @dev Caller should encode slippage protection in the router calldata
-    @dev Any input the router does not consume (partial fills) is refunded to the caller so it is never
-         left stranded on this (permissionless) contract
+    @dev Any input the router does not consume is refunded to the caller
     @param router The DEX aggregator router address
     @param data The swap calldata
     @param token_in The input token
@@ -53,7 +52,7 @@ def swap(router: address, data: Bytes[_MAX_SWAP_DATA_SIZE], token_in: address, t
     if amount_out > 0:
         assert extcall IERC20(token_out).transfer(msg.sender, amount_out, default_return_value=True)
 
-    # Refund any input tokens the router did not consume (so they are never stranded here)
+    # Sweep any leftover input tokens back to the caller
     amount_in_left: uint256 = staticcall IERC20(token_in).balanceOf(self)
     if amount_in_left > 0:
         assert extcall IERC20(token_in).transfer(msg.sender, amount_in_left, default_return_value=True)

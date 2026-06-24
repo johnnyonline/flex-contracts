@@ -8,9 +8,9 @@ import {ILender} from "../src/lender/interfaces/ILender.sol";
 
 import {ICatFactory} from "../script/interfaces/ICatFactory.sol";
 import {IDaddy} from "../script/interfaces/IDaddy.sol";
+import {ILeverageZapperNG} from "../script/interfaces/ILeverageZapperNG.sol";
 import {IRegistry} from "../script/interfaces/IRegistry.sol";
 
-import {ILeverageZapperNG} from "./interfaces/ILeverageZapperNG.sol";
 import {IPriceOracle} from "./interfaces/IPriceOracle.sol";
 import {ITroveManager} from "./interfaces/ITroveManager.sol";
 
@@ -192,9 +192,10 @@ contract LeverageZapperNGLossyConversionTests is Test {
         assertEq(uint256(trove.status), uint256(ITroveManager.Status.active), "E1");
         assertApproxEqRel(trove.collateral, _userCollateral * _leverage, 3e16, "E2"); // 3% tolerance
 
-        // Verify no leftover tokens, and the borrower was swept dust at most (we over-borrow by exactly DUST)
+        // Verify no leftover tokens, and the borrower got back a positive, dust-bounded borrow refund
         _assertNoLeftovers();
-        assertLe(borrowToken.balanceOf(userBorrower), DUST, "E3");
+        assertGt(borrowToken.balanceOf(userBorrower), 0, "E3");
+        assertLe(borrowToken.balanceOf(userBorrower), DUST, "E4");
     }
 
     function test_leverUpTrove_noIdle(
@@ -254,7 +255,8 @@ contract LeverageZapperNGLossyConversionTests is Test {
         assertApproxEqRel(troveAfter.collateral, troveBefore.collateral + additionalCollateral, 3e16, "E0"); // 3% tolerance
         assertGt(troveAfter.debt, troveBefore.debt, "E1");
         _assertNoLeftovers();
-        assertLe(borrowToken.balanceOf(userBorrower) - borrowBalanceBefore, DUST, "E2");
+        assertGt(borrowToken.balanceOf(userBorrower) - borrowBalanceBefore, 0, "E2");
+        assertLe(borrowToken.balanceOf(userBorrower) - borrowBalanceBefore, DUST, "E3");
     }
 
     function test_leverUpTrove_noIdle_revertsWithoutTakerFunding(
@@ -341,9 +343,13 @@ contract LeverageZapperNGLossyConversionTests is Test {
                 min_borrow_out: 0,
                 min_collateral_out: 0,
                 collateral_swap: ILeverageZapperNG.SwapData({router: address(0), data: ""}), // no acquisition swap
-                debt_swap: ILeverageZapperNG.SwapData({router: address(mockRouter), data: abi.encode(address(borrowToken), address(collateralToken))}), // borrow -> collateral to repay the flash
+                debt_swap: ILeverageZapperNG.SwapData({
+                    router: address(mockRouter), data: abi.encode(address(borrowToken), address(collateralToken))
+                }), // borrow -> collateral to repay the flash
                 taker_funding: takerFunding,
-                taker_swap: ILeverageZapperNG.SwapData({router: address(mockRouter), data: abi.encode(address(collateralToken), address(borrowToken))})
+                taker_swap: ILeverageZapperNG.SwapData({
+                    router: address(mockRouter), data: abi.encode(address(collateralToken), address(borrowToken))
+                })
             })
         );
 
@@ -353,6 +359,139 @@ contract LeverageZapperNGLossyConversionTests is Test {
         assertEq(uint256(trove.status), uint256(ITroveManager.Status.active), "E1");
         assertApproxEqRel(trove.collateral, _userCollateral * _leverage, 1e15, "E2"); // ~exact, no acquisition slippage
         _assertNoLeftovers();
+
+        // Refund comes back entirely as collateral (debt_swap converts all borrow to repay the collateral
+        // flash): 0 borrow, and a positive collateral refund smaller than the funding we carved out (slippage eats the rest)
+        assertEq(borrowToken.balanceOf(userBorrower), 0, "E3");
+        assertGt(collateralToken.balanceOf(userBorrower), 0, "E4");
+        assertLe(collateralToken.balanceOf(userBorrower), takerFunding, "E5");
+    }
+
+    function test_leverUpTrove_noIdle_flashCollateral(
+        uint256 _userCollateral,
+        uint256 _additionalLeverage
+    ) public {
+        _userCollateral = bound(_userCollateral, minCollateralFuzzAmount, maxCollateralFuzzAmount);
+        _additionalLeverage = bound(_additionalLeverage, 1, maxLeverage - 3);
+
+        // Fund the lender and open the borrower's base trove (low LTV, high rate so it can redeem)
+        _mintAndDepositIntoLender(userLender, LENDER_FUNDS);
+        uint256 troveId = _openTrove(userBorrower, _userCollateral, _collateralValue(_userCollateral) / 5, MIN_RATE * 20);
+
+        // Drain remaining idle with a big low-rate trove (the redemption target)
+        _drainIdle(MIN_RATE);
+
+        // Flash the COLLATERAL token directly (Morpho holds wstETH) so there is NO acquisition swap.
+        // Over-borrow to cover the recovery + repayment swaps, fund the taker in collateral (carved from the flash)
+        uint256 additionalCollateral = _userCollateral * _additionalLeverage;
+        uint256 baseDebt = _collateralValue(additionalCollateral);
+        uint256 debtAmount = baseDebt * BPS / (BPS - 100) + DUST;
+        uint256 takerFunding = additionalCollateral * 100 / BPS; // collateral (== flash token)
+
+        ITroveManager.Trove memory troveBefore = troveManager.troves(troveId);
+        uint256 borrowBalanceBefore = borrowToken.balanceOf(userBorrower);
+
+        // Approve zapper to operate on behalf of the borrower
+        vm.prank(userBorrower);
+        troveManager.approve(address(zapper), true);
+
+        // Lever up flashing the collateral token (no idle -> full redemption -> funded take)
+        vm.prank(userBorrower);
+        zapper.lever_up_trove(
+            ILeverageZapperNG.LeverUpData({
+                trove_manager: address(troveManager),
+                flash_loan_token: address(collateralToken), // flash the collateral, not the borrow token
+                auction_taker: auctionTaker,
+                trove_id: troveId,
+                flash_loan_amount: additionalCollateral + takerFunding,
+                collateral_amount: 0,
+                debt_amount: debtAmount,
+                max_upfront_fee: type(uint256).max,
+                min_borrow_out: 0,
+                min_collateral_out: 0,
+                collateral_swap: ILeverageZapperNG.SwapData({router: address(0), data: ""}), // no acquisition swap
+                debt_swap: ILeverageZapperNG.SwapData({
+                    router: address(mockRouter), data: abi.encode(address(borrowToken), address(collateralToken))
+                }), // borrow -> collateral to repay the flash
+                taker_funding: takerFunding,
+                taker_swap: ILeverageZapperNG.SwapData({
+                    router: address(mockRouter), data: abi.encode(address(collateralToken), address(borrowToken))
+                })
+            })
+        );
+
+        // Verify trove grew by ~additionalCollateral (collateral flashed directly => no acquisition slippage)
+        ITroveManager.Trove memory troveAfter = troveManager.troves(troveId);
+        assertApproxEqRel(troveAfter.collateral, troveBefore.collateral + additionalCollateral, 1e15, "E0"); // ~exact
+        assertGt(troveAfter.debt, troveBefore.debt, "E1");
+        _assertNoLeftovers();
+
+        // Refund comes back entirely as collateral (debt_swap converts all borrow to repay the collateral
+        // flash): 0 borrow, and a positive collateral refund smaller than the funding we carved out (slippage eats the rest)
+        assertEq(borrowToken.balanceOf(userBorrower) - borrowBalanceBefore, 0, "E2");
+        assertGt(collateralToken.balanceOf(userBorrower), 0, "E3");
+        assertLe(collateralToken.balanceOf(userBorrower), takerFunding, "E4");
+    }
+
+    // Outside of an in-progress take `_active_auction` is empty, so the callback guard rejects every caller.
+    function test_takeCallback_revertsWhenNoActiveAuction() public {
+        vm.expectRevert("!auction");
+        ISwapAuctionTaker(auctionTaker).takeCallback(0, address(this), 0, 0, "");
+    }
+
+    // During a take the guard is open for the auction only: a whitelisted-but-malicious taker_swap router that
+    // reenters `takeCallback` mid-take (to drain the funding the taker holds) is rejected, reverting the whole take.
+    function test_takeAuction_revertsWhenRouterReentersMidTake() public {
+        uint256 userCollateral = 10 * COLLATERAL_TOKEN_PRECISION;
+        uint256 leverage = 2;
+
+        // Fund the lender, then drain all idle so the open triggers a redemption + funded take
+        _mintAndDepositIntoLender(userLender, LENDER_FUNDS);
+        _drainIdle(MIN_RATE);
+
+        uint256 additionalCollateral = userCollateral * (leverage - 1);
+        uint256 baseDebt = _collateralValue(additionalCollateral);
+        uint256 debtAmount = baseDebt * BPS / (BPS - SLIPPAGE_BPS) + DUST;
+        uint256 takerFunding = debtAmount * SLIPPAGE_BPS / BPS + DUST;
+
+        // Malicious router that reenters the taker's callback when invoked mid-take, whitelisted like a real one
+        ReentrantRouterMock reentrantRouter = new ReentrantRouterMock(auctionTaker);
+        vm.prank(daddyOwner);
+        DADDY.execute(address(zapper), abi.encodeWithSelector(ILeverageZapperNG.set_router.selector, address(reentrantRouter), true), 0, true);
+
+        _airdrop(address(collateralToken), userBorrower, userCollateral);
+        vm.prank(userBorrower);
+        collateralToken.approve(address(zapper), userCollateral);
+
+        // The reentrant call hits the guard and bubbles "!auction" up through the whole take
+        vm.prank(userBorrower);
+        vm.expectRevert("!auction");
+        zapper.open_leveraged_trove(
+            ILeverageZapperNG.OpenLeveragedData({
+                owner: userBorrower,
+                trove_manager: address(troveManager),
+                flash_loan_token: address(borrowToken),
+                auction_taker: auctionTaker,
+                owner_index: ++_ownerIndex,
+                flash_loan_amount: baseDebt + takerFunding,
+                collateral_amount: userCollateral,
+                debt_amount: debtAmount,
+                prev_id: 0,
+                next_id: 0,
+                annual_interest_rate: MIN_RATE * 20,
+                max_upfront_fee: type(uint256).max,
+                min_borrow_out: 0,
+                min_collateral_out: 0,
+                collateral_swap: ILeverageZapperNG.SwapData({
+                    router: address(mockRouter), data: abi.encode(address(borrowToken), address(collateralToken))
+                }),
+                debt_swap: ILeverageZapperNG.SwapData({router: address(0), data: ""}),
+                taker_funding: takerFunding,
+                taker_swap: ILeverageZapperNG.SwapData({
+                    router: address(reentrantRouter), data: abi.encode(address(collateralToken), address(borrowToken))
+                })
+            })
+        );
     }
 
     // ============================================================================================
@@ -418,6 +557,35 @@ contract LeverageZapperNGLossyConversionTests is Test {
         assertEq(borrowToken.balanceOf(auctionTaker), 0, "taker borrow leftover");
         assertEq(collateralToken.balanceOf(swapExecutor), 0, "executor collateral leftover");
         assertEq(borrowToken.balanceOf(swapExecutor), 0, "executor borrow leftover");
+    }
+
+}
+
+interface ISwapAuctionTaker {
+
+    function takeCallback(
+        uint256 auction_id,
+        address taker,
+        uint256 amount_taken,
+        uint256 needed_amount,
+        bytes calldata data
+    ) external;
+
+}
+
+// Whitelisted router that, when invoked by the Swap Executor mid-take, reenters the taker's callback
+contract ReentrantRouterMock {
+
+    ISwapAuctionTaker immutable taker;
+
+    constructor(
+        address _taker
+    ) {
+        taker = ISwapAuctionTaker(_taker);
+    }
+
+    fallback() external {
+        taker.takeCallback(0, address(this), 0, 0, "");
     }
 
 }
