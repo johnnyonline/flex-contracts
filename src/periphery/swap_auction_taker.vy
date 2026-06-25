@@ -79,6 +79,9 @@ def takeAuction(auction: address, auction_id: uint256, swap_router: address, swa
     @param swap_router The router used for the collateral token --> borrow token conversion
     @param swap_data The router calldata
     """
+    # Make sure the active auction guard is clear
+    assert self._active_auction == empty(address), "active_auction"
+
     # Read tokens before taking (can't read during callback due to reentrancy guard)
     buy_token: address = staticcall IAuction(auction).buy_token()
     sell_token: address = staticcall IAuction(auction).sell_token()
@@ -123,7 +126,7 @@ def takeCallback(
     @param data Encoded buy token, sell token, swap router and swap calldata
     """
     # Make sure the caller is the auction we're currently taking
-    assert msg.sender == self._active_auction, "!auction"
+    assert msg.sender == self._active_auction, "!active_auction"
 
     # Decode the callback data
     buy_token: address = empty(address)

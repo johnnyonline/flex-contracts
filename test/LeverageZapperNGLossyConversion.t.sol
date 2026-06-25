@@ -435,8 +435,19 @@ contract LeverageZapperNGLossyConversionTests is Test {
 
     // Outside of an in-progress take `_active_auction` is empty, so the callback guard rejects every caller.
     function test_takeCallback_revertsWhenNoActiveAuction() public {
-        vm.expectRevert("!auction");
+        vm.expectRevert("!active_auction");
         ISwapAuctionTaker(auctionTaker).takeCallback(0, address(this), 0, 0, "");
+    }
+
+    // A nested takeAuction (e.g. a malicious router/auction reentering mid-take) is rejected by the entry
+    // guard, so it cannot overwrite `_active_auction` and sweep the in-flight funding to itself.
+    function test_takeAuction_revertsOnReentrantTakeAuction() public {
+        ReentrantAuctionMock mockAuction = new ReentrantAuctionMock(address(borrowToken), address(collateralToken));
+        mockAuction.setTaker(auctionTaker);
+
+        // outer take sets the guard then calls take(), which reenters takeAuction -> "active_auction" bubbles up
+        vm.expectRevert("active_auction");
+        ISwapAuctionTaker(auctionTaker).takeAuction(address(mockAuction), 0, address(0), "");
     }
 
     // During a take the guard is open for the auction only: a whitelisted-but-malicious taker_swap router that
@@ -463,9 +474,9 @@ contract LeverageZapperNGLossyConversionTests is Test {
         vm.prank(userBorrower);
         collateralToken.approve(address(zapper), userCollateral);
 
-        // The reentrant call hits the guard and bubbles "!auction" up through the whole take
+        // The reentrant call hits the guard and bubbles "!active_auction" up through the whole take
         vm.prank(userBorrower);
-        vm.expectRevert("!auction");
+        vm.expectRevert("!active_auction");
         zapper.open_leveraged_trove(
             ILeverageZapperNG.OpenLeveragedData({
                 owner: userBorrower,
@@ -563,6 +574,13 @@ contract LeverageZapperNGLossyConversionTests is Test {
 
 interface ISwapAuctionTaker {
 
+    function takeAuction(
+        address auction,
+        uint256 auction_id,
+        address swap_router,
+        bytes calldata swap_data
+    ) external;
+
     function takeCallback(
         uint256 auction_id,
         address taker,
@@ -586,6 +604,40 @@ contract ReentrantRouterMock {
 
     fallback() external {
         taker.takeCallback(0, address(this), 0, 0, "");
+    }
+
+}
+
+// Mock auction whose take() reenters takeAuction on the taker, to exercise the reentrancy guard
+contract ReentrantAuctionMock {
+
+    address public buy_token;
+    address public sell_token;
+    ISwapAuctionTaker taker;
+
+    constructor(
+        address _buy_token,
+        address _sell_token
+    ) {
+        buy_token = _buy_token;
+        sell_token = _sell_token;
+    }
+
+    function setTaker(
+        address _taker
+    ) external {
+        taker = ISwapAuctionTaker(_taker);
+    }
+
+    function take(
+        uint256 auction_id,
+        uint256,
+        address,
+        bytes calldata
+    ) external returns (uint256) {
+        // Reenter takeAuction mid-take; the guard must reject this
+        taker.takeAuction(address(this), auction_id, address(0), "");
+        return 0;
     }
 
 }
