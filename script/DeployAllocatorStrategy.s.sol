@@ -29,7 +29,7 @@ contract DeployAllocatorStrategy is Script {
 
     // Deployed contracts
     address public constant FIXED_REPORT_TRIGGER = 0xb9F57B62Cbe9463da16E5b75e3B809321a0eA871;
-    address public constant STRATEGY_APR_ORACLE = 0xfd6117E7dC92Dd284412a0eE9FC2C9bDb945B9d1;
+    address public constant STRATEGY_APR_ORACLE = 0x84D1AeC938D4b9F492c50A1b5218E77195899471;
     ICentralAPROracle public constant CENTRAL_APR_ORACLE = ICentralAPROracle(0x1981AD9F44F2EA9aDd2dC4AD7D075c102C70aF92);
     ICommonReportTrigger public constant COMMON_REPORT_TRIGGER = ICommonReportTrigger(0xf8dF17a35c88AbB25e83C92f9D293B4368b9D52D);
     StrategyFactory public constant FACTORY = StrategyFactory(0x7A3B96E84156d22Cdb53CbfC0B035Ddd61805266);
