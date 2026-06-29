@@ -97,6 +97,9 @@ def takeAuction(auction: address, auction_id: uint256, swap_router: address, swa
     # Clear the transient guard
     self._active_auction = empty(address)
 
+    # Reset any residual approval, just in case
+    assert extcall IERC20(buy_token).approve(auction, 0, default_return_value=True)
+
     # Transfer any leftover buy tokens to the caller
     buy_token_leftover: uint256 = staticcall IERC20(buy_token).balanceOf(self)
     if buy_token_leftover > 0:
