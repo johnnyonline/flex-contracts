@@ -247,12 +247,8 @@ def open_leveraged_trove(data: OpenLeveragedData) -> uint256:
     # Compute the Trove ID
     trove_id: uint256 = convert(keccak256(abi_encode(self, data.owner_index)), uint256)
 
-    # Sweep any remaining flash loan tokens to caller
-    self._sweep(data.flash_loan_token, msg.sender)
-
-    # If not the flash loan token, sweep any remaining collateral tokens to caller
-    if collateral_token != data.flash_loan_token:
-        self._sweep(collateral_token, msg.sender)
+    # Sweep any remaining tokens to caller
+    self._sweep_all(data.trove_manager, data.flash_loan_token, msg.sender)
 
     # Return the Trove ID
     return trove_id
@@ -291,20 +287,8 @@ def close_leveraged_trove(data: CloseLeveragedData):
         abi_encode(Operation.CLOSE, data),  # data
     )
 
-    # Get collateral and borrow tokens from the Trove Manager
-    collateral_token: address = staticcall trove_manager.collateral_token()
-    borrow_token: address = staticcall trove_manager.borrow_token()
-
-    # Sweep any remaining flash loan tokens to caller
-    self._sweep(data.flash_loan_token, msg.sender)
-
-    # Sweep any remaining collateral tokens to caller
-    if collateral_token != data.flash_loan_token:
-        self._sweep(collateral_token, msg.sender)
-
-    # Sweep any remaining borrow tokens to caller
-    if borrow_token != data.flash_loan_token and borrow_token != collateral_token:
-        self._sweep(borrow_token, msg.sender)
+    # Sweep any remaining tokens to caller
+    self._sweep_all(data.trove_manager, data.flash_loan_token, msg.sender)
 
 
 # ============================================================================================
@@ -357,12 +341,8 @@ def lever_up_trove(data: LeverUpData):
         abi_encode(Operation.LEVER_UP, data),  # data
     )
 
-    # Sweep any remaining flash loan tokens to caller
-    self._sweep(data.flash_loan_token, msg.sender)
-
-    # If not the flash loan token, sweep any remaining collateral tokens to caller
-    if collateral_token != data.flash_loan_token:
-        self._sweep(collateral_token, msg.sender)
+    # Sweep any remaining tokens to caller
+    self._sweep_all(data.trove_manager, data.flash_loan_token, msg.sender)
 
 
 # ============================================================================================
@@ -398,20 +378,8 @@ def lever_down_trove(data: LeverDownData):
         abi_encode(Operation.LEVER_DOWN, data),  # data
     )
 
-    # Get collateral and borrow tokens from the Trove Manager
-    collateral_token: address = staticcall trove_manager.collateral_token()
-    borrow_token: address = staticcall trove_manager.borrow_token()
-
-    # Sweep any remaining flash loan tokens to caller
-    self._sweep(data.flash_loan_token, msg.sender)
-
-    # Sweep any remaining collateral tokens to caller
-    if collateral_token != data.flash_loan_token:
-        self._sweep(collateral_token, msg.sender)
-
-    # Sweep any remaining borrow tokens to caller
-    if borrow_token != data.flash_loan_token and borrow_token != collateral_token:
-        self._sweep(borrow_token, msg.sender)
+    # Sweep any remaining tokens to caller
+    self._sweep_all(data.trove_manager, data.flash_loan_token, msg.sender)
 
 
 # ============================================================================================
@@ -747,6 +715,19 @@ def _swap(swap: SwapData, token_in: address, token_out: address, amount_in: uint
 
     # Execute the swap via the Swap Executor. Output tokens are sent back to this contract
     extcall SWAP_EXECUTOR.swap(swap.router, swap.data, token_in, token_out)
+
+
+@internal
+def _sweep_all(trove_manager: address, flash_loan_token: address, receiver: address):
+    """
+    @notice Sweep the flash loan, collateral and borrow tokens to the `receiver`
+    @param trove_manager The Trove Manager contract
+    @param flash_loan_token The flash loan token
+    @param receiver The receiver of the swept tokens
+    """
+    self._sweep(flash_loan_token, receiver)
+    self._sweep(staticcall ITroveManager(trove_manager).collateral_token(), receiver)
+    self._sweep(staticcall ITroveManager(trove_manager).borrow_token(), receiver)
 
 
 @internal
