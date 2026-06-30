@@ -744,8 +744,9 @@ def _settle_auction(
 ):
     """
     @notice Settle the redemption auction kicked while opening/levering, if one was kicked
-    @dev With an `auction_taker`: fund it and have it settle via a swap. Without one: settle losslessly by
-         flashloaning the borrow token to pay the auction directly (only when the flashloan token is the collateral)
+    @dev With an `auction_taker`, fund it and have it settle via a swap. Without one, settle losslessly by
+         flashloaning the borrow token to pay the auction directly
+    @dev No-taker path requires (1) the flashloan token to be the collateral token and (2) a <=100% starting price buffer
     @param taker_swap The collateral --> borrow swap the taker runs in its callback (taker path only)
     @param dutch_desk The Dutch Desk that kicked the redemption auction
     @param auction_taker The Auction Taker that settles via a swap, or empty for the flashloan path
