@@ -128,8 +128,7 @@ SWAP_EXECUTOR: public(immutable(ISwapExecutor))
 _MAX_SWAP_DATA_SIZE: constant(uint256) = 10 ** 4
 _MAX_FLASHLOAN_CALLBACK_DATA_SIZE: constant(uint256) = 10 ** 5
 
-# Max starting price buffer for the no-taker settle path: 100% (WAD).
-# A higher buffer charges an auction premium that the loss-free path cannot fund
+# Max starting price buffer the no-taker settle path supports (no buffer)
 _MAX_STARTING_PRICE_BUFFER: constant(uint256) = 10 ** 18
 
 # Flash loan provider
@@ -746,7 +745,7 @@ def _settle_auction(
     @notice Settle the redemption auction kicked while opening/levering, if one was kicked
     @dev With an `auction_taker`, fund it and have it settle via a swap. Without one, settle losslessly by
          flashloaning the borrow token to pay the auction directly
-    @dev No-taker path requires (1) the flashloan token to be the collateral token and (2) a <=100% starting price buffer
+    @dev No-taker path requires (1) the flashloan token to be the collateral token and (2) no starting price buffer
     @param taker_swap The collateral --> borrow swap the taker runs in its callback (taker path only)
     @param dutch_desk The Dutch Desk that kicked the redemption auction
     @param auction_taker The Auction Taker that settles via a swap, or empty for the flashloan path
