@@ -45,5 +45,11 @@ def nonce() -> uint256:
 
 
 @external
+@view
+def starting_price_buffer_percentage() -> uint256:
+    ...
+
+
+@external
 def kick(amount: uint256, maximum_amount: uint256, receiver: address):
     ...
