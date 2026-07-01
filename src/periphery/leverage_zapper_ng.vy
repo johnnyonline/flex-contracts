@@ -4,10 +4,11 @@
 @title Leverage Zapper NG
 @license GNU AGPLv3
 @author Flex
-@notice Enables leveraged positions using Morpho flash loans and DEX aggregator swaps
-@dev The Morpho contract address is hardcoded to the Ethereum mainnet deployment
-@dev Differs from leverage_zapper.vy: open/lever_up add `taker_funding` + `taker_swap` to settle a
-     redemption-kicked auction atomically on lossy collateral<-->borrow markets
+@notice Enables leveraged positions using Morpho flashloans and DEX aggregator swaps
+@dev The Morpho flashloan contract address is hardcoded to the Ethereum mainnet deployment
+@dev Differs from leverage_zapper.vy: open/lever_up settle a redemption-kicked auction atomically on lossy
+     collateral<-->borrow markets - either via an auction taker (funded with `taker_funding` + a `taker_swap`),
+     or with no taker by settling losslessly through a nested borrow-token flashloan
 """
 
 from ethereum.ercs import IERC20
