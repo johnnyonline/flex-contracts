@@ -16,8 +16,11 @@ import "forge-std/Script.sol";
 contract DeployMarket is Script {
 
     // Parameters
-    address public constant BORROW_TOKEN = address(0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48); // USDC
-    address public constant COLLATERAL_TOKEN = address(0x696d02Db93291651ED510704c9b286841d506987); // yvUSD
+    address public constant BORROW_TOKEN = address(0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2); // WETH
+    address public constant COLLATERAL_TOKEN = address(0x7f39C581F595B53c5cb19bD0b3f8dA6c935E2Ca0); // wstETH
+
+    // Morpho oracle for the wstETH/WETH pair
+    address public constant MORPHO_ORACLE = address(0xbD60A6770b27E084E8617335ddE769241B0e71D8);
 
     // Deployed contracts
     ICatFactory public constant FACTORY = ICatFactory(0xe2c4a5C2AB1ed5745D206B33cc0abf0A5D34753d);
@@ -32,8 +35,8 @@ contract DeployMarket is Script {
 
         vm.startBroadcast(_pk);
 
-        // Deploy price oracle
-        address _priceOracle = deployCode("yvusd_to_usdc_oracle");
+        // Deploy price oracle (generic Morpho-oracle wrapper for the wstETH/WETH pair)
+        address _priceOracle = deployCode("morpho_oracle", abi.encode(MORPHO_ORACLE, BORROW_TOKEN, COLLATERAL_TOKEN));
 
         // Deploy market
         (address _troveManager, address _sortedTroves, address _dutchDesk, address _auction, address _lender) = FACTORY.deploy(
@@ -41,12 +44,12 @@ contract DeployMarket is Script {
                 borrow_token: BORROW_TOKEN,
                 collateral_token: COLLATERAL_TOKEN,
                 price_oracle: _priceOracle,
-                minimum_debt: 500,
-                safe_collateral_ratio: 120, // 120%
-                minimum_collateral_ratio: 110, // 110%
-                max_penalty_collateral_ratio: 105, // 105%
+                minimum_debt: 1,
+                safe_collateral_ratio: 110, // 110%
+                minimum_collateral_ratio: 105, // 105% CR = ~95.2% max LTV
+                max_penalty_collateral_ratio: 103, // 103%
                 min_liquidation_fee: 50, // 0.5%
-                max_liquidation_fee: 500, // 5%
+                max_liquidation_fee: 300, // 3%
                 upfront_interest_period: 7 days,
                 interest_rate_adj_cooldown: 7 days,
                 minimum_price_buffer_percentage: 1e18 - 1e16, // 99%
@@ -59,11 +62,11 @@ contract DeployMarket is Script {
             })
         );
 
-        // Accept Lender management
-        DADDY.execute(address(_lender), abi.encodeWithSelector(ITokenizedStrategy.acceptManagement.selector), 0, true);
+        // // Accept Lender management
+        // DADDY.execute(address(_lender), abi.encodeWithSelector(ITokenizedStrategy.acceptManagement.selector), 0, true);
 
-        // Endorse market
-        DADDY.execute(address(REGISTRY), abi.encodeWithSelector(IRegistry.endorse.selector, _troveManager), 0, true);
+        // // Endorse market
+        // DADDY.execute(address(REGISTRY), abi.encodeWithSelector(IRegistry.endorse.selector, _troveManager), 0, true);
 
         console2.log("---------------------------------");
         console2.log("Trove Manager: ", _troveManager);
