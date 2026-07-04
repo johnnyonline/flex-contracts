@@ -17,9 +17,9 @@ import "forge-std/Script.sol";
 contract DeployAllocatorStrategy is Script {
 
     // Market params
-    string public constant NAME = "Flex yvUSD/USDC Lender";
+    string public constant NAME = "Flex siUSD/USDC Lender";
     address public constant ASSET = 0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48; // USDC
-    address public constant LENDER = 0x33C45216E121E31f1a8CD24C7E9d0d0C9e29B732; // Flex yvUSD/USDC Lender
+    address public constant LENDER = 0x9a28d962aF18B304cA2bA16bf998D1EaF8452456; // Flex siUSD/USDC Lender
 
     // Yearn addresses
     address public constant SMS = 0x16388463d60FFE0661Cf7F1f31a7D658aC790ff7; // sms mainnet
@@ -29,7 +29,7 @@ contract DeployAllocatorStrategy is Script {
 
     // Deployed contracts
     address public constant FIXED_REPORT_TRIGGER = 0xb9F57B62Cbe9463da16E5b75e3B809321a0eA871;
-    address public constant STRATEGY_APR_ORACLE = 0xfd6117E7dC92Dd284412a0eE9FC2C9bDb945B9d1;
+    address public constant STRATEGY_APR_ORACLE = 0x84D1AeC938D4b9F492c50A1b5218E77195899471;
     ICentralAPROracle public constant CENTRAL_APR_ORACLE = ICentralAPROracle(0x1981AD9F44F2EA9aDd2dC4AD7D075c102C70aF92);
     ICommonReportTrigger public constant COMMON_REPORT_TRIGGER = ICommonReportTrigger(0xf8dF17a35c88AbB25e83C92f9D293B4368b9D52D);
     StrategyFactory public constant FACTORY = StrategyFactory(0x7A3B96E84156d22Cdb53CbfC0B035Ddd61805266);

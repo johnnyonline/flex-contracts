@@ -1,0 +1,11 @@
+# @version 0.4.3
+
+
+@external
+def takeAuction(
+    auction: address,
+    auction_id: uint256,
+    swap_router: address,
+    swap_data: Bytes[10 ** 4],
+):
+    ...
