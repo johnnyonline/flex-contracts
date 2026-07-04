@@ -488,6 +488,70 @@ contract LeverageZapperNGLossyConversionTests is Test {
         assertLe(collateralToken.balanceOf(userBorrower), _collateralForDebt(DUST) + COLLATERAL_TOKEN_PRECISION / 100, "E4");
     }
 
+    function test_openLeveragedTrove_partialIdle_lossFree(
+        uint256 _userCollateral,
+        uint256 _leverage
+    ) public {
+        _userCollateral = bound(_userCollateral, minCollateralFuzzAmount, maxCollateralFuzzAmount);
+        _leverage = bound(_leverage, 2, maxLeverage);
+
+        _mintAndDepositIntoLender(userLender, LENDER_FUNDS);
+
+        uint256 additionalCollateral = _userCollateral * (_leverage - 1);
+        uint256 baseDebt = _collateralValue(additionalCollateral);
+        // Over-borrow to cover slippage on the idle-sourced borrow (converted back to collateral via debt_swap)
+        uint256 debtAmount = baseDebt * BPS / (BPS - SLIPPAGE_BPS) + DUST;
+
+        // Leave partial idle: ~half the borrow fundable from idle, so the rest triggers a redemption
+        uint256 leaveIdle = debtAmount / 2;
+        uint256 idle = borrowToken.balanceOf(lender);
+        if (idle > leaveIdle) {
+            uint256 toDrain = idle - leaveIdle;
+            _openTrove(anotherUserBorrower, _collateralForDebt(toDrain) * 2, toDrain, MIN_RATE);
+        }
+
+        _airdrop(address(collateralToken), userBorrower, _userCollateral);
+        vm.prank(userBorrower);
+        collateralToken.approve(address(zapper), _userCollateral);
+
+        vm.prank(userBorrower);
+        uint256 troveId = zapper.open_leveraged_trove(
+            ILeverageZapperNG.OpenLeveragedData({
+                owner: userBorrower,
+                trove_manager: address(troveManager),
+                flash_loan_token: address(collateralToken), // flash the collateral, not the borrow token
+                auction_taker: address(0), // no taker -> zapper settles the redeemed part losslessly
+                owner_index: ++_ownerIndex,
+                flash_loan_amount: additionalCollateral,
+                collateral_amount: _userCollateral,
+                debt_amount: debtAmount,
+                prev_id: 0,
+                next_id: 0,
+                annual_interest_rate: MIN_RATE * 20,
+                max_upfront_fee: type(uint256).max,
+                min_borrow_out: 0,
+                min_collateral_out: 0,
+                collateral_swap: ILeverageZapperNG.SwapData({router: address(0), data: ""}), // no acquisition swap
+                debt_swap: ILeverageZapperNG.SwapData({
+                    router: address(mockRouter), data: abi.encode(address(borrowToken), address(collateralToken))
+                }), // convert the idle-sourced borrow back to collateral to repay the flash
+                taker_funding: 0,
+                taker_swap: ILeverageZapperNG.SwapData({router: address(0), data: ""})
+            })
+        );
+
+        // Trove opened at exactly the target leverage; the redeemed part was loss-free, only the idle part paid slippage
+        ITroveManager.Trove memory trove = troveManager.troves(troveId);
+        assertEq(trove.owner, userBorrower, "E0");
+        assertEq(uint256(trove.status), uint256(ITroveManager.Status.active), "E1");
+        assertApproxEqRel(trove.collateral, _userCollateral * _leverage, 1e15, "E2"); // deposit is exact
+
+        // No stranded tokens; idle-sourced borrow was converted by debt_swap -> ~0 borrow back, small collateral dust
+        _assertNoLeftovers();
+        assertLe(borrowToken.balanceOf(userBorrower), DUST, "E3");
+        assertLe(collateralToken.balanceOf(userBorrower), _collateralForDebt(debtAmount - baseDebt) + COLLATERAL_TOKEN_PRECISION / 100, "E4");
+    }
+
     function test_leverUpTrove_noIdle_lossFree(
         uint256 _userCollateral,
         uint256 _additionalLeverage
@@ -543,6 +607,68 @@ contract LeverageZapperNGLossyConversionTests is Test {
         _assertNoLeftovers();
         assertLe(borrowToken.balanceOf(userBorrower) - borrowBalanceBefore, DUST, "E2");
         assertLe(collateralToken.balanceOf(userBorrower), _collateralForDebt(DUST) + COLLATERAL_TOKEN_PRECISION / 100, "E3");
+    }
+
+    function test_leverUpTrove_partialIdle_lossFree(
+        uint256 _userCollateral,
+        uint256 _additionalLeverage
+    ) public {
+        _userCollateral = bound(_userCollateral, minCollateralFuzzAmount, maxCollateralFuzzAmount);
+        _additionalLeverage = bound(_additionalLeverage, 1, maxLeverage - 3);
+
+        _mintAndDepositIntoLender(userLender, LENDER_FUNDS);
+        uint256 troveId = _openTrove(userBorrower, _userCollateral, _collateralValue(_userCollateral) / 5, MIN_RATE * 20);
+
+        uint256 additionalCollateral = _userCollateral * _additionalLeverage;
+        uint256 baseDebt = _collateralValue(additionalCollateral);
+        // Over-borrow to cover slippage on the idle-sourced borrow (converted back to collateral via debt_swap)
+        uint256 debtAmount = baseDebt * BPS / (BPS - SLIPPAGE_BPS) + DUST;
+
+        // Leave partial idle: ~half the borrow fundable from idle, so the rest triggers a redemption
+        uint256 leaveIdle = debtAmount / 2;
+        uint256 idle = borrowToken.balanceOf(lender);
+        if (idle > leaveIdle) {
+            uint256 toDrain = idle - leaveIdle;
+            _openTrove(anotherUserBorrower, _collateralForDebt(toDrain) * 2, toDrain, MIN_RATE);
+        }
+
+        ITroveManager.Trove memory troveBefore = troveManager.troves(troveId);
+        uint256 borrowBalanceBefore = borrowToken.balanceOf(userBorrower);
+
+        vm.prank(userBorrower);
+        troveManager.approve(address(zapper), true);
+
+        vm.prank(userBorrower);
+        zapper.lever_up_trove(
+            ILeverageZapperNG.LeverUpData({
+                trove_manager: address(troveManager),
+                flash_loan_token: address(collateralToken), // flash the collateral, not the borrow token
+                auction_taker: address(0), // no taker -> zapper settles the redeemed part losslessly
+                trove_id: troveId,
+                flash_loan_amount: additionalCollateral,
+                collateral_amount: 0,
+                debt_amount: debtAmount,
+                max_upfront_fee: type(uint256).max,
+                min_borrow_out: 0,
+                min_collateral_out: 0,
+                collateral_swap: ILeverageZapperNG.SwapData({router: address(0), data: ""}), // no acquisition swap
+                debt_swap: ILeverageZapperNG.SwapData({
+                    router: address(mockRouter), data: abi.encode(address(borrowToken), address(collateralToken))
+                }), // convert the idle-sourced borrow back to collateral to repay the flash
+                taker_funding: 0,
+                taker_swap: ILeverageZapperNG.SwapData({router: address(0), data: ""})
+            })
+        );
+
+        // Trove grew by exactly the deposit; the redeemed part was loss-free, only the idle part paid slippage
+        ITroveManager.Trove memory troveAfter = troveManager.troves(troveId);
+        assertApproxEqRel(troveAfter.collateral, troveBefore.collateral + additionalCollateral, 1e15, "E0"); // deposit is exact
+        assertGt(troveAfter.debt, troveBefore.debt, "E1");
+
+        // No stranded tokens; idle-sourced borrow was converted by debt_swap -> ~0 borrow back, small collateral dust
+        _assertNoLeftovers();
+        assertLe(borrowToken.balanceOf(userBorrower) - borrowBalanceBefore, DUST, "E2");
+        assertLe(collateralToken.balanceOf(userBorrower), _collateralForDebt(debtAmount - baseDebt) + COLLATERAL_TOKEN_PRECISION / 100, "E3");
     }
 
     // Outside of an in-progress take `_active_auction` is empty, so the callback guard rejects every caller.
