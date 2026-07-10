@@ -119,6 +119,7 @@ def open_trove(
     min_borrow_out: uint256,
     min_collateral_out: uint256,
     owner: address = msg.sender,
+    callback_data: Bytes[10 ** 5] = b"",
 ) -> uint256:
     ...
 
@@ -145,6 +146,8 @@ def borrow(
     max_upfront_fee: uint256,
     min_borrow_out: uint256,
     min_collateral_out: uint256,
+    collateral_amount: uint256 = 0,
+    callback_data: Bytes[10 ** 5] = b"",
 ):
     ...
 

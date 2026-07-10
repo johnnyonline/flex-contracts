@@ -15,10 +15,8 @@ interface ILeverageZapper {
     struct OpenLeveragedData {
         address owner;
         address trove_manager;
-        address flash_loan_token;
-        address auction_taker;
         uint256 owner_index;
-        uint256 flash_loan_amount;
+        uint256 initial_collateral;
         uint256 collateral_amount;
         uint256 debt_amount;
         uint256 prev_id;
@@ -27,7 +25,6 @@ interface ILeverageZapper {
         uint256 max_upfront_fee;
         uint256 min_borrow_out;
         uint256 min_collateral_out;
-        SwapData collateral_swap;
         SwapData debt_swap;
     }
 
@@ -42,16 +39,13 @@ interface ILeverageZapper {
 
     struct LeverUpData {
         address trove_manager;
-        address flash_loan_token;
-        address auction_taker;
         uint256 trove_id;
-        uint256 flash_loan_amount;
+        uint256 initial_collateral;
         uint256 collateral_amount;
         uint256 debt_amount;
         uint256 max_upfront_fee;
         uint256 min_borrow_out;
         uint256 min_collateral_out;
-        SwapData collateral_swap;
         SwapData debt_swap;
     }
 
@@ -74,9 +68,6 @@ interface ILeverageZapper {
     function routers(
         address router
     ) external view returns (bool);
-    function auction_takers(
-        address auction_taker
-    ) external view returns (bool);
 
     // ============================================================================================
     // Whitelist
@@ -84,10 +75,6 @@ interface ILeverageZapper {
 
     function set_router(
         address router,
-        bool allowed
-    ) external;
-    function set_auction_taker(
-        address auction_taker,
         bool allowed
     ) external;
 
@@ -106,6 +93,15 @@ interface ILeverageZapper {
     ) external;
     function lever_down_trove(
         LeverDownData calldata data
+    ) external;
+
+    // ============================================================================================
+    // Trove callback
+    // ============================================================================================
+
+    function troveCallback(
+        uint256 trove_id,
+        bytes calldata data
     ) external;
 
 }

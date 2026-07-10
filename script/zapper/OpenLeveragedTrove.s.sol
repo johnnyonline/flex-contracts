@@ -34,7 +34,6 @@ contract OpenLeveragedTrove is BaseZapperScript {
     uint256 internal _additionalCollateral;
     uint256 internal _totalCollateral;
     uint256 internal _baseDebt;
-    uint256 internal _flashLoanAmount;
     uint256 internal _debtAmount;
     uint256 internal _maxUpfrontFee;
     uint256 internal _minBorrowOut;
@@ -63,16 +62,18 @@ contract OpenLeveragedTrove is BaseZapperScript {
 
         _loadMarket();
 
-        // Compute amounts
+        // Compute amounts. The additional collateral is sourced inside the trove callback: the
+        // redemption-driven portion arrives in kind from the kicked auction (the zapper is both
+        // taker and kick receiver, so the take nets out), and the idle-liquidity portion is
+        // swapped borrow -> collateral via Enso.
         _additionalCollateral = USER_COLLATERAL * (TARGET_LEVERAGE - 1);
         _totalCollateral = USER_COLLATERAL * TARGET_LEVERAGE;
         _baseDebt = _additionalCollateral * _price / ORACLE_PRICE_SCALE;
-        _flashLoanAmount = _baseDebt;
         // Buffer the debt to cover swap slippage (lever zapper sweeps excess back to user)
         _debtAmount = _baseDebt * BPS / (BPS - SLIPPAGE_BPS);
 
         // Snapshot how much of `_debtAmount` the Lender can cover from idle vs. how much will go
-        // through the redemption path (auction settled atomically via the AUCTION_TAKER).
+        // through the redemption path (auction taken atomically in the trove callback).
         _lenderIdle = IERC20(_borrowToken).balanceOf(TROVE_MANAGER.lender());
         _atomicDelivery = _debtAmount > _lenderIdle ? _lenderIdle : _debtAmount;
         _redemptionAmount = _debtAmount - _atomicDelivery;
@@ -83,6 +84,8 @@ contract OpenLeveragedTrove is BaseZapperScript {
         // - min borrow out: require the Lender to still have at least its snapshotted idle balance
         //   (anyone draining it between quote and execution makes the tx revert)
         // - min collateral out: allow up to SLIPPAGE_BPS slippage on the redemption-driven auction
+        // - the declared `collateral_amount` is itself the overall floor: if the callback sources
+        //   less than `_totalCollateral`, the Trove Manager's collateral pull reverts
         _maxUpfrontFee = TROVE_MANAGER.get_upfront_fee(_debtAmount, ANNUAL_INTEREST_RATE) * (BPS + SLIPPAGE_BPS) / BPS;
         _minBorrowOut = _atomicDelivery;
         _minCollateralOut = _expectedRedeemedColl * (BPS - SLIPPAGE_BPS) / BPS;
@@ -108,7 +111,6 @@ contract OpenLeveragedTrove is BaseZapperScript {
         console.log("Total trove coll:     %s", _format(_totalCollateral, _collDec, _collSym));
         console.log("Base debt:            %s", _format(_baseDebt, _borrowDec, _borrowSym));
         console.log("Buffered debt:        %s", _format(_debtAmount, _borrowDec, _borrowSym));
-        console.log("Flash loan amount:    %s", _format(_flashLoanAmount, _borrowDec, _borrowSym));
         console.log("Annual interest rate: %s bps", _rateBps);
         console.log("Max upfront fee:      %s", _format(_maxUpfrontFee, _borrowDec, _borrowSym));
         console.log("Lender idle:          %s", _format(_lenderIdle, _borrowDec, _borrowSym));
@@ -119,17 +121,20 @@ contract OpenLeveragedTrove is BaseZapperScript {
         console.log("Min collateral out:   %s", _format(_minCollateralOut, _collDec, _collSym));
         console.log("---------------------------------");
 
-        // Get the enso swap calldata (borrow_token -> collateral_token).
+        // Get the enso swap calldata (borrow_token -> collateral_token) for the idle-liquidity
+        // portion only; the redemption portion arrives in kind from the auction.
         // IMPORTANT: pass the SwapExecutor as the Enso `fromAddress` so the route writes the output
         // back to the executor (which sweeps it to the LeverageZapper). If we pass the user instead,
         // Enso bakes the user's address into the deposit receiver and the zapper sees zero output.
-        (_swapRouter, _swapData) = _getEnsoSwapData(block.chainid, _borrowToken, _collateralToken, _flashLoanAmount, LEVERAGE_ZAPPER.SWAP_EXECUTOR());
-        console.log("Swap router:          %s", _swapRouter);
-        console.log("Swap calldata bytes:  %s", _swapData.length);
+        if (_atomicDelivery > 0) {
+            (_swapRouter, _swapData) =
+                _getEnsoSwapData(block.chainid, _borrowToken, _collateralToken, _atomicDelivery, LEVERAGE_ZAPPER.SWAP_EXECUTOR());
+            console.log("Swap router:          %s", _swapRouter);
+            console.log("Swap calldata bytes:  %s", _swapData.length);
 
-        // Make sure the router and auction taker are whitelisted on the zapper
-        require(LEVERAGE_ZAPPER.routers(_swapRouter), "swap router not whitelisted on LeverageZapper");
-        require(LEVERAGE_ZAPPER.auction_takers(AUCTION_TAKER), "auction taker not whitelisted on LeverageZapper");
+            // Make sure the router is whitelisted on the zapper
+            require(LEVERAGE_ZAPPER.routers(_swapRouter), "swap router not whitelisted on LeverageZapper");
+        }
 
         _ownerIndex = block.timestamp;
 
@@ -146,11 +151,9 @@ contract OpenLeveragedTrove is BaseZapperScript {
             ILeverageZapper.OpenLeveragedData({
                 owner: _user,
                 trove_manager: address(TROVE_MANAGER),
-                flash_loan_token: _borrowToken,
-                auction_taker: AUCTION_TAKER,
                 owner_index: _ownerIndex,
-                flash_loan_amount: _flashLoanAmount,
-                collateral_amount: USER_COLLATERAL,
+                initial_collateral: USER_COLLATERAL,
+                collateral_amount: _totalCollateral,
                 debt_amount: _debtAmount,
                 prev_id: _prevId,
                 next_id: _nextId,
@@ -158,8 +161,7 @@ contract OpenLeveragedTrove is BaseZapperScript {
                 max_upfront_fee: _maxUpfrontFee,
                 min_borrow_out: _minBorrowOut,
                 min_collateral_out: _minCollateralOut,
-                collateral_swap: ILeverageZapper.SwapData({router: _swapRouter, data: _swapData}),
-                debt_swap: ILeverageZapper.SwapData({router: address(0), data: ""})
+                debt_swap: ILeverageZapper.SwapData({router: _swapRouter, data: _swapData})
             })
         );
 

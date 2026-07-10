@@ -162,6 +162,19 @@ interface ITroveManager {
         uint256 min_collateral_out,
         address owner
     ) external returns (uint256);
+    function open_trove(
+        uint256 owner_index,
+        uint256 collateral_amount,
+        uint256 debt_amount,
+        uint256 upper_hint,
+        uint256 lower_hint,
+        uint256 annual_interest_rate,
+        uint256 max_upfront_fee,
+        uint256 min_borrow_out,
+        uint256 min_collateral_out,
+        address owner,
+        bytes calldata callback_data
+    ) external returns (uint256);
 
     // ============================================================================================
     // Adjust trove
@@ -181,6 +194,15 @@ interface ITroveManager {
         uint256 max_upfront_fee,
         uint256 min_borrow_out,
         uint256 min_collateral_out
+    ) external;
+    function borrow(
+        uint256 trove_id,
+        uint256 debt_amount,
+        uint256 max_upfront_fee,
+        uint256 min_borrow_out,
+        uint256 min_collateral_out,
+        uint256 collateral_amount,
+        bytes calldata callback_data
     ) external;
     function repay(
         uint256 trove_id,

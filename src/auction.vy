@@ -423,12 +423,14 @@ def take(
     if needed_amount <= receiver_remaining:
         # Entire amount to the receiver
         auction.amount_received += needed_amount
-        assert extcall buy_token.transferFrom(msg.sender, auction.receiver, needed_amount, default_return_value=True)
+        if msg.sender != auction.receiver:
+            assert extcall buy_token.transferFrom(msg.sender, auction.receiver, needed_amount, default_return_value=True)
     else:
         # Cover the receiver first
         if receiver_remaining > 0:
             auction.amount_received = auction.maximum_amount
-            assert extcall buy_token.transferFrom(msg.sender, auction.receiver, receiver_remaining, default_return_value=True)
+            if msg.sender != auction.receiver:
+                assert extcall buy_token.transferFrom(msg.sender, auction.receiver, receiver_remaining, default_return_value=True)
 
         # Transfer the surplus to the surplus receiver
         surplus: uint256 = needed_amount - receiver_remaining
