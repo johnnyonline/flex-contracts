@@ -1228,13 +1228,14 @@ def liquidate_trove(
     # Pull the borrow tokens from caller and transfer them to the Lender contract
     assert extcall self.borrow_token.transferFrom(msg.sender, self.lender, debt_to_repay, default_return_value=True)
 
-    # In a bad debt scenario, absorb the loss into the accrued protocol fees first
+    # In a bad debt scenario, absorb the loss into the accrued protocol fees first,
+    # if the fees do not cover the entire loss, trigger a report so the Lender's PPS reflects it atomically
     if is_underwater:
         loss: uint256 = trove_debt_after_interest - debt_to_repay
         loss_absorbed_by_fees: uint256 = min(self.unclaimed_protocol_fees, loss)
         self.unclaimed_protocol_fees -= loss_absorbed_by_fees
 
-        # If the fees did not absorb the entire loss, trigger a report so the Lender's PPS reflects it atomically
+        # If the fees did not absorb the entire loss, trigger a report on the Lender
         if loss > loss_absorbed_by_fees:
             lender: ILender = ILender(self.lender)
             keeper: IKeeper = IKeeper(staticcall lender.keeper())
