@@ -85,6 +85,7 @@ interface ITroveManager {
     function total_weighted_debt() external view returns (uint256);
     function last_debt_update_time() external view returns (uint256);
     function collateral_balance() external view returns (uint256);
+    function unclaimed_protocol_fees() external view returns (uint256);
     function troves(
         uint256
     ) external view returns (Trove memory);
@@ -133,6 +134,15 @@ interface ITroveManager {
     function approve(
         address operator,
         bool _approved
+    ) external;
+
+    // ============================================================================================
+    // Protocol fees
+    // ============================================================================================
+
+    function claim_protocol_fees(
+        uint256 min_borrow_out,
+        uint256 min_collateral_out
     ) external;
 
     // ============================================================================================

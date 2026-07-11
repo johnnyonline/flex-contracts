@@ -3,6 +3,9 @@ pragma solidity 0.8.23;
 
 import "forge-std/Test.sol";
 
+import {IPriceOracleNotScaled} from "../interfaces/IPriceOracleNotScaled.sol";
+import {IPriceOracleScaled} from "../interfaces/IPriceOracleScaled.sol";
+
 import "../Base.sol";
 
 contract Handler is Test {
@@ -16,6 +19,7 @@ contract Handler is Test {
     IERC20 public borrowToken;
     IERC20 public collateralToken;
     address public lender;
+    address public lenderUser;
 
     uint256 public minDebt;
     uint256 public minRate;
@@ -38,13 +42,15 @@ contract Handler is Test {
         IPriceOracle _priceOracle,
         IERC20 _borrowToken,
         IERC20 _collateralToken,
-        address _lender
+        address _lender,
+        address _lenderUser
     ) {
         troveManager = _troveManager;
         priceOracle = _priceOracle;
         borrowToken = _borrowToken;
         collateralToken = _collateralToken;
         lender = _lender;
+        lenderUser = _lenderUser;
 
         minDebt = troveManager.min_debt();
         minRate = troveManager.min_annual_interest_rate();
@@ -182,6 +188,65 @@ contract Handler is Test {
         borrowToken.approve(address(troveManager), _debt);
         try troveManager.close_trove(_troveId) {} catch {}
         vm.stopPrank();
+    }
+
+    // ============================================================================================
+    // Lender & Protocol fees
+    // ============================================================================================
+
+    function lenderDeposit(
+        uint256 _amount
+    ) external {
+        _amount = bound(_amount, 1, minDebt * 10);
+
+        deal(address(borrowToken), lenderUser, _amount);
+
+        vm.startPrank(lenderUser);
+        borrowToken.approve(lender, _amount);
+        try ILender(lender).deposit(_amount, lenderUser) {} catch {}
+        vm.stopPrank();
+    }
+
+    function lenderWithdraw(
+        uint256 _shares
+    ) external {
+        uint256 _balance = ILender(lender).balanceOf(lenderUser);
+        if (_balance == 0) return;
+        _shares = bound(_shares, 1, _balance);
+
+        vm.prank(lenderUser);
+        try ILender(lender).redeem(_shares, lenderUser, lenderUser) {} catch {}
+    }
+
+    function claimFees() external {
+        address _recipient = ILender(lender).performanceFeeRecipient();
+        vm.prank(_recipient);
+        try troveManager.claim_protocol_fees(0, 0) {} catch {}
+    }
+
+    function liquidateUnderwater(
+        uint256 _troveIndex,
+        uint256 _collateralRatio
+    ) external {
+        if (troveIds.length == 0) return;
+        _troveIndex = bound(_troveIndex, 0, troveIds.length - 1);
+        _collateralRatio = bound(_collateralRatio, 80, 104);
+
+        uint256 _troveId = troveIds[_troveIndex];
+        ITroveManager.Trove memory _trove = troveManager.troves(_troveId);
+        if (_trove.collateral == 0 || _trove.debt == 0) return;
+
+        // Drop the oracle price so the trove sits at the target collateral ratio
+        uint256 _price = _collateralRatio * troveManager.one_pct() * _trove.debt * ORACLE_PRICE_SCALE / (_trove.collateral * borrowTokenPrecision);
+        uint256 _price18 = _price * collateralTokenPrecision * 1e18 / (ORACLE_PRICE_SCALE * borrowTokenPrecision);
+        vm.mockCall(address(priceOracle), abi.encodeWithSelector(IPriceOracleScaled.get_price.selector), abi.encode(_price));
+        vm.mockCall(address(priceOracle), abi.encodeWithSelector(IPriceOracleNotScaled.get_price.selector, false), abi.encode(_price18));
+
+        deal(address(borrowToken), address(this), _trove.debt);
+        borrowToken.approve(address(troveManager), _trove.debt);
+        try troveManager.liquidate_trove(_troveId, type(uint256).max, address(this), "") {} catch {}
+
+        vm.clearMockedCalls();
     }
 
     // ============================================================================================

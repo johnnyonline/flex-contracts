@@ -30,6 +30,10 @@ event Approval:
     operator: indexed(address)
     approved: bool
 
+event ClaimProtocolFees:
+    recipient: indexed(address)
+    amount: uint256
+
 event OpenTrove:
     trove_id: indexed(uint256)
     trove_owner: indexed(address)
@@ -76,6 +80,11 @@ event CloseZombieTrove:
     trove_owner: indexed(address)
     collateral_amount: uint256
     debt_amount: uint256
+
+event BadDebt:
+    trove_id: indexed(uint256)
+    loss: uint256
+    loss_absorbed_by_fees: uint256
 
 event LiquidateTrove:
     trove_id: indexed(uint256)
@@ -190,6 +199,7 @@ total_debt: public(uint256)  # total outstanding system debt
 total_weighted_debt: public(uint256)  # sum of individual trove debts weighted by their annual interest rates
 last_debt_update_time: public(uint256)  # last timestamp when `total_debt` and `total_weighted_debt` were updated
 collateral_balance: public(uint256)  # total collateral tokens currently held by the contract
+unclaimed_protocol_fees: public(uint256)  # accrued upfront fees claimable by the protocol
 troves: public(HashMap[uint256, Trove])  # Trove ID --> Trove info
 
 # Approvals
@@ -313,6 +323,45 @@ def approve(operator: address, approved: bool):
 
 
 # ============================================================================================
+# Protocol fees
+# ============================================================================================
+
+
+@external
+@nonreentrant
+def claim_protocol_fees(min_borrow_out: uint256, min_collateral_out: uint256):
+    """
+    @notice Claim the accrued protocol fees
+    @dev Only callable by the Lender's performance fee recipient, which receives the fees
+    @dev Pays out of the Lender's idle liquidity first, then redeems the shortfall, which kicks
+         an auction with the recipient as the receiver of the proceeds
+    @param min_borrow_out Minimum borrow tokens received atomically from idle liquidity
+    @param min_collateral_out Minimum amount of collateral tokens to be redeemed
+    """
+    # Get the protocol fee recipient from the Lender
+    recipient: address = staticcall ILender(self.lender).performanceFeeRecipient()
+
+    # Make sure the caller is the fee recipient
+    assert msg.sender == recipient, "!recipient"
+
+    # Make sure there are fees to claim
+    unclaimed: uint256 = self.unclaimed_protocol_fees
+    assert unclaimed > 0, "!unclaimed"
+
+    # Zero out the unclaimed fees
+    self.unclaimed_protocol_fees = 0
+
+    # Transfer the fees to the caller, redeeming the shortfall if idle liquidity is insufficient
+    self._transfer_borrow_tokens(unclaimed, max_value(uint256), min_borrow_out, min_collateral_out)
+
+    # Emit event
+    log ClaimProtocolFees(
+        recipient=recipient,
+        amount=unclaimed,
+    )
+
+
+# ============================================================================================
 # Open trove
 # ============================================================================================
 
@@ -411,6 +460,9 @@ def open_trove(
 
     # Record the received collateral
     self.collateral_balance += collateral_amount
+
+    # Accrue the upfront fee to the protocol
+    self.unclaimed_protocol_fees += upfront_fee
 
     # Add the Trove to the sorted troves list
     extcall self.sorted_troves.insert(
@@ -618,6 +670,9 @@ def borrow(
     # Record the received collateral
     self.collateral_balance += collateral_amount
 
+    # Accrue the upfront fee to the protocol
+    self.unclaimed_protocol_fees += upfront_fee
+
     # Accrue interest on the total debt and update accounting
     self._accrue_interest_and_account_for_trove_change(
         debt_amount_with_fee, # debt_increase
@@ -781,6 +836,9 @@ def adjust_interest_rate(
 
         # Make sure the new collateral ratio is above the minimum collateral ratio
         assert collateral_ratio >= self.minimum_collateral_ratio, "!minimum_collateral_ratio"
+
+        # Accrue the upfront fee to the protocol
+        self.unclaimed_protocol_fees += upfront_fee
 
     # Cache the Trove's old debt and interest rate for global accounting
     old_debt: uint256 = trove.debt
@@ -1170,12 +1228,27 @@ def liquidate_trove(
     # Pull the borrow tokens from caller and transfer them to the Lender contract
     assert extcall self.borrow_token.transferFrom(msg.sender, self.lender, debt_to_repay, default_return_value=True)
 
-    # In a bad debt scenario, trigger a report so the Lender's PPS reflects the loss atomically
+    # In a bad debt scenario, absorb the loss into the accrued protocol fees first
     if is_underwater:
-        lender: ILender = ILender(self.lender)
-        keeper: IKeeper = IKeeper(staticcall lender.keeper())
-        extcall lender.disableHealthCheck()
-        extcall keeper.report(lender.address)
+        loss: uint256 = trove_debt_after_interest - debt_to_repay
+        loss_absorbed_by_fees: uint256 = min(self.unclaimed_protocol_fees, loss)
+        self.unclaimed_protocol_fees -= loss_absorbed_by_fees
+
+        # If the fees did not absorb the entire loss, trigger a report so the Lender's PPS reflects it atomically
+        if loss > loss_absorbed_by_fees:
+            lender: ILender = ILender(self.lender)
+            keeper: IKeeper = IKeeper(staticcall lender.keeper())
+
+            # Disable the Lender's health check and report the loss
+            extcall lender.disableHealthCheck()
+            extcall keeper.report(lender.address)
+
+        # Emit event
+        log BadDebt(
+            trove_id=trove_id,
+            loss=loss,
+            loss_absorbed_by_fees=loss_absorbed_by_fees,
+        )
 
     # Emit event
     log LiquidateTrove(
