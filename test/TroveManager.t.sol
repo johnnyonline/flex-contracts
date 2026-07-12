@@ -51,7 +51,8 @@ contract TroveManagerTests is Base {
                 min_liquidation_fee: minLiquidationFee,
                 max_liquidation_fee: maxLiquidationFee,
                 upfront_interest_period: upfrontInterestPeriod,
-                interest_rate_adj_cooldown: interestRateAdjCooldown
+                interest_rate_adj_cooldown: interestRateAdjCooldown,
+                repay_cooldown: repayCooldown
             })
         );
     }

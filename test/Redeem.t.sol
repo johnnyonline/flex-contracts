@@ -21,6 +21,71 @@ contract RedeemTests is Base {
         troveManager.redeem(0, address(0));
     }
 
+    // A borrow-path redemption skips the borrower's own Troves even when someone else (e.g. the
+    // Leverage Zapper) opens on their behalf
+    function test_redeem_skipsOwnTroves_openOnBehalf(
+        uint256 _amount
+    ) public {
+        _amount = bound(_amount, troveManager.min_debt() * 2, maxFuzzAmount / 2);
+        mintAndDepositIntoLender(userLender, _amount * 2);
+
+        uint256 _collateral = (_amount * DEFAULT_TARGET_COLLATERAL_RATIO / BORROW_TOKEN_PRECISION) * ORACLE_PRICE_SCALE / priceOracle.get_price();
+
+        // The owner's own Trove sits at the lowest rate, so a naive walk would redeem it first
+        uint256 _ownTroveId = mintAndOpenTrove(userBorrower, _collateral, _amount, DEFAULT_ANNUAL_INTEREST_RATE);
+        uint256 _otherTroveId = mintAndOpenTrove(anotherUserBorrower, _collateral, _amount, DEFAULT_ANNUAL_INTEREST_RATE * 2);
+        assertEq(borrowToken.balanceOf(address(lender)), 0, "E0");
+
+        uint256 _ownDebtBefore = troveManager.troves(_ownTroveId).debt;
+        uint256 _otherDebtBefore = troveManager.troves(_otherTroveId).debt;
+
+        // The operator opens a Trove on the owner's behalf at a higher rate, triggering a redemption
+        uint256 _debtAmount = _amount / 2;
+        airdrop(address(collateralToken), operator, _collateral);
+        vm.startPrank(operator);
+        collateralToken.approve(address(troveManager), _collateral);
+        troveManager.open_trove(0, _collateral, _debtAmount, 0, 0, DEFAULT_ANNUAL_INTEREST_RATE * 4, type(uint256).max, 0, 0, userBorrower);
+        vm.stopPrank();
+
+        // The owner's own Trove was skipped; the other borrower's Trove was redeemed
+        assertEq(troveManager.troves(_ownTroveId).debt, _ownDebtBefore, "E1");
+        assertEq(troveManager.troves(_otherTroveId).debt, _otherDebtBefore - _debtAmount, "E2");
+    }
+
+    // A borrow-path redemption skips the borrowing Trove owner's other Troves even when an
+    // approved operator (e.g. the Leverage Zapper) borrows on their behalf
+    function test_redeem_skipsOwnTroves_borrowOnBehalf(
+        uint256 _amount
+    ) public {
+        _amount = bound(_amount, troveManager.min_debt() * 2, maxFuzzAmount / 2);
+        mintAndDepositIntoLender(userLender, _amount * 3);
+
+        uint256 _collateral = (_amount * DEFAULT_TARGET_COLLATERAL_RATIO / BORROW_TOKEN_PRECISION) * ORACLE_PRICE_SCALE / priceOracle.get_price();
+
+        // The owner's own Trove sits at the lowest rate, so a naive walk would redeem it first
+        uint256 _ownTroveId = mintAndOpenTrove(userBorrower, _collateral, _amount, DEFAULT_ANNUAL_INTEREST_RATE);
+        uint256 _otherTroveId = mintAndOpenTrove(anotherUserBorrower, _collateral, _amount, DEFAULT_ANNUAL_INTEREST_RATE * 2);
+
+        // The owner's second Trove, with headroom to borrow more (skip a second to avoid a trove id collision)
+        skip(1);
+        uint256 _borrowTroveId = mintAndOpenTrove(userBorrower, _collateral * 2, _amount, DEFAULT_ANNUAL_INTEREST_RATE * 4);
+        assertEq(borrowToken.balanceOf(address(lender)), 0, "E0");
+
+        uint256 _ownDebtBefore = troveManager.troves(_ownTroveId).debt;
+        uint256 _otherDebtBefore = troveManager.get_trove_debt_after_interest(_otherTroveId);
+
+        // The owner approves the operator, which borrows more on their behalf, triggering a redemption
+        vm.prank(userBorrower);
+        troveManager.approve(operator, true);
+        uint256 _debtAmount = _amount / 2;
+        vm.prank(operator);
+        troveManager.borrow(_borrowTroveId, _debtAmount, type(uint256).max, 0, 0);
+
+        // The owner's own Trove was skipped; the other borrower's Trove was redeemed
+        assertEq(troveManager.troves(_ownTroveId).debt, _ownDebtBefore, "E1");
+        assertEq(troveManager.troves(_otherTroveId).debt, _otherDebtBefore - _debtAmount, "E2");
+    }
+
     // A redeeming lender who wants the collateral itself can simply take its own auction: as both
     // taker and kick receiver the payment nets out, so it keeps the collateral in kind and pays nothing
     function test_redeem_receiverSelfTake_receivesCollateral(

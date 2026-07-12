@@ -241,7 +241,7 @@ contract CloseTroveTests is Base {
 
         // Closing in the same block as the open should revert
         vm.prank(userBorrower);
-        vm.expectRevert("same block");
+        vm.expectRevert("!repay_cooldown");
         troveManager.close_trove(_troveId);
 
         // Advancing one second is enough to make `last_interest_rate_adj_time != block.timestamp`
@@ -260,8 +260,8 @@ contract CloseTroveTests is Base {
         assertEq(uint256(troveManager.troves(_troveId).status), uint256(ITroveManager.Status.closed), "E0");
     }
 
-    // Adjusting the rate and closing in the same block should revert
-    function test_closeTrove_sameBlockAsAdjustRate_reverts(
+    // Adjusting the rate does not gate closing: the close works in the same block
+    function test_closeTrove_sameBlockAsAdjustRate_works(
         uint256 _amount
     ) public {
         _amount = bound(_amount, troveManager.min_debt(), maxFuzzAmount);
@@ -284,12 +284,13 @@ contract CloseTroveTests is Base {
         uint256 _debt = troveManager.get_trove_debt_after_interest(_troveId);
         airdrop(address(borrowToken), userBorrower, _debt);
 
-        // Closing in the same block as the rate adjustment should revert
+        // Close in the same block as the rate adjustment
         vm.startPrank(userBorrower);
         borrowToken.approve(address(troveManager), _debt);
-        vm.expectRevert("same block");
         troveManager.close_trove(_troveId);
         vm.stopPrank();
+
+        assertEq(uint256(troveManager.troves(_troveId).status), uint256(ITroveManager.Status.closed), "E0");
     }
 
     // Borrowing more debt and closing in the same block should revert
@@ -321,13 +322,13 @@ contract CloseTroveTests is Base {
         // Closing in the same block as the borrow should revert
         vm.startPrank(userBorrower);
         borrowToken.approve(address(troveManager), _debt);
-        vm.expectRevert("same block");
+        vm.expectRevert("!repay_cooldown");
         troveManager.close_trove(_troveId);
         vm.stopPrank();
     }
 
-    // Repaying debt and closing in the same block should revert
-    function test_closeTrove_sameBlockAsRepay_reverts(
+    // Repaying does not gate closing: the close works in the same block
+    function test_closeTrove_sameBlockAsRepay_works(
         uint256 _amount
     ) public {
         // Need enough debt headroom above min_debt to repay
@@ -346,15 +347,16 @@ contract CloseTroveTests is Base {
         uint256 _debt = troveManager.get_trove_debt_after_interest(_troveId);
         airdrop(address(borrowToken), userBorrower, _debt);
 
-        // Repay something - refreshes `last_debt_update_time` to `block.timestamp`
+        // Repay something
         vm.startPrank(userBorrower);
         borrowToken.approve(address(troveManager), _debt);
         troveManager.repay(_troveId, _amount / 2);
 
-        // Closing in the same block as the repay should revert
-        vm.expectRevert("same block");
+        // Close in the same block as the repay
         troveManager.close_trove(_troveId);
         vm.stopPrank();
+
+        assertEq(uint256(troveManager.troves(_troveId).status), uint256(ITroveManager.Status.closed), "E0");
     }
 
 }

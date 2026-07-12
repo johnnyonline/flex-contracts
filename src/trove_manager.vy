@@ -129,6 +129,7 @@ struct Trove:
     collateral: uint256
     annual_interest_rate: uint256
     last_debt_update_time: uint64
+    last_debt_increase_time: uint64
     last_interest_rate_adj_time: uint64
     owner: address
     status: Status
@@ -149,6 +150,7 @@ struct InitializeParams:
     max_liquidation_fee: uint256
     upfront_interest_period: uint256
     interest_rate_adj_cooldown: uint256
+    repay_cooldown: uint256
 
 
 # ============================================================================================
@@ -191,6 +193,7 @@ min_liquidation_fee: public(uint256)
 max_liquidation_fee: public(uint256)
 upfront_interest_period: public(uint256)
 interest_rate_adj_cooldown: public(uint256)
+repay_cooldown: public(uint256)
 min_annual_interest_rate: public(uint256)
 max_annual_interest_rate: public(uint256)
 
@@ -249,6 +252,7 @@ def initialize(params: InitializeParams):
     self.max_liquidation_fee = params.max_liquidation_fee * one_hundredth_pct
     self.upfront_interest_period = params.upfront_interest_period
     self.interest_rate_adj_cooldown = params.interest_rate_adj_cooldown
+    self.repay_cooldown = params.repay_cooldown
     self.min_annual_interest_rate = one_pct // 10  # 0.1%
     self.max_annual_interest_rate = 250 * one_pct  # 250%
 
@@ -446,6 +450,7 @@ def open_trove(
         collateral=collateral_amount,
         annual_interest_rate=annual_interest_rate,
         last_debt_update_time=convert(block.timestamp, uint64),
+        last_debt_increase_time=convert(block.timestamp, uint64),
         last_interest_rate_adj_time=convert(block.timestamp, uint64),
         owner=owner,
         status=Status.ACTIVE
@@ -474,7 +479,13 @@ def open_trove(
     )
 
     # Deliver borrow tokens to the caller, redeem if liquidity is insufficient
-    self._transfer_borrow_tokens(debt_amount, annual_interest_rate, min_borrow_out, min_collateral_out)
+    self._transfer_borrow_tokens(
+        debt_amount,
+        annual_interest_rate,
+        min_borrow_out,
+        min_collateral_out,
+        owner,
+    )
 
     # If requested, hand control to the caller so it can source the collateral
     if len(callback_data) > 0:
@@ -664,6 +675,7 @@ def borrow(
     trove.debt = new_debt
     trove.collateral += collateral_amount
     trove.last_debt_update_time = convert(block.timestamp, uint64)
+    trove.last_debt_increase_time = convert(block.timestamp, uint64)
 
     # Save changes to storage
     self.troves[trove_id] = trove
@@ -688,6 +700,7 @@ def borrow(
         trove.annual_interest_rate,
         min_borrow_out,
         min_collateral_out,
+        trove.owner,
     )
 
     # If requested, hand control to the caller so it can source the collateral
@@ -734,8 +747,8 @@ def repay(trove_id: uint256, debt_amount: uint256):
     # Make sure the Trove is active
     assert trove.status == Status.ACTIVE, "!active"
 
-    # Disallow repaying in the same block as any debt-touching update
-    assert convert(trove.last_debt_update_time, uint256) != block.timestamp, "same block"
+    # Enforce the cooldown after the last debt increase, so debt cannot be created and repaid atomically
+    assert block.timestamp > convert(trove.last_debt_increase_time, uint256) + self.repay_cooldown, "!repay_cooldown"
 
     # Get the Trove's debt after accruing interest
     trove_debt_after_interest: uint256 = self._get_trove_debt_after_interest(trove)
@@ -904,8 +917,8 @@ def close_trove(trove_id: uint256):
     # Make sure the Trove is active
     assert trove.status == Status.ACTIVE, "!active"
 
-    # Disallow closing in the same block as any debt-touching update
-    assert convert(trove.last_debt_update_time, uint256) != block.timestamp, "same block"
+    # Enforce the cooldown after the last debt increase, so debt cannot be created and repaid atomically
+    assert block.timestamp > convert(trove.last_debt_increase_time, uint256) + self.repay_cooldown, "!repay_cooldown"
 
     # Get the Trove's debt after accruing interest
     trove_debt_after_interest: uint256 = self._get_trove_debt_after_interest(trove)
@@ -1292,7 +1305,8 @@ def redeem(debt_amount: uint256, receiver: address):
 def _redeem(
     debt_amount: uint256,
     redeemer_annual_interest_rate: uint256,
-    receiver: address = msg.sender
+    receiver: address = msg.sender,
+    borrower: address = empty(address)
 ) -> uint256:
     """
     @notice Internal implementation of `redeem`
@@ -1302,6 +1316,8 @@ def _redeem(
     @param debt_amount Target amount of borrow tokens to free
     @param redeemer_annual_interest_rate Annual interest rate paid by the redeemer
     @param receiver Address to transfer the auction proceeds to
+    @param borrower The account on whose behalf the redemption runs, whose own Troves are skipped.
+           Defaults to the zero address, which skips no one
     @return Amount of collateral tokens that were redeemed
     """
     # Get the collateral price
@@ -1343,9 +1359,9 @@ def _redeem(
         # Cache the ID of the next Trove to redeem, i.e., the previous Trove in the sorted list
         next_trove_to_redeem: uint256 = staticcall sorted_troves.prev(trove_to_redeem)
 
-        # Don't redeem a borrower's own Trove, unless it's a zombie. A borrower with multiple
+        # Don't redeem the borrower's own Trove, unless it's a zombie. A borrower with multiple
         # Troves can have one become zombie and acting on another Trove should clear it
-        if msg.sender != trove.owner or is_zombie_trove:
+        if borrower != trove.owner or is_zombie_trove:
             # Get the Trove's debt after accruing interest
             trove_debt_after_interest: uint256 = self._get_trove_debt_after_interest(trove)
 
@@ -1607,6 +1623,7 @@ def _transfer_borrow_tokens(
     annual_interest_rate: uint256,
     min_borrow_out: uint256,
     min_collateral_out: uint256,
+    borrower: address = empty(address),
 ):
     """
     @notice Transfer borrow tokens to the caller, redeeming other borrowers' collateral if necessary
@@ -1614,6 +1631,8 @@ def _transfer_borrow_tokens(
     @param annual_interest_rate Annual interest rate paid by the borrower
     @param min_borrow_out Minimum borrow tokens received atomically from idle liquidity
     @param min_collateral_out Minimum amount of collateral tokens to be redeemed
+    @param borrower The account on whose behalf the redemption runs, whose own Troves are skipped.
+           Defaults to the zero address, which skips no one
     """
     # Cache the Lender contract address
     lender: address = self.lender
@@ -1634,7 +1653,7 @@ def _transfer_borrow_tokens(
             assert extcall borrow_token.transferFrom(lender, msg.sender, available_liquidity, default_return_value=True)
 
         # Redeem the difference
-        collateral_out: uint256 = self._redeem(amount - available_liquidity, annual_interest_rate)
+        collateral_out: uint256 = self._redeem(amount - available_liquidity, annual_interest_rate, msg.sender, borrower)
 
         # Make sure we satisfied the `min_collateral_out` requirement
         assert collateral_out >= min_collateral_out, "!min_collateral_out"

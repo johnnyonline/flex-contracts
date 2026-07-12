@@ -29,6 +29,7 @@ interface ITroveManager {
         uint256 collateral;
         uint256 annual_interest_rate;
         uint64 last_debt_update_time;
+        uint64 last_debt_increase_time;
         uint64 last_interest_rate_adj_time;
         address owner;
         Status status;
@@ -49,6 +50,7 @@ interface ITroveManager {
         uint256 max_liquidation_fee;
         uint256 upfront_interest_period;
         uint256 interest_rate_adj_cooldown;
+        uint256 repay_cooldown;
     }
 
     // ============================================================================================
@@ -76,6 +78,7 @@ interface ITroveManager {
     function max_liquidation_fee() external view returns (uint256);
     function upfront_interest_period() external view returns (uint256);
     function interest_rate_adj_cooldown() external view returns (uint256);
+    function repay_cooldown() external view returns (uint256);
     function min_annual_interest_rate() external view returns (uint256);
     function max_annual_interest_rate() external view returns (uint256);
 

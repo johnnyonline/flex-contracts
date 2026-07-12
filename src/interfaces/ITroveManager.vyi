@@ -23,6 +23,7 @@ struct Trove:
     collateral: uint256
     annual_interest_rate: uint256
     last_debt_update_time: uint64
+    last_debt_increase_time: uint64
     last_interest_rate_adj_time: uint64
     owner: address
     status: Status
@@ -43,6 +44,7 @@ struct InitializeParams:
     max_liquidation_fee: uint256
     upfront_interest_period: uint256
     interest_rate_adj_cooldown: uint256
+    repay_cooldown: uint256
 
 
 # ============================================================================================

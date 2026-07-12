@@ -52,6 +52,7 @@ contract DeployMarket is Script {
                 max_liquidation_fee: 500, // 5%
                 upfront_interest_period: 7 days,
                 interest_rate_adj_cooldown: 7 days,
+                repay_cooldown: 30 minutes,
                 minimum_price_buffer_percentage: 1e18 - 1e16, // 99%
                 starting_price_buffer_percentage: 1e18, // 100%
                 re_kick_starting_price_buffer_percentage: 1e18 + 1e15, // 100.1%

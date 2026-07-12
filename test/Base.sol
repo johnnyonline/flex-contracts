@@ -46,6 +46,7 @@ abstract contract Base is Deploy, Test {
     uint256 public maxLiquidationFee = 500; // 5%
     uint256 public upfrontInterestPeriod = 7 days; // 7 days
     uint256 public interestRateAdjCooldown = 7 days; // 7 days
+    uint256 public repayCooldown = 0; // no cooldown
     uint256 public minimumPriceBufferPercentage = 1e18 - 5e16; // 95%
     uint256 public startingPriceBufferPercentage = 1e18 + 1e16; // 101%
     uint256 public reKickStartingPriceBufferPercentage = 1e18 + 10e16; // 110%
@@ -99,6 +100,7 @@ abstract contract Base is Deploy, Test {
                 max_liquidation_fee: maxLiquidationFee,
                 upfront_interest_period: upfrontInterestPeriod,
                 interest_rate_adj_cooldown: interestRateAdjCooldown,
+                repay_cooldown: repayCooldown,
                 minimum_price_buffer_percentage: minimumPriceBufferPercentage,
                 starting_price_buffer_percentage: startingPriceBufferPercentage,
                 re_kick_starting_price_buffer_percentage: reKickStartingPriceBufferPercentage,

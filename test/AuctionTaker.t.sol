@@ -29,6 +29,7 @@ contract AuctionTakerTests is Base {
                 max_liquidation_fee: maxLiquidationFee,
                 upfront_interest_period: upfrontInterestPeriod,
                 interest_rate_adj_cooldown: interestRateAdjCooldown,
+                repay_cooldown: repayCooldown,
                 minimum_price_buffer_percentage: minimumPriceBufferPercentage,
                 starting_price_buffer_percentage: 1e18, // no buffer
                 re_kick_starting_price_buffer_percentage: reKickStartingPriceBufferPercentage,
