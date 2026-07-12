@@ -64,6 +64,7 @@ abstract contract Base is Deploy, Test {
 
     uint256 public constant ORACLE_PRICE_SCALE = 1e36;
     uint256 public constant WAD = 1e18;
+    uint256 public constant BPS = 10_000;
 
     function setUp() public virtual {
         // Notify deployment script that this is a test
@@ -90,7 +91,7 @@ abstract contract Base is Deploy, Test {
                 borrow_token: address(borrowToken),
                 collateral_token: address(collateralToken),
                 price_oracle: address(priceOracle),
-                minimum_debt: minimumDebt,
+                minimum_debt: minimumDebt * BPS,
                 safe_collateral_ratio: safeCollateralRatio,
                 minimum_collateral_ratio: minimumCollateralRatio,
                 max_penalty_collateral_ratio: maxPenaltyCollateralRatio,

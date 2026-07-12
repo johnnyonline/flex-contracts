@@ -10,7 +10,6 @@ contract LeverageZapperTests is Base {
     MockRouter public mockRouter;
 
     uint256 constant SLIPPAGE_BPS = 50; // 0.5%
-    uint256 constant BPS = 10_000;
 
     uint256 public maxCollateralFuzzAmount;
     uint256 public minCollateralFuzzAmount;
@@ -947,7 +946,7 @@ contract LeverageZapperTests is Base {
                 borrow_token: address(borrowToken),
                 collateral_token: address(collateralToken),
                 price_oracle: address(priceOracle),
-                minimum_debt: minimumDebt,
+                minimum_debt: minimumDebt * BPS,
                 safe_collateral_ratio: safeCollateralRatio,
                 minimum_collateral_ratio: minimumCollateralRatio,
                 max_penalty_collateral_ratio: maxPenaltyCollateralRatio,

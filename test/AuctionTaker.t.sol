@@ -21,7 +21,7 @@ contract AuctionTakerTests is Base {
                 borrow_token: address(borrowToken),
                 collateral_token: yvUSD,
                 price_oracle: _oracle,
-                minimum_debt: minimumDebt,
+                minimum_debt: minimumDebt * BPS,
                 safe_collateral_ratio: safeCollateralRatio,
                 minimum_collateral_ratio: minimumCollateralRatio,
                 max_penalty_collateral_ratio: maxPenaltyCollateralRatio,

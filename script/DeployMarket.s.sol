@@ -19,6 +19,9 @@ contract DeployMarket is Script {
     address public constant BORROW_TOKEN = address(0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48); // USDC
     address public constant COLLATERAL_TOKEN = address(0x696d02Db93291651ED510704c9b286841d506987); // yvUSD
 
+    // Constants
+    uint256 public constant BPS = 10_000;
+
     // Deployed contracts
     ICatFactory public constant FACTORY = ICatFactory(0xe2c4a5C2AB1ed5745D206B33cc0abf0A5D34753d);
     IDaddy public constant DADDY = IDaddy(0x4e8341C77c94cCE982AB96d92BB28D69f4638290);
@@ -41,7 +44,7 @@ contract DeployMarket is Script {
                 borrow_token: BORROW_TOKEN,
                 collateral_token: COLLATERAL_TOKEN,
                 price_oracle: _priceOracle,
-                minimum_debt: 500,
+                minimum_debt: 500 * BPS, // 500 tokens
                 safe_collateral_ratio: 120, // 120%
                 minimum_collateral_ratio: 110, // 110%
                 max_penalty_collateral_ratio: 105, // 105%

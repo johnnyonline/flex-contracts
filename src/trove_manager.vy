@@ -159,6 +159,7 @@ struct InitializeParams:
 _MAX_CALLBACK_DATA_SIZE: constant(uint256) = 10**5
 _PRICE_ORACLE_PRECISION: constant(uint256) = 10 ** 36
 _LIQUIDATION_FEE_PRECISION: constant(uint256) = 10_000
+_BPS: constant(uint256) = 10_000
 _WAD: constant(uint256) = 10 ** 18
 _MAX_REDEMPTIONS: constant(uint256) = 1_000
 _ONE_YEAR: constant(uint256) = 365 * 60 * 60 * 24
@@ -240,7 +241,7 @@ def initialize(params: InitializeParams):
     # Set market parameters
     self.one_pct = one_pct
     self.borrow_token_precision = borrow_token_precision
-    self.min_debt = params.minimum_debt * borrow_token_precision
+    self.min_debt = params.minimum_debt * borrow_token_precision // _BPS
     self.safe_collateral_ratio = params.safe_collateral_ratio * one_pct
     self.minimum_collateral_ratio = params.minimum_collateral_ratio * one_pct
     self.max_penalty_collateral_ratio = params.max_penalty_collateral_ratio * one_pct
