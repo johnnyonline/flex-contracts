@@ -5,6 +5,7 @@ import {ITokenizedStrategy} from "@tokenized-strategy/interfaces/ITokenizedStrat
 
 import {ICatFactory} from "./interfaces/ICatFactory.sol";
 import {IDaddy} from "./interfaces/IDaddy.sol";
+import {IMorphoOracleFactory} from "./interfaces/IMorphoOracleFactory.sol";
 import {IRegistry} from "./interfaces/IRegistry.sol";
 
 import "forge-std/Script.sol";
@@ -26,6 +27,7 @@ contract DeployMarket is Script {
     ICatFactory public constant FACTORY = ICatFactory(0xe2c4a5C2AB1ed5745D206B33cc0abf0A5D34753d);
     IDaddy public constant DADDY = IDaddy(0x4e8341C77c94cCE982AB96d92BB28D69f4638290);
     IRegistry public constant REGISTRY = IRegistry(0x9117440a7D03238905d1C8908157Bd7a547c77c8);
+    IMorphoOracleFactory public constant MORPHO_ORACLE_FACTORY = IMorphoOracleFactory(0x3A7bB36Ee3f3eE32A60e9f2b33c1e5f2E83ad766);
 
     function run() public {
         uint256 _pk = vm.envUint("DEPLOYER_PRIVATE_KEY");
@@ -35,8 +37,21 @@ contract DeployMarket is Script {
 
         vm.startBroadcast(_pk);
 
-        // Deploy price oracle
-        address _priceOracle = deployCode("yvusd_to_usdc_oracle");
+        // Deploy a Morpho oracle for yvUSD/USDC (vault conversion only) and wrap it in the Flex adapter
+        address _morphoOracle = MORPHO_ORACLE_FACTORY.createMorphoChainlinkOracleV2(
+            COLLATERAL_TOKEN, // baseVault: yvUSD
+            1e6, // baseVaultConversionSample
+            address(0), // baseFeed1
+            address(0), // baseFeed2
+            6, // baseTokenDecimals: USDC
+            address(0), // quoteVault
+            1, // quoteVaultConversionSample
+            address(0), // quoteFeed1
+            address(0), // quoteFeed2
+            6, // quoteTokenDecimals: USDC
+            bytes32(0) // salt
+        );
+        address _priceOracle = deployCode("morpho_oracle", abi.encode(_morphoOracle, BORROW_TOKEN, COLLATERAL_TOKEN));
 
         // Deploy market
         (address _troveManager, address _sortedTroves, address _dutchDesk, address _auction, address _lender) = FACTORY.deploy(

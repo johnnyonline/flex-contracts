@@ -384,7 +384,7 @@ def open_trove(
     min_borrow_out: uint256,
     min_collateral_out: uint256,
     owner: address = msg.sender,
-    callback_data: Bytes[_MAX_CALLBACK_DATA_SIZE] = b"",
+    data: Bytes[_MAX_CALLBACK_DATA_SIZE] = b"",
 ) -> uint256:
     """
     @notice Open a new Trove with specified collateral, debt, and interest rate
@@ -402,7 +402,7 @@ def open_trove(
     @param min_borrow_out Minimum borrow tokens received atomically from idle liquidity
     @param min_collateral_out Minimum amount of collateral tokens to be redeemed
     @param owner The address that will own the Trove. Defaults to msg.sender
-    @param callback_data If non-empty, `troveCallback` is called on the caller after the borrow tokens are
+    @param data If non-empty, `troveCallback` is called on the caller after the borrow tokens are
            delivered (and any auction kicked) but before the collateral is pulled, so the caller can source
            the collateral from the auction itself. Defaults to empty (no callback)
     @return trove_id Unique identifier for the new Trove
@@ -488,8 +488,8 @@ def open_trove(
     )
 
     # If requested, hand control to the caller so it can source the collateral
-    if len(callback_data) > 0:
-        extcall ITroveCallback(msg.sender).troveCallback(trove_id, callback_data)
+    if len(data) > 0:
+        extcall ITroveCallback(msg.sender).troveCallback(trove_id, data)
 
     # Pull the collateral tokens from caller
     assert extcall self.collateral_token.transferFrom(msg.sender, self, collateral_amount, default_return_value=True)
@@ -616,7 +616,7 @@ def borrow(
     min_borrow_out: uint256,
     min_collateral_out: uint256,
     collateral_amount: uint256 = 0,
-    callback_data: Bytes[_MAX_CALLBACK_DATA_SIZE] = b"",
+    data: Bytes[_MAX_CALLBACK_DATA_SIZE] = b"",
 ):
     """
     @notice Borrow more tokens from an existing Trove
@@ -631,7 +631,7 @@ def borrow(
     @param min_collateral_out Minimum amount of collateral tokens to be redeemed
     @param collateral_amount Amount of collateral tokens to add to the Trove. Counted towards the collateral
            ratio check but pulled only after the callback. Defaults to zero
-    @param callback_data If non-empty, `troveCallback` is called on the caller after the borrow tokens are
+    @param data If non-empty, `troveCallback` is called on the caller after the borrow tokens are
            delivered (and any auction kicked) but before the collateral is pulled, so the caller can source
            the collateral from the auction itself. Defaults to empty (no callback)
     """
@@ -704,8 +704,8 @@ def borrow(
     )
 
     # If requested, hand control to the caller so it can source the collateral
-    if len(callback_data) > 0:
-        extcall ITroveCallback(msg.sender).troveCallback(trove_id, callback_data)
+    if len(data) > 0:
+        extcall ITroveCallback(msg.sender).troveCallback(trove_id, data)
 
     # If provided, pull the collateral tokens from caller
     if collateral_amount > 0:

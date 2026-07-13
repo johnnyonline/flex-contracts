@@ -186,7 +186,7 @@ interface ITroveManager {
         uint256 min_borrow_out,
         uint256 min_collateral_out,
         address owner,
-        bytes calldata callback_data
+        bytes calldata data
     ) external returns (uint256);
 
     // ============================================================================================
@@ -215,7 +215,7 @@ interface ITroveManager {
         uint256 min_borrow_out,
         uint256 min_collateral_out,
         uint256 collateral_amount,
-        bytes calldata callback_data
+        bytes calldata data
     ) external;
     function repay(
         uint256 trove_id,

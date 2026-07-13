@@ -6,6 +6,8 @@ import {ITokenizedStrategy} from "@tokenized-strategy/interfaces/ITokenizedStrat
 
 import {ILender} from "../src/lender/interfaces/ILender.sol";
 
+import {IMorphoOracleFactory} from "../script/interfaces/IMorphoOracleFactory.sol";
+
 import {IAuction} from "./interfaces/IAuction.sol";
 import {IDutchDesk} from "./interfaces/IDutchDesk.sol";
 import {IKeeper} from "./interfaces/IKeeper.sol";
@@ -67,6 +69,11 @@ abstract contract Base is Deploy, Test {
     uint256 public constant WAD = 1e18;
     uint256 public constant BPS = 10_000;
 
+    // Morpho oracle factory and Chainlink feeds
+    address public constant MORPHO_ORACLE_FACTORY = 0x3A7bB36Ee3f3eE32A60e9f2b33c1e5f2E83ad766;
+    address public constant ETH_USD_PRICE_FEED = 0x5f4eC3Df9cbd43714FE2740f5E3616155c5b8419;
+    address public constant USDC_USD_PRICE_FEED = 0x8fFfFfd4AfB6115b954Bd326cbe7B4BA576818f6;
+
     function setUp() public virtual {
         // Notify deployment script that this is a test
         isTest = true;
@@ -83,8 +90,22 @@ abstract contract Base is Deploy, Test {
         // Deploy factories, daddy, and registry
         run();
 
-        // Deploy price oracle
-        priceOracle = IPriceOracle(deployCode("yvweth2_to_usdc_oracle"));
+        // Deploy a Morpho oracle for yvWETH-2/USDC and wrap it in the Flex adapter
+        address _morphoOracle = IMorphoOracleFactory(MORPHO_ORACLE_FACTORY)
+            .createMorphoChainlinkOracleV2(
+                address(collateralToken), // baseVault: yvWETH-2
+                1e18, // baseVaultConversionSample
+                ETH_USD_PRICE_FEED, // baseFeed1
+                address(0), // baseFeed2
+                18, // baseTokenDecimals: WETH
+                address(0), // quoteVault
+                1, // quoteVaultConversionSample
+                USDC_USD_PRICE_FEED, // quoteFeed1
+                address(0), // quoteFeed2
+                6, // quoteTokenDecimals: USDC
+                bytes32(0) // salt
+            );
+        priceOracle = IPriceOracle(deployCode("morpho_oracle", abi.encode(_morphoOracle, address(borrowToken), address(collateralToken))));
 
         // Deploy market
         (address _troveManager, address _sortedTroves, address _dutchDesk, address _auction, address _lender) = catFactory.deploy(
