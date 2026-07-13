@@ -230,7 +230,7 @@ contract Handler is Test {
     ) external {
         if (troveIds.length == 0) return;
         _troveIndex = bound(_troveIndex, 0, troveIds.length - 1);
-        _collateralRatio = bound(_collateralRatio, 80, 104);
+        _collateralRatio = bound(_collateralRatio, 1, 104);
 
         uint256 _troveId = troveIds[_troveIndex];
         ITroveManager.Trove memory _trove = troveManager.troves(_troveId);

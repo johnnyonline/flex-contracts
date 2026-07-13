@@ -70,7 +70,7 @@ AUCTION: public(immutable(address))
 LENDER_FACTORY: public(immutable(ILenderFactory))
 
 # Version
-VERSION: public(constant(String[28])) = "1.0.0"
+VERSION: public(constant(String[28])) = "2.0.0"
 
 # Validation constants
 _MIN_TOKEN_DECIMALS: constant(uint256) = 6

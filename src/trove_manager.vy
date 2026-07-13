@@ -310,6 +310,7 @@ def sync_total_debt() -> uint256:
 
 
 @external
+@nonreentrant
 def approve(operator: address, approved: bool):
     """
     @notice Approve or revoke an operator to act on all Troves owned by the caller
@@ -792,6 +793,7 @@ def repay(trove_id: uint256, debt_amount: uint256):
 
 
 @external
+@nonreentrant
 def adjust_interest_rate(
     trove_id: uint256,
     new_annual_interest_rate: uint256,
