@@ -132,7 +132,7 @@ _MORPHO: constant(IMorpho) = IMorpho(0xBBBBBbbBBb9cC5e90e3b3Af64bdAF62C37EEFFCb)
 # Whitelists
 routers: public(HashMap[address, bool])
 
-# Transient guard that allows only Trove Manager to call `troveCallback`
+# Transient guard that allows only the Trove Manager to call `troveCallback`
 _pending_trove_manager: transient(address)
 
 
@@ -237,7 +237,7 @@ def open_leveraged_trove(data: OpenLeveragedData) -> uint256:
     assert extcall IERC20(collateral_token).approve(data.trove_manager, 0, default_return_value=True)
 
     # Sweep any remaining tokens to caller
-    self._sweep_all(data.trove_manager, msg.sender)
+    self._sweep_all(data.trove_manager)
 
     # Return the Trove ID
     return trove_id
@@ -277,7 +277,7 @@ def close_leveraged_trove(data: CloseLeveragedData):
     )
 
     # Sweep any remaining tokens to caller
-    self._sweep_all(data.trove_manager, msg.sender, data.flash_loan_token)
+    self._sweep_all(data.trove_manager, data.flash_loan_token)
 
 
 # ============================================================================================
@@ -344,7 +344,7 @@ def lever_up_trove(data: LeverUpData):
     assert extcall IERC20(collateral_token).approve(data.trove_manager, 0, default_return_value=True)
 
     # Sweep any remaining tokens to caller
-    self._sweep_all(data.trove_manager, msg.sender)
+    self._sweep_all(data.trove_manager)
 
 
 # ============================================================================================
@@ -381,7 +381,7 @@ def lever_down_trove(data: LeverDownData):
     )
 
     # Sweep any remaining tokens to caller
-    self._sweep_all(data.trove_manager, msg.sender, data.flash_loan_token)
+    self._sweep_all(data.trove_manager, data.flash_loan_token)
 
 
 # ============================================================================================
@@ -417,7 +417,7 @@ def troveCallback(trove_id: uint256, data: Bytes[_MAX_CALLBACK_DATA_SIZE]):
     # Take the auction, if one was kicked
     if staticcall dutch_desk.nonce() > nonce_before:
         # Make sure there is no starting price buffer. Otherwise we would not have enough buy tokens to take the auction
-        assert staticcall dutch_desk.starting_price_buffer_percentage() <= _MAX_STARTING_PRICE_BUFFER, "!buffer"
+        assert staticcall dutch_desk.starting_price_buffer_percentage() == _MAX_STARTING_PRICE_BUFFER, "!buffer"
 
         # Take the auction
         extcall IAuction(staticcall dutch_desk.auction()).take(nonce_before)
@@ -603,26 +603,24 @@ def _swap(swap: SwapData, token_in: address, token_out: address, amount_in: uint
 
 
 @internal
-def _sweep_all(trove_manager: address, receiver: address, flash_loan_token: address = empty(address)):
+def _sweep_all(trove_manager: address, flash_loan_token: address = empty(address)):
     """
-    @notice Sweep the flash loan, collateral and borrow tokens to the `receiver`
+    @notice Sweep the flash loan, collateral and borrow tokens to the caller
     @param trove_manager The Trove Manager contract
-    @param receiver The receiver of the swept tokens
     @param flash_loan_token The flash loan token, if the operation used one
     """
     if flash_loan_token != empty(address):
-        self._sweep(flash_loan_token, receiver)
-    self._sweep(staticcall ITroveManager(trove_manager).collateral_token(), receiver)
-    self._sweep(staticcall ITroveManager(trove_manager).borrow_token(), receiver)
+        self._sweep(flash_loan_token)
+    self._sweep(staticcall ITroveManager(trove_manager).collateral_token())
+    self._sweep(staticcall ITroveManager(trove_manager).borrow_token())
 
 
 @internal
-def _sweep(token: address, receiver: address):
+def _sweep(token: address):
     """
-    @notice Transfer the entire balance of a token held by this contract to the `receiver`
+    @notice Transfer the entire balance of a token held by this contract to the caller
     @param token The token to sweep
-    @param receiver The receiver of the swept tokens
     """
     balance: uint256 = staticcall IERC20(token).balanceOf(self)
     if balance > 0:
-        assert extcall IERC20(token).transfer(receiver, balance, default_return_value=True)
+        assert extcall IERC20(token).transfer(msg.sender, balance, default_return_value=True)
