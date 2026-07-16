@@ -41,7 +41,7 @@ contract FactoryTests is Base {
                 borrow_token: _weth,
                 collateral_token: _wsteth,
                 price_oracle: _oracle,
-                minimum_debt: 1000, // 0.1 WETH
+                minimum_debt: 0.1e18, // 0.1 WETH
                 safe_collateral_ratio: safeCollateralRatio,
                 minimum_collateral_ratio: minimumCollateralRatio,
                 max_penalty_collateral_ratio: maxPenaltyCollateralRatio,

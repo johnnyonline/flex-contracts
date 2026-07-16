@@ -44,7 +44,7 @@ contract TroveManagerTests is Base {
                 sorted_troves: address(sortedTroves),
                 borrow_token: address(borrowToken),
                 collateral_token: address(collateralToken),
-                minimum_debt: minimumDebt * BPS,
+                minimum_debt: minimumDebt * BORROW_TOKEN_PRECISION,
                 safe_collateral_ratio: safeCollateralRatio,
                 minimum_collateral_ratio: minimumCollateralRatio,
                 max_penalty_collateral_ratio: maxPenaltyCollateralRatio,

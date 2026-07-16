@@ -946,7 +946,7 @@ contract LeverageZapperTests is Base {
                 borrow_token: address(borrowToken),
                 collateral_token: address(collateralToken),
                 price_oracle: address(priceOracle),
-                minimum_debt: minimumDebt * BPS,
+                minimum_debt: minimumDebt * BORROW_TOKEN_PRECISION,
                 safe_collateral_ratio: safeCollateralRatio,
                 minimum_collateral_ratio: minimumCollateralRatio,
                 max_penalty_collateral_ratio: maxPenaltyCollateralRatio,

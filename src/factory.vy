@@ -39,7 +39,7 @@ struct DeployParams:
     borrow_token: address  # address of the borrow token
     collateral_token: address  # address of the collateral token
     price_oracle: address  # address of the Price Oracle contract
-    minimum_debt: uint256  # minimum borrowable amount in BPS of one borrow token, e.g., `5_000_000` for 500 tokens
+    minimum_debt: uint256  # minimum borrowable amount in borrow token units, e.g., `500 * 10 ** 6` for 500 USDC
     safe_collateral_ratio: uint256  # target CR after partial liquidation, e.g., `115` for 115%
     minimum_collateral_ratio: uint256  # minimum CR to avoid liquidation, e.g., `110` for 110%
     max_penalty_collateral_ratio: uint256  # CR at which max liquidation fee applies, e.g., `105` for 105%
