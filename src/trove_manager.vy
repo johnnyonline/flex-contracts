@@ -479,13 +479,7 @@ def open_trove(
     )
 
     # Deliver borrow tokens to the caller, redeem if liquidity is insufficient
-    self._transfer_borrow_tokens(
-        debt_amount,
-        annual_interest_rate,
-        min_borrow_out,
-        min_collateral_out,
-        owner,
-    )
+    self._transfer_borrow_tokens(debt_amount, annual_interest_rate, min_borrow_out, min_collateral_out)
 
     # If requested, hand control to the caller so it can source the collateral
     if len(data) > 0:
@@ -695,13 +689,7 @@ def borrow(
     )
 
     # Deliver borrow tokens to the caller, redeem if liquidity is insufficient
-    self._transfer_borrow_tokens(
-        debt_amount,
-        trove.annual_interest_rate,
-        min_borrow_out,
-        min_collateral_out,
-        trove.owner,
-    )
+    self._transfer_borrow_tokens(debt_amount, trove.annual_interest_rate, min_borrow_out, min_collateral_out)
 
     # If requested, hand control to the caller so it can source the collateral
     if len(data) > 0:
@@ -1306,8 +1294,7 @@ def redeem(debt_amount: uint256, receiver: address):
 def _redeem(
     debt_amount: uint256,
     redeemer_annual_interest_rate: uint256,
-    receiver: address = msg.sender,
-    borrower: address = empty(address)
+    receiver: address = msg.sender
 ) -> uint256:
     """
     @notice Internal implementation of `redeem`
@@ -1317,8 +1304,6 @@ def _redeem(
     @param debt_amount Target amount of borrow tokens to free
     @param redeemer_annual_interest_rate Annual interest rate paid by the redeemer
     @param receiver Address to transfer the auction proceeds to
-    @param borrower The account on whose behalf the redemption runs, whose own Troves are skipped.
-           Defaults to the zero address, which skips no one
     @return Amount of collateral tokens that were redeemed
     """
     # Get the collateral price
@@ -1360,77 +1345,74 @@ def _redeem(
         # Cache the ID of the next Trove to redeem, i.e., the previous Trove in the sorted list
         next_trove_to_redeem: uint256 = staticcall sorted_troves.prev(trove_to_redeem)
 
-        # Don't redeem the borrower's own Trove, unless it's a zombie. A borrower with multiple
-        # Troves can have one become zombie and acting on another Trove should clear it
-        if borrower != trove.owner or is_zombie_trove:
-            # Get the Trove's debt after accruing interest
-            trove_debt_after_interest: uint256 = self._get_trove_debt_after_interest(trove)
+        # Get the Trove's debt after accruing interest
+        trove_debt_after_interest: uint256 = self._get_trove_debt_after_interest(trove)
 
-            # Determine the amount to be freed
-            debt_to_free: uint256 = min(remaining_debt_to_free, trove_debt_after_interest)
+        # Determine the amount to be freed
+        debt_to_free: uint256 = min(remaining_debt_to_free, trove_debt_after_interest)
 
-            # Calculate the Trove's new debt amount
-            trove_new_debt: uint256 = trove_debt_after_interest - debt_to_free
+        # Calculate the Trove's new debt amount
+        trove_new_debt: uint256 = trove_debt_after_interest - debt_to_free
 
-            # If trove would be left with debt below the minimum, go zombie
-            if trove_new_debt < self.min_debt:
-                # If the trove is not already a zombie trove, we need to mark it as such
-                if not is_zombie_trove:
-                    # Mark trove as zombie
-                    trove.status = Status.ZOMBIE
+        # If trove would be left with debt below the minimum, go zombie
+        if trove_new_debt < self.min_debt:
+            # If the trove is not already a zombie trove, we need to mark it as such
+            if not is_zombie_trove:
+                # Mark trove as zombie
+                trove.status = Status.ZOMBIE
 
-                    # Remove trove from sorted list
-                    extcall sorted_troves.remove(trove_to_redeem)
+                # Remove trove from sorted list
+                extcall sorted_troves.remove(trove_to_redeem)
 
-                    # If it's a partial redemption, record it so we know to continue with it next time
-                    if trove_new_debt > 0:
-                        self.zombie_trove_id = trove_to_redeem
+                # If it's a partial redemption, record it so we know to continue with it next time
+                if trove_new_debt > 0:
+                    self.zombie_trove_id = trove_to_redeem
 
-                # If we fully redeemed a zombie trove, reset the `zombie_trove_id` variable
-                elif trove_new_debt == 0:
-                    self.zombie_trove_id = 0
+            # If we fully redeemed a zombie trove, reset the `zombie_trove_id` variable
+            elif trove_new_debt == 0:
+                self.zombie_trove_id = 0
 
-            # Get the amount of collateral equal to `debt_to_free`
-            collateral_to_redeem: uint256 = debt_to_free * _PRICE_ORACLE_PRECISION // collateral_price
+        # Get the amount of collateral equal to `debt_to_free`
+        collateral_to_redeem: uint256 = debt_to_free * _PRICE_ORACLE_PRECISION // collateral_price
 
-            # Calculate the Trove's new collateral amount
-            trove_new_collateral: uint256 = trove.collateral - collateral_to_redeem
+        # Calculate the Trove's new collateral amount
+        trove_new_collateral: uint256 = trove.collateral - collateral_to_redeem
 
-            # Calculate the Trove's old and new weighted debt
-            trove_weighted_debt_decrease: uint256 = trove.debt * trove.annual_interest_rate
-            trove_weighted_debt_increase: uint256 = trove_new_debt * trove.annual_interest_rate
+        # Calculate the Trove's old and new weighted debt
+        trove_weighted_debt_decrease: uint256 = trove.debt * trove.annual_interest_rate
+        trove_weighted_debt_increase: uint256 = trove_new_debt * trove.annual_interest_rate
 
-            # Update the Trove's info
-            trove.debt = trove_new_debt
-            trove.collateral = trove_new_collateral
-            trove.last_debt_update_time = convert(block.timestamp, uint64)
+        # Update the Trove's info
+        trove.debt = trove_new_debt
+        trove.collateral = trove_new_collateral
+        trove.last_debt_update_time = convert(block.timestamp, uint64)
 
-            # Save changes to storage
-            self.troves[trove_to_redeem] = trove
+        # Save changes to storage
+        self.troves[trove_to_redeem] = trove
 
-            # Increment the total debt and collateral decrease
-            total_debt_decrease += debt_to_free
-            total_collateral_decrease += collateral_to_redeem
+        # Increment the total debt and collateral decrease
+        total_debt_decrease += debt_to_free
+        total_collateral_decrease += collateral_to_redeem
 
-            # Increment the total old and new weighted debt
-            total_weighted_debt_decrease += trove_weighted_debt_decrease
-            total_weighted_debt_increase += trove_weighted_debt_increase
+        # Increment the total old and new weighted debt
+        total_weighted_debt_decrease += trove_weighted_debt_decrease
+        total_weighted_debt_increase += trove_weighted_debt_increase
 
-            # Update the remaining debt to free
-            remaining_debt_to_free -= debt_to_free
+        # Update the remaining debt to free
+        remaining_debt_to_free -= debt_to_free
 
-            # Emit event
-            log RedeemTrove(
-                trove_id=trove_to_redeem,
-                trove_owner=trove.owner,
-                redeemer=msg.sender,
-                collateral_amount=collateral_to_redeem,
-                debt_amount=debt_to_free,
-            )
+        # Emit event
+        log RedeemTrove(
+            trove_id=trove_to_redeem,
+            trove_owner=trove.owner,
+            redeemer=msg.sender,
+            collateral_amount=collateral_to_redeem,
+            debt_amount=debt_to_free,
+        )
 
-            # Break if we freed all the debt we wanted
-            if remaining_debt_to_free == 0:
-                break
+        # Break if we freed all the debt we wanted
+        if remaining_debt_to_free == 0:
+            break
 
         # Get the next Trove to redeem. If we just processed a zombie Trove (which is not in the sorted Troves list),
         # get the Trove with the lowest interest rate. Otherwise, use the previous Trove from the list
@@ -1624,7 +1606,6 @@ def _transfer_borrow_tokens(
     annual_interest_rate: uint256,
     min_borrow_out: uint256,
     min_collateral_out: uint256,
-    borrower: address = empty(address),
 ):
     """
     @notice Transfer borrow tokens to the caller, redeeming other borrowers' collateral if necessary
@@ -1632,8 +1613,6 @@ def _transfer_borrow_tokens(
     @param annual_interest_rate Annual interest rate paid by the borrower
     @param min_borrow_out Minimum borrow tokens received atomically from idle liquidity
     @param min_collateral_out Minimum amount of collateral tokens to be redeemed
-    @param borrower The account on whose behalf the redemption runs, whose own Troves are skipped.
-           Defaults to the zero address, which skips no one
     """
     # Cache the Lender contract address
     lender: address = self.lender
@@ -1654,7 +1633,7 @@ def _transfer_borrow_tokens(
             assert extcall borrow_token.transferFrom(lender, msg.sender, available_liquidity, default_return_value=True)
 
         # Redeem the difference
-        collateral_out: uint256 = self._redeem(amount - available_liquidity, annual_interest_rate, msg.sender, borrower)
+        collateral_out: uint256 = self._redeem(amount - available_liquidity, annual_interest_rate)
 
         # Make sure we satisfied the `min_collateral_out` requirement
         assert collateral_out >= min_collateral_out, "!min_collateral_out"

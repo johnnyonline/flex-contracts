@@ -21,9 +21,9 @@ contract RedeemTests is Base {
         troveManager.redeem(0, address(0));
     }
 
-    // A borrow-path redemption skips the borrower's own Troves even when someone else (e.g. the
-    // Leverage Zapper) opens on their behalf
-    function test_redeem_skipsOwnTroves_openOnBehalf(
+    // A borrow-path redemption walks strictly by rate order: the borrower's own lowest-rate
+    // Trove is redeemed first, it cannot be used to shield and push the redemption onto others
+    function test_redeem_redeemsOwnTroveFirst_open(
         uint256 _amount
     ) public {
         _amount = bound(_amount, troveManager.min_debt() * 2, maxFuzzAmount / 2);
@@ -31,30 +31,30 @@ contract RedeemTests is Base {
 
         uint256 _collateral = (_amount * DEFAULT_TARGET_COLLATERAL_RATIO / BORROW_TOKEN_PRECISION) * ORACLE_PRICE_SCALE / priceOracle.get_price();
 
-        // The owner's own Trove sits at the lowest rate, so a naive walk would redeem it first
+        // The owner's own Trove sits at the lowest rate, so it is first in line to be redeemed
         uint256 _ownTroveId = mintAndOpenTrove(userBorrower, _collateral, _amount, DEFAULT_ANNUAL_INTEREST_RATE);
         uint256 _otherTroveId = mintAndOpenTrove(anotherUserBorrower, _collateral, _amount, DEFAULT_ANNUAL_INTEREST_RATE * 2);
         assertEq(borrowToken.balanceOf(address(lender)), 0, "E0");
 
-        uint256 _ownDebtBefore = troveManager.troves(_ownTroveId).debt;
+        skip(1); // avoid a trove id collision
+        uint256 _ownDebtBefore = troveManager.get_trove_debt_after_interest(_ownTroveId);
         uint256 _otherDebtBefore = troveManager.troves(_otherTroveId).debt;
 
-        // The operator opens a Trove on the owner's behalf at a higher rate, triggering a redemption
+        // The owner opens another Trove at a higher rate, triggering a redemption
         uint256 _debtAmount = _amount / 2;
-        airdrop(address(collateralToken), operator, _collateral);
-        vm.startPrank(operator);
+        airdrop(address(collateralToken), userBorrower, _collateral);
+        vm.startPrank(userBorrower);
         collateralToken.approve(address(troveManager), _collateral);
-        troveManager.open_trove(0, _collateral, _debtAmount, 0, 0, DEFAULT_ANNUAL_INTEREST_RATE * 4, type(uint256).max, 0, 0, userBorrower);
+        troveManager.open_trove(0, _collateral, _debtAmount, 0, 0, DEFAULT_ANNUAL_INTEREST_RATE * 4, type(uint256).max, 0, 0);
         vm.stopPrank();
 
-        // The owner's own Trove was skipped; the other borrower's Trove was redeemed
-        assertEq(troveManager.troves(_ownTroveId).debt, _ownDebtBefore, "E1");
-        assertEq(troveManager.troves(_otherTroveId).debt, _otherDebtBefore - _debtAmount, "E2");
+        // The owner's own lowest-rate Trove was redeemed; the other borrower's Trove was untouched
+        assertEq(troveManager.troves(_ownTroveId).debt, _ownDebtBefore - _debtAmount, "E1");
+        assertEq(troveManager.troves(_otherTroveId).debt, _otherDebtBefore, "E2");
     }
 
-    // A borrow-path redemption skips the borrowing Trove owner's other Troves even when an
-    // approved operator (e.g. the Leverage Zapper) borrows on their behalf
-    function test_redeem_skipsOwnTroves_borrowOnBehalf(
+    // Same via borrow: levering an existing Trove redeems the owner's own lowest-rate Trove first
+    function test_redeem_redeemsOwnTroveFirst_borrow(
         uint256 _amount
     ) public {
         _amount = bound(_amount, troveManager.min_debt() * 2, maxFuzzAmount / 2);
@@ -62,7 +62,7 @@ contract RedeemTests is Base {
 
         uint256 _collateral = (_amount * DEFAULT_TARGET_COLLATERAL_RATIO / BORROW_TOKEN_PRECISION) * ORACLE_PRICE_SCALE / priceOracle.get_price();
 
-        // The owner's own Trove sits at the lowest rate, so a naive walk would redeem it first
+        // The owner's own Trove sits at the lowest rate, so it is first in line to be redeemed
         uint256 _ownTroveId = mintAndOpenTrove(userBorrower, _collateral, _amount, DEFAULT_ANNUAL_INTEREST_RATE);
         uint256 _otherTroveId = mintAndOpenTrove(anotherUserBorrower, _collateral, _amount, DEFAULT_ANNUAL_INTEREST_RATE * 2);
 
@@ -71,19 +71,17 @@ contract RedeemTests is Base {
         uint256 _borrowTroveId = mintAndOpenTrove(userBorrower, _collateral * 2, _amount, DEFAULT_ANNUAL_INTEREST_RATE * 4);
         assertEq(borrowToken.balanceOf(address(lender)), 0, "E0");
 
-        uint256 _ownDebtBefore = troveManager.troves(_ownTroveId).debt;
-        uint256 _otherDebtBefore = troveManager.get_trove_debt_after_interest(_otherTroveId);
+        uint256 _ownDebtBefore = troveManager.get_trove_debt_after_interest(_ownTroveId);
+        uint256 _otherDebtBefore = troveManager.troves(_otherTroveId).debt;
 
-        // The owner approves the operator, which borrows more on their behalf, triggering a redemption
-        vm.prank(userBorrower);
-        troveManager.approve(operator, true);
+        // The owner borrows more, triggering a redemption
         uint256 _debtAmount = _amount / 2;
-        vm.prank(operator);
+        vm.prank(userBorrower);
         troveManager.borrow(_borrowTroveId, _debtAmount, type(uint256).max, 0, 0);
 
-        // The owner's own Trove was skipped; the other borrower's Trove was redeemed
-        assertEq(troveManager.troves(_ownTroveId).debt, _ownDebtBefore, "E1");
-        assertEq(troveManager.troves(_otherTroveId).debt, _otherDebtBefore - _debtAmount, "E2");
+        // The owner's own lowest-rate Trove was redeemed; the other borrower's Trove was untouched
+        assertEq(troveManager.troves(_ownTroveId).debt, _ownDebtBefore - _debtAmount, "E1");
+        assertEq(troveManager.troves(_otherTroveId).debt, _otherDebtBefore, "E2");
     }
 
     // A redeeming lender who wants the collateral itself can simply take its own auction: as both
