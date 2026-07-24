@@ -125,15 +125,24 @@ _MORPHO: constant(IMorpho) = IMorpho(0xBBBBBbbBBb9cC5e90e3b3Af64bdAF62C37EEFFCb)
 
 
 # ============================================================================================
+# Transient storage
+# ============================================================================================
+
+
+# Guard that allows only the Trove Manager to call `troveCallback`
+_pending_trove_manager: transient(address)
+
+# Commitment binding `onMorphoFlashLoan` to the payload encoded by the outer call
+_pending_flash_loan: transient(bytes32)
+
+
+# ============================================================================================
 # Storage
 # ============================================================================================
 
 
 # Whitelists
 routers: public(HashMap[address, bool])
-
-# Transient guard that allows only the Trove Manager to call `troveCallback`
-_pending_trove_manager: transient(address)
 
 
 # ============================================================================================
@@ -269,6 +278,9 @@ def close_leveraged_trove(data: CloseLeveragedData):
     # Make sure the caller is the Trove owner or an approved operator
     assert trove.owner == msg.sender or staticcall trove_manager.approved(trove.owner, msg.sender), "!owner"
 
+    # Commit to the flash loan payload
+    self._pending_flash_loan = keccak256(abi_encode(Operation.CLOSE, data))
+
     # Initiate flash loan
     extcall _MORPHO.flashLoan(
         data.flash_loan_token,  # token
@@ -373,6 +385,9 @@ def lever_down_trove(data: LeverDownData):
     # Make sure the caller is the Trove owner or an approved operator
     assert trove.owner == msg.sender or staticcall trove_manager.approved(trove.owner, msg.sender), "!owner"
 
+    # Commit to the flash loan payload
+    self._pending_flash_loan = keccak256(abi_encode(Operation.LEVER_DOWN, data))
+
     # Initiate flash loan
     extcall _MORPHO.flashLoan(
         data.flash_loan_token,  # token
@@ -443,9 +458,12 @@ def onMorphoFlashLoan(
     @param assets The amount that was flash loaned
     @param data Encoded operation parameters
     """
-    # Sanity checks
+    # Make sure the caller is Morpho and the payload is the one committed by the outer call
     assert msg.sender == _MORPHO.address, "!caller"
-    assert len(data) >= 32, "!data"
+    assert keccak256(data) == self._pending_flash_loan, "!pending"
+
+    # Clear the transient commitment
+    self._pending_flash_loan = empty(bytes32)
 
     # Decode operation type from the first 32 bytes
     operation: Operation = abi_decode(slice(data, 0, 32), Operation)

@@ -661,6 +661,26 @@ contract LeverageZapperTests is Base {
         leverageZapper.troveCallback(0, abi.encode(uint256(0), ILeverageZapper.SwapData({router: address(0), data: ""})));
     }
 
+    function test_onMorphoFlashLoan_directCall_reverts(
+        address _caller,
+        bytes memory _data
+    ) public {
+        address _morpho = 0xBBBBBbbBBb9cC5e90e3b3Af64bdAF62C37EEFFCb;
+        vm.assume(_caller != _morpho);
+        vm.prank(_caller);
+        vm.expectRevert("!caller");
+        leverageZapper.onMorphoFlashLoan(0, _data);
+    }
+
+    function test_onMorphoFlashLoan_noPendingCommitment_reverts(
+        bytes memory _data
+    ) public {
+        // Even Morpho itself cannot invoke the callback without a payload committed by an outer call
+        vm.prank(0xBBBBBbbBBb9cC5e90e3b3Af64bdAF62C37EEFFCb);
+        vm.expectRevert("!pending");
+        leverageZapper.onMorphoFlashLoan(0, _data);
+    }
+
     function test_closeLeveragedTrove_unapproved_reverts(
         uint256 _userCollateral,
         uint256 _leverage,

@@ -104,4 +104,13 @@ interface ILeverageZapper {
         bytes calldata data
     ) external;
 
+    // ============================================================================================
+    // Flash loan callback
+    // ============================================================================================
+
+    function onMorphoFlashLoan(
+        uint256 assets,
+        bytes calldata data
+    ) external;
+
 }
