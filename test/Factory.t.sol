@@ -16,7 +16,7 @@ contract FactoryTests is Base {
         assertEq(catFactory.DUTCH_DESK(), originalDutchDesk, "E2");
         assertEq(catFactory.AUCTION(), originalAuction, "E3");
         assertEq(catFactory.LENDER_FACTORY(), address(lenderFactory), "E4");
-        assertEq(catFactory.VERSION(), "2.0.0", "E5");
+        assertEq(catFactory.VERSION(), "1.1.0", "E5");
 
         // Lender Factory
         assertEq(lenderFactory.DADDY(), address(daddy), "E6");
