@@ -405,6 +405,9 @@ contract CloseZombieTroveTests is Base {
 
         assertEq(uint256(troveManager.troves(_troveId).status), uint256(ITroveManager.Status.zombie), "E0");
 
+        // Wait out the repay cooldown
+        skip(1);
+
         // Approve operator
         vm.prank(userBorrower);
         troveManager.approve(operator, true);

@@ -969,6 +969,9 @@ def close_zombie_trove(trove_id: uint256):
     # Make sure the Trove is zombie
     assert trove.status == Status.ZOMBIE, "!zombie"
 
+    # Enforce the cooldown after the last debt increase, so debt cannot be created and repaid atomically
+    assert block.timestamp > convert(trove.last_debt_increase_time, uint256) + self.repay_cooldown, "!repay_cooldown"
+
     # Cache the Trove's old info for global accounting
     old_trove: Trove = trove
 

@@ -141,6 +141,39 @@ contract RepayCooldownTests is Base {
         assertEq(uint256(troveManager.troves(_troveId).status), uint256(ITroveManager.Status.closed), "E0");
     }
 
+    // Closing a zombie Trove is blocked until the cooldown after the open has passed, so a Trove
+    // cannot be opened and removed atomically via a self redemption into zombie status
+    function test_closeZombieTrove_cooldown(
+        uint256 _amount
+    ) public {
+        _amount = bound(_amount, troveManager.min_debt(), maxFuzzAmount);
+        uint256 _troveId = _openTrove(_amount);
+
+        // Redeem the Trove down below the minimum debt, making it a zombie in the block it was opened
+        uint256 _debt = troveManager.get_trove_debt_after_interest(_troveId);
+        vm.prank(address(lender));
+        troveManager.redeem(_debt - 100 * BORROW_TOKEN_PRECISION, address(lender));
+        assertEq(uint256(troveManager.troves(_troveId).status), uint256(ITroveManager.Status.zombie), "E0");
+
+        // Airdrop generously so the close attempt isn't blocked by balance
+        airdrop(address(borrowToken), userBorrower, _amount * 2);
+
+        vm.startPrank(userBorrower);
+        borrowToken.approve(address(troveManager), type(uint256).max);
+
+        // Blocked through the last second of the cooldown
+        skip(30 minutes);
+        vm.expectRevert("!repay_cooldown");
+        troveManager.close_zombie_trove(_troveId);
+
+        // One second later the close works
+        skip(1);
+        troveManager.close_zombie_trove(_troveId);
+        vm.stopPrank();
+
+        assertEq(uint256(troveManager.troves(_troveId).status), uint256(ITroveManager.Status.closed), "E1");
+    }
+
     // The factory rejects cooldowns above the maximum
     function test_deploy_cooldownTooLong_reverts() public {
         vm.expectRevert("!repay_cooldown");
