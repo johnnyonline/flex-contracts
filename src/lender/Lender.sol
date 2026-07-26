@@ -119,7 +119,10 @@ contract Lender is BaseHooks {
     /// @inheritdoc BaseStrategy
     function _freeFunds(uint256 _amount) internal override {
         // Try to free `_amount` by redeeming collateral (which triggers an auction).
-        // Auction proceeds will be sent to `_auctionProceedsReceiver` which is set in the `_preWithdrawHook`
+        // Auction proceeds will be sent to `_auctionProceedsReceiver` which is set in the `_preWithdrawHook`.
+        // The redemption may free less than `_amount` if it walks the maximum number of Troves, in which case
+        // the auction covers only what was freed, so callers should verify it covers what they asked for in
+        // the same transaction
         TROVE_MANAGER.redeem(_amount, _auctionProceedsReceiver);
     }
 

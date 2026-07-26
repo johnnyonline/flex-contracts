@@ -1283,6 +1283,9 @@ def redeem(debt_amount: uint256, receiver: address):
     @notice Attempt to free the specified amount of borrow tokens by selling collateral
     @dev Can only be called by the Lender contract
     @dev Uses the Dutch Desk contract to auction off the redeemed collateral tokens
+    @dev May free less than `debt_amount`, as the walk stops after `_MAX_REDEMPTIONS` Troves. The kicked
+         auction pays the `receiver` only up to the amount actually freed, so callers should verify the
+         kicked auction covers what they asked for in the same transaction
     @param debt_amount Target amount of borrow tokens to free
     @param receiver Address to transfer the auction proceeds to
     """
