@@ -23,7 +23,7 @@ contract DeployMarket is Script {
     address public constant COLLATERAL_TOKEN = address(0x696d02Db93291651ED510704c9b286841d506987); // yvUSD
 
     // Deployed contracts
-    ICatFactory public constant FACTORY = ICatFactory(0xe2c4a5C2AB1ed5745D206B33cc0abf0A5D34753d);
+    ICatFactory public constant FACTORY = ICatFactory(0xfFc787AD990dA8f73dDA2B971Dce31C0D9d2501F);
     IDaddy public constant DADDY = IDaddy(0x4e8341C77c94cCE982AB96d92BB28D69f4638290);
     IRegistry public constant REGISTRY = IRegistry(0x9117440a7D03238905d1C8908157Bd7a547c77c8);
     IMorphoOracleFactory public constant MORPHO_ORACLE_FACTORY = IMorphoOracleFactory(0x3A7bB36Ee3f3eE32A60e9f2b33c1e5f2E83ad766);
@@ -64,9 +64,9 @@ contract DeployMarket is Script {
                 max_penalty_collateral_ratio: 105, // 105%
                 min_liquidation_fee: 50, // 0.5%
                 max_liquidation_fee: 500, // 5%
-                upfront_interest_period: 7 days,
+                upfront_interest_period: 1 days,
                 interest_rate_adj_cooldown: 7 days,
-                repay_cooldown: 30 minutes,
+                repay_cooldown: 10 minutes,
                 minimum_price_buffer_percentage: 1e18 - 1e16, // 99%
                 starting_price_buffer_percentage: 1e18, // 100%
                 re_kick_starting_price_buffer_percentage: 1e18 + 1e15, // 100.1%
@@ -77,13 +77,15 @@ contract DeployMarket is Script {
             })
         );
 
-        // Accept Lender management
-        DADDY.execute(address(_lender), abi.encodeWithSelector(ITokenizedStrategy.acceptManagement.selector), 0, true);
+        // // Accept Lender management
+        // DADDY.execute(address(_lender), abi.encodeWithSelector(ITokenizedStrategy.acceptManagement.selector), 0, true);
 
-        // Endorse market
-        DADDY.execute(address(REGISTRY), abi.encodeWithSelector(IRegistry.endorse.selector, _troveManager), 0, true);
+        // // Endorse market
+        // DADDY.execute(address(REGISTRY), abi.encodeWithSelector(IRegistry.endorse.selector, _troveManager), 0, true);
 
         console2.log("---------------------------------");
+        console2.log("Morpho Oracle: ", _morphoOracle);
+        console2.log("Price Oracle: ", _priceOracle);
         console2.log("Trove Manager: ", _troveManager);
         console2.log("Sorted Troves: ", _sortedTroves);
         console2.log("Dutch Desk: ", _dutchDesk);
