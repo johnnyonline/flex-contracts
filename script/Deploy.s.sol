@@ -65,6 +65,10 @@ contract Deploy is Script {
     IERC20 public collateralToken = IERC20(0xAc37729B76db6438CE62042AE1270ee574CA7571); // yvWETH-2
     // IERC20 public collateralToken = IERC20(0xBF319dDC2Edc1Eb6FDf9910E39b37Be221C8805F); // yvcrvUSD-2
 
+    // Existing contracts
+    IDaddy public constant DADDY = IDaddy(0x4e8341C77c94cCE982AB96d92BB28D69f4638290);
+    IRegistry public constant REGISTRY = IRegistry(0x9117440a7D03238905d1C8908157Bd7a547c77c8);
+
     // CREATE2 salt
     bytes32 public constant SALT = bytes32(uint256(555));
 
@@ -87,14 +91,17 @@ contract Deploy is Script {
         // Deploy original contracts using CREATE2
         deployOriginalContracts();
 
-        // Deploy daddy using CREATE2
-        deployDaddy();
+        // Use the existing daddy and registry, or deploy fresh ones for tests
+        if (isTest) {
+            deployDaddy();
+            deployRegistry();
+        } else {
+            daddy = DADDY;
+            registry = REGISTRY;
+        }
 
         // Deploy factories using CREATE2
         deployFactories();
-
-        // Deploy registry using CREATE2
-        deployRegistry();
 
         // Deploy periphery using CREATE2
         deployPeriphery();
