@@ -119,14 +119,18 @@ contract Lender is BaseHooks {
     /// @inheritdoc BaseStrategy
     function _freeFunds(uint256 _amount) internal override {
         // Try to free `_amount` by redeeming collateral (which triggers an auction).
-        // Auction proceeds will be sent to `_auctionProceedsReceiver` which is set in the `_preWithdrawHook`
+        // Auction proceeds will be sent to `_auctionProceedsReceiver` which is set in the `_preWithdrawHook`.
+        // The redemption may free less than `_amount` if it walks the maximum number of Troves, in which case
+        // the auction covers only what was freed, so callers should verify it covers what they asked for in
+        // the same transaction
         TROVE_MANAGER.redeem(_amount, _auctionProceedsReceiver);
     }
 
     /// @inheritdoc BaseStrategy
     function _harvestAndReport() internal override returns (uint256) {
-        // Total assets is whatever idle asset we have + the latest total debt figure from the Trove Manager
-        return asset.balanceOf(address(this)) + TROVE_MANAGER.sync_total_debt();
+        // Total assets is whatever idle asset we have + the latest total debt figure from the Trove Manager,
+        // minus the accrued protocol fees, which are claimed from the Trove Manager contract
+        return asset.balanceOf(address(this)) + TROVE_MANAGER.sync_total_debt() - TROVE_MANAGER.unclaimed_protocol_fees();
     }
 
 }

@@ -11,8 +11,7 @@
 
 from ethereum.ercs import IERC20Detailed
 
-from interfaces import IMorphoOracle
-
+from ..interfaces import IMorphoOracle
 from ..interfaces import IPriceOracle
 
 # ============================================================================================

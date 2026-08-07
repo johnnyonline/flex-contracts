@@ -15,6 +15,7 @@ from snekmate.utils import math
 from interfaces import IKeeper
 from interfaces import ILender
 from interfaces import ITaker
+from interfaces import ITroveCallback
 from interfaces import IDutchDesk
 from interfaces import IPriceOracle
 from interfaces import ISortedTroves
@@ -28,6 +29,10 @@ event Approval:
     owner: indexed(address)
     operator: indexed(address)
     approved: bool
+
+event ClaimProtocolFees:
+    recipient: indexed(address)
+    amount: uint256
 
 event OpenTrove:
     trove_id: indexed(uint256)
@@ -76,6 +81,11 @@ event CloseZombieTrove:
     collateral_amount: uint256
     debt_amount: uint256
 
+event BadDebt:
+    trove_id: indexed(uint256)
+    loss: uint256
+    loss_absorbed_by_fees: uint256
+
 event LiquidateTrove:
     trove_id: indexed(uint256)
     trove_owner: indexed(address)
@@ -119,6 +129,7 @@ struct Trove:
     collateral: uint256
     annual_interest_rate: uint256
     last_debt_update_time: uint64
+    last_debt_increase_time: uint64
     last_interest_rate_adj_time: uint64
     owner: address
     status: Status
@@ -139,6 +150,7 @@ struct InitializeParams:
     max_liquidation_fee: uint256
     upfront_interest_period: uint256
     interest_rate_adj_cooldown: uint256
+    repay_cooldown: uint256
 
 
 # ============================================================================================
@@ -180,6 +192,7 @@ min_liquidation_fee: public(uint256)
 max_liquidation_fee: public(uint256)
 upfront_interest_period: public(uint256)
 interest_rate_adj_cooldown: public(uint256)
+repay_cooldown: public(uint256)
 min_annual_interest_rate: public(uint256)
 max_annual_interest_rate: public(uint256)
 
@@ -189,6 +202,7 @@ total_debt: public(uint256)  # total outstanding system debt
 total_weighted_debt: public(uint256)  # sum of individual trove debts weighted by their annual interest rates
 last_debt_update_time: public(uint256)  # last timestamp when `total_debt` and `total_weighted_debt` were updated
 collateral_balance: public(uint256)  # total collateral tokens currently held by the contract
+unclaimed_protocol_fees: public(uint256)  # accrued upfront fees claimable by the protocol
 troves: public(HashMap[uint256, Trove])  # Trove ID --> Trove info
 
 # Approvals
@@ -229,7 +243,7 @@ def initialize(params: InitializeParams):
     # Set market parameters
     self.one_pct = one_pct
     self.borrow_token_precision = borrow_token_precision
-    self.min_debt = params.minimum_debt * borrow_token_precision
+    self.min_debt = params.minimum_debt
     self.safe_collateral_ratio = params.safe_collateral_ratio * one_pct
     self.minimum_collateral_ratio = params.minimum_collateral_ratio * one_pct
     self.max_penalty_collateral_ratio = params.max_penalty_collateral_ratio * one_pct
@@ -237,6 +251,7 @@ def initialize(params: InitializeParams):
     self.max_liquidation_fee = params.max_liquidation_fee * one_hundredth_pct
     self.upfront_interest_period = params.upfront_interest_period
     self.interest_rate_adj_cooldown = params.interest_rate_adj_cooldown
+    self.repay_cooldown = params.repay_cooldown
     self.min_annual_interest_rate = one_pct // 10  # 0.1%
     self.max_annual_interest_rate = 250 * one_pct  # 250%
 
@@ -294,6 +309,7 @@ def sync_total_debt() -> uint256:
 
 
 @external
+@nonreentrant
 def approve(operator: address, approved: bool):
     """
     @notice Approve or revoke an operator to act on all Troves owned by the caller
@@ -312,11 +328,51 @@ def approve(operator: address, approved: bool):
 
 
 # ============================================================================================
+# Protocol fees
+# ============================================================================================
+
+
+@external
+@nonreentrant
+def claim_protocol_fees(min_borrow_out: uint256, min_collateral_out: uint256):
+    """
+    @notice Claim the accrued protocol fees
+    @dev Only callable by the Lender's performance fee recipient, which receives the fees
+    @dev Pays out of the Lender's idle liquidity first, then redeems the shortfall, which kicks
+         an auction with the recipient as the receiver of the proceeds
+    @param min_borrow_out Minimum borrow tokens received atomically from idle liquidity
+    @param min_collateral_out Minimum amount of collateral tokens to be redeemed
+    """
+    # Get the protocol fee recipient from the Lender
+    recipient: address = staticcall ILender(self.lender).performanceFeeRecipient()
+
+    # Make sure the caller is the fee recipient
+    assert msg.sender == recipient, "!recipient"
+
+    # Make sure there are fees to claim
+    unclaimed: uint256 = self.unclaimed_protocol_fees
+    assert unclaimed > 0, "!unclaimed"
+
+    # Zero out the unclaimed fees
+    self.unclaimed_protocol_fees = 0
+
+    # Transfer the fees to the caller, redeeming the shortfall if idle liquidity is insufficient
+    self._transfer_borrow_tokens(unclaimed, max_value(uint256), min_borrow_out, min_collateral_out)
+
+    # Emit event
+    log ClaimProtocolFees(
+        recipient=recipient,
+        amount=unclaimed,
+    )
+
+
+# ============================================================================================
 # Open trove
 # ============================================================================================
 
 
 @external
+@nonreentrant
 def open_trove(
     owner_index: uint256,
     collateral_amount: uint256,
@@ -328,6 +384,7 @@ def open_trove(
     min_borrow_out: uint256,
     min_collateral_out: uint256,
     owner: address = msg.sender,
+    data: Bytes[_MAX_CALLBACK_DATA_SIZE] = b"",
 ) -> uint256:
     """
     @notice Open a new Trove with specified collateral, debt, and interest rate
@@ -345,6 +402,9 @@ def open_trove(
     @param min_borrow_out Minimum borrow tokens received atomically from idle liquidity
     @param min_collateral_out Minimum amount of collateral tokens to be redeemed
     @param owner The address that will own the Trove. Defaults to msg.sender
+    @param data If non-empty, `troveCallback` is called on the caller after the borrow tokens are
+           delivered (and any auction kicked) but before the collateral is pulled, so the caller can source
+           the collateral from the auction itself. Defaults to empty (no callback)
     @return trove_id Unique identifier for the new Trove
     """
     # Make sure collateral and debt amounts are non-zero
@@ -390,6 +450,7 @@ def open_trove(
         collateral=collateral_amount,
         annual_interest_rate=annual_interest_rate,
         last_debt_update_time=convert(block.timestamp, uint64),
+        last_debt_increase_time=convert(block.timestamp, uint64),
         last_interest_rate_adj_time=convert(block.timestamp, uint64),
         owner=owner,
         status=Status.ACTIVE
@@ -406,6 +467,9 @@ def open_trove(
     # Record the received collateral
     self.collateral_balance += collateral_amount
 
+    # Accrue the upfront fee to the protocol
+    self.unclaimed_protocol_fees += upfront_fee
+
     # Add the Trove to the sorted troves list
     extcall self.sorted_troves.insert(
         trove_id,
@@ -414,11 +478,15 @@ def open_trove(
         next_id
     )
 
-    # Pull the collateral tokens from caller
-    assert extcall self.collateral_token.transferFrom(msg.sender, self, collateral_amount, default_return_value=True)
-
     # Deliver borrow tokens to the caller, redeem if liquidity is insufficient
     self._transfer_borrow_tokens(debt_amount, annual_interest_rate, min_borrow_out, min_collateral_out)
+
+    # If requested, hand control to the caller so it can source the collateral
+    if len(data) > 0:
+        extcall ITroveCallback(msg.sender).troveCallback(trove_id, data)
+
+    # Pull the collateral tokens from caller
+    assert extcall self.collateral_token.transferFrom(msg.sender, self, collateral_amount, default_return_value=True)
 
     # Emit event
     log OpenTrove(
@@ -439,6 +507,7 @@ def open_trove(
 
 
 @external
+@nonreentrant
 def add_collateral(trove_id: uint256, collateral_amount: uint256):
     """
     @notice Add collateral to an existing Trove
@@ -477,6 +546,7 @@ def add_collateral(trove_id: uint256, collateral_amount: uint256):
 
 
 @external
+@nonreentrant
 def remove_collateral(trove_id: uint256, collateral_amount: uint256):
     """
     @notice Remove collateral from an existing Trove
@@ -532,12 +602,15 @@ def remove_collateral(trove_id: uint256, collateral_amount: uint256):
 
 
 @external
+@nonreentrant
 def borrow(
     trove_id: uint256,
     debt_amount: uint256,
     max_upfront_fee: uint256,
     min_borrow_out: uint256,
     min_collateral_out: uint256,
+    collateral_amount: uint256 = 0,
+    data: Bytes[_MAX_CALLBACK_DATA_SIZE] = b"",
 ):
     """
     @notice Borrow more tokens from an existing Trove
@@ -550,6 +623,11 @@ def borrow(
     @param max_upfront_fee Maximum upfront fee the caller is willing to pay
     @param min_borrow_out Minimum borrow tokens received atomically from idle liquidity
     @param min_collateral_out Minimum amount of collateral tokens to be redeemed
+    @param collateral_amount Amount of collateral tokens to add to the Trove. Counted towards the collateral
+           ratio check but pulled only after the callback. Defaults to zero
+    @param data If non-empty, `troveCallback` is called on the caller after the borrow tokens are
+           delivered (and any auction kicked) but before the collateral is pulled, so the caller can source
+           the collateral from the auction itself. Defaults to empty (no callback)
     """
     # Make sure debt amount is non-zero
     assert debt_amount > 0, "!debt_amount"
@@ -578,8 +656,8 @@ def borrow(
     # Get the collateral price
     collateral_price: uint256 = staticcall self.price_oracle.get_price()
 
-    # Calculate the collateral ratio
-    collateral_ratio: uint256 = self._calculate_collateral_ratio(trove.collateral, new_debt, collateral_price)
+    # Calculate the collateral ratio, accounting for any collateral to be added
+    collateral_ratio: uint256 = self._calculate_collateral_ratio(trove.collateral + collateral_amount, new_debt, collateral_price)
 
     # Make sure the new collateral ratio is above the minimum collateral ratio
     assert collateral_ratio >= self.minimum_collateral_ratio, "!minimum_collateral_ratio"
@@ -587,12 +665,20 @@ def borrow(
     # Cache the Trove's old debt for global accounting
     old_debt: uint256 = trove.debt
 
-    # Update the Trove's debt info
+    # Update the Trove's debt and collateral info
     trove.debt = new_debt
+    trove.collateral += collateral_amount
     trove.last_debt_update_time = convert(block.timestamp, uint64)
+    trove.last_debt_increase_time = convert(block.timestamp, uint64)
 
     # Save changes to storage
     self.troves[trove_id] = trove
+
+    # Record the received collateral
+    self.collateral_balance += collateral_amount
+
+    # Accrue the upfront fee to the protocol
+    self.unclaimed_protocol_fees += upfront_fee
 
     # Accrue interest on the total debt and update accounting
     self._accrue_interest_and_account_for_trove_change(
@@ -603,12 +689,20 @@ def borrow(
     )
 
     # Deliver borrow tokens to the caller, redeem if liquidity is insufficient
-    self._transfer_borrow_tokens(
-        debt_amount,
-        trove.annual_interest_rate,
-        min_borrow_out,
-        min_collateral_out,
-    )
+    self._transfer_borrow_tokens(debt_amount, trove.annual_interest_rate, min_borrow_out, min_collateral_out)
+
+    # If requested, hand control to the caller so it can source the collateral
+    if len(data) > 0:
+        extcall ITroveCallback(msg.sender).troveCallback(trove_id, data)
+
+    # If provided, pull the collateral tokens from caller
+    if collateral_amount > 0:
+        assert extcall self.collateral_token.transferFrom(msg.sender, self, collateral_amount, default_return_value=True)
+        log AddCollateral(
+            trove_id=trove_id,
+            trove_owner=trove.owner,
+            collateral_amount=collateral_amount
+        )
 
     # Emit event
     log Borrow(
@@ -620,6 +714,7 @@ def borrow(
 
 
 @external
+@nonreentrant
 def repay(trove_id: uint256, debt_amount: uint256):
     """
     @notice Repay part of the debt of an existing Trove
@@ -640,8 +735,8 @@ def repay(trove_id: uint256, debt_amount: uint256):
     # Make sure the Trove is active
     assert trove.status == Status.ACTIVE, "!active"
 
-    # Disallow repaying in the same block as any debt-touching update
-    assert convert(trove.last_debt_update_time, uint256) != block.timestamp, "same block"
+    # Enforce the cooldown after the last debt increase, so debt cannot be created and repaid atomically
+    assert block.timestamp > convert(trove.last_debt_increase_time, uint256) + self.repay_cooldown, "!repay_cooldown"
 
     # Get the Trove's debt after accruing interest
     trove_debt_after_interest: uint256 = self._get_trove_debt_after_interest(trove)
@@ -685,6 +780,7 @@ def repay(trove_id: uint256, debt_amount: uint256):
 
 
 @external
+@nonreentrant
 def adjust_interest_rate(
     trove_id: uint256,
     new_annual_interest_rate: uint256,
@@ -744,6 +840,9 @@ def adjust_interest_rate(
         # Make sure the new collateral ratio is above the minimum collateral ratio
         assert collateral_ratio >= self.minimum_collateral_ratio, "!minimum_collateral_ratio"
 
+        # Accrue the upfront fee to the protocol
+        self.unclaimed_protocol_fees += upfront_fee
+
     # Cache the Trove's old debt and interest rate for global accounting
     old_debt: uint256 = trove.debt
     old_annual_interest_rate: uint256 = trove.annual_interest_rate
@@ -790,6 +889,7 @@ def adjust_interest_rate(
 
 
 @external
+@nonreentrant
 def close_trove(trove_id: uint256):
     """
     @notice Close an existing Trove by repaying all its debt and withdrawing all its collateral
@@ -806,8 +906,8 @@ def close_trove(trove_id: uint256):
     # Make sure the Trove is active
     assert trove.status == Status.ACTIVE, "!active"
 
-    # Disallow closing in the same block as any debt-touching update
-    assert convert(trove.last_debt_update_time, uint256) != block.timestamp, "same block"
+    # Enforce the cooldown after the last debt increase, so debt cannot be created and repaid atomically
+    assert block.timestamp > convert(trove.last_debt_increase_time, uint256) + self.repay_cooldown, "!repay_cooldown"
 
     # Get the Trove's debt after accruing interest
     trove_debt_after_interest: uint256 = self._get_trove_debt_after_interest(trove)
@@ -852,6 +952,7 @@ def close_trove(trove_id: uint256):
 
 
 @external
+@nonreentrant
 def close_zombie_trove(trove_id: uint256):
     """
     @notice Close a zombie Trove by repaying all its debt (if it has any) and withdrawing all its collateral
@@ -867,6 +968,9 @@ def close_zombie_trove(trove_id: uint256):
 
     # Make sure the Trove is zombie
     assert trove.status == Status.ZOMBIE, "!zombie"
+
+    # Enforce the cooldown after the last debt increase, so debt cannot be created and repaid atomically
+    assert block.timestamp > convert(trove.last_debt_increase_time, uint256) + self.repay_cooldown, "!repay_cooldown"
 
     # Cache the Trove's old info for global accounting
     old_trove: Trove = trove
@@ -921,6 +1025,7 @@ def close_zombie_trove(trove_id: uint256):
 
 
 @external
+@nonreentrant
 def liquidate_trove(
     trove_id: uint256,
     max_debt_to_repay: uint256 = max_value(uint256),
@@ -1129,12 +1234,28 @@ def liquidate_trove(
     # Pull the borrow tokens from caller and transfer them to the Lender contract
     assert extcall self.borrow_token.transferFrom(msg.sender, self.lender, debt_to_repay, default_return_value=True)
 
-    # In a bad debt scenario, trigger a report so the Lender's PPS reflects the loss atomically
+    # In a bad debt scenario, absorb the loss into the accrued protocol fees first,
+    # if the fees do not cover the entire loss, trigger a report so the Lender's PPS reflects it atomically
     if is_underwater:
-        lender: ILender = ILender(self.lender)
-        keeper: IKeeper = IKeeper(staticcall lender.keeper())
-        extcall lender.disableHealthCheck()
-        extcall keeper.report(lender.address)
+        loss: uint256 = trove_debt_after_interest - debt_to_repay
+        loss_absorbed_by_fees: uint256 = min(self.unclaimed_protocol_fees, loss)
+        self.unclaimed_protocol_fees -= loss_absorbed_by_fees
+
+        # If the fees did not absorb the entire loss, trigger a report on the Lender
+        if loss > loss_absorbed_by_fees:
+            lender: ILender = ILender(self.lender)
+            keeper: IKeeper = IKeeper(staticcall lender.keeper())
+
+            # Disable the Lender's health check and report the loss
+            extcall lender.disableHealthCheck()
+            extcall keeper.report(lender.address)
+
+        # Emit event
+        log BadDebt(
+            trove_id=trove_id,
+            loss=loss,
+            loss_absorbed_by_fees=loss_absorbed_by_fees,
+        )
 
     # Emit event
     log LiquidateTrove(
@@ -1156,11 +1277,15 @@ def liquidate_trove(
 
 
 @external
+@nonreentrant
 def redeem(debt_amount: uint256, receiver: address):
     """
     @notice Attempt to free the specified amount of borrow tokens by selling collateral
     @dev Can only be called by the Lender contract
     @dev Uses the Dutch Desk contract to auction off the redeemed collateral tokens
+    @dev May free less than `debt_amount`, as the walk stops after `_MAX_REDEMPTIONS` Troves. The kicked
+         auction pays the `receiver` only up to the amount actually freed, so callers should verify the
+         kicked auction covers what they asked for in the same transaction
     @param debt_amount Target amount of borrow tokens to free
     @param receiver Address to transfer the auction proceeds to
     """
@@ -1226,77 +1351,74 @@ def _redeem(
         # Cache the ID of the next Trove to redeem, i.e., the previous Trove in the sorted list
         next_trove_to_redeem: uint256 = staticcall sorted_troves.prev(trove_to_redeem)
 
-        # Don't redeem a borrower's own Trove, unless it's a zombie. A borrower with multiple
-        # Troves can have one become zombie and acting on another Trove should clear it
-        if msg.sender != trove.owner or is_zombie_trove:
-            # Get the Trove's debt after accruing interest
-            trove_debt_after_interest: uint256 = self._get_trove_debt_after_interest(trove)
+        # Get the Trove's debt after accruing interest
+        trove_debt_after_interest: uint256 = self._get_trove_debt_after_interest(trove)
 
-            # Determine the amount to be freed
-            debt_to_free: uint256 = min(remaining_debt_to_free, trove_debt_after_interest)
+        # Determine the amount to be freed
+        debt_to_free: uint256 = min(remaining_debt_to_free, trove_debt_after_interest)
 
-            # Calculate the Trove's new debt amount
-            trove_new_debt: uint256 = trove_debt_after_interest - debt_to_free
+        # Calculate the Trove's new debt amount
+        trove_new_debt: uint256 = trove_debt_after_interest - debt_to_free
 
-            # If trove would be left with debt below the minimum, go zombie
-            if trove_new_debt < self.min_debt:
-                # If the trove is not already a zombie trove, we need to mark it as such
-                if not is_zombie_trove:
-                    # Mark trove as zombie
-                    trove.status = Status.ZOMBIE
+        # If trove would be left with debt below the minimum, go zombie
+        if trove_new_debt < self.min_debt:
+            # If the trove is not already a zombie trove, we need to mark it as such
+            if not is_zombie_trove:
+                # Mark trove as zombie
+                trove.status = Status.ZOMBIE
 
-                    # Remove trove from sorted list
-                    extcall sorted_troves.remove(trove_to_redeem)
+                # Remove trove from sorted list
+                extcall sorted_troves.remove(trove_to_redeem)
 
-                    # If it's a partial redemption, record it so we know to continue with it next time
-                    if trove_new_debt > 0:
-                        self.zombie_trove_id = trove_to_redeem
+                # If it's a partial redemption, record it so we know to continue with it next time
+                if trove_new_debt > 0:
+                    self.zombie_trove_id = trove_to_redeem
 
-                # If we fully redeemed a zombie trove, reset the `zombie_trove_id` variable
-                elif trove_new_debt == 0:
-                    self.zombie_trove_id = 0
+            # If we fully redeemed a zombie trove, reset the `zombie_trove_id` variable
+            elif trove_new_debt == 0:
+                self.zombie_trove_id = 0
 
-            # Get the amount of collateral equal to `debt_to_free`
-            collateral_to_redeem: uint256 = debt_to_free * _PRICE_ORACLE_PRECISION // collateral_price
+        # Get the amount of collateral equal to `debt_to_free`
+        collateral_to_redeem: uint256 = debt_to_free * _PRICE_ORACLE_PRECISION // collateral_price
 
-            # Calculate the Trove's new collateral amount
-            trove_new_collateral: uint256 = trove.collateral - collateral_to_redeem
+        # Calculate the Trove's new collateral amount
+        trove_new_collateral: uint256 = trove.collateral - collateral_to_redeem
 
-            # Calculate the Trove's old and new weighted debt
-            trove_weighted_debt_decrease: uint256 = trove.debt * trove.annual_interest_rate
-            trove_weighted_debt_increase: uint256 = trove_new_debt * trove.annual_interest_rate
+        # Calculate the Trove's old and new weighted debt
+        trove_weighted_debt_decrease: uint256 = trove.debt * trove.annual_interest_rate
+        trove_weighted_debt_increase: uint256 = trove_new_debt * trove.annual_interest_rate
 
-            # Update the Trove's info
-            trove.debt = trove_new_debt
-            trove.collateral = trove_new_collateral
-            trove.last_debt_update_time = convert(block.timestamp, uint64)
+        # Update the Trove's info
+        trove.debt = trove_new_debt
+        trove.collateral = trove_new_collateral
+        trove.last_debt_update_time = convert(block.timestamp, uint64)
 
-            # Save changes to storage
-            self.troves[trove_to_redeem] = trove
+        # Save changes to storage
+        self.troves[trove_to_redeem] = trove
 
-            # Increment the total debt and collateral decrease
-            total_debt_decrease += debt_to_free
-            total_collateral_decrease += collateral_to_redeem
+        # Increment the total debt and collateral decrease
+        total_debt_decrease += debt_to_free
+        total_collateral_decrease += collateral_to_redeem
 
-            # Increment the total old and new weighted debt
-            total_weighted_debt_decrease += trove_weighted_debt_decrease
-            total_weighted_debt_increase += trove_weighted_debt_increase
+        # Increment the total old and new weighted debt
+        total_weighted_debt_decrease += trove_weighted_debt_decrease
+        total_weighted_debt_increase += trove_weighted_debt_increase
 
-            # Update the remaining debt to free
-            remaining_debt_to_free -= debt_to_free
+        # Update the remaining debt to free
+        remaining_debt_to_free -= debt_to_free
 
-            # Emit event
-            log RedeemTrove(
-                trove_id=trove_to_redeem,
-                trove_owner=trove.owner,
-                redeemer=msg.sender,
-                collateral_amount=collateral_to_redeem,
-                debt_amount=debt_to_free,
-            )
+        # Emit event
+        log RedeemTrove(
+            trove_id=trove_to_redeem,
+            trove_owner=trove.owner,
+            redeemer=msg.sender,
+            collateral_amount=collateral_to_redeem,
+            debt_amount=debt_to_free,
+        )
 
-            # Break if we freed all the debt we wanted
-            if remaining_debt_to_free == 0:
-                break
+        # Break if we freed all the debt we wanted
+        if remaining_debt_to_free == 0:
+            break
 
         # Get the next Trove to redeem. If we just processed a zombie Trove (which is not in the sorted Troves list),
         # get the Trove with the lowest interest rate. Otherwise, use the previous Trove from the list

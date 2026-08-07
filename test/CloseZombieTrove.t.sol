@@ -216,32 +216,39 @@ contract CloseZombieTroveTests is Base {
         assertEq(borrowToken.balanceOf(address(dutchDesk)), 0, "E22");
         assertEq(collateralToken.balanceOf(address(dutchDesk)), 0, "E23");
 
-        // Expected profit is just the upfront fee
-        uint256 _expectedProfit = troveManager.get_upfront_fee(_amount, DEFAULT_ANNUAL_INTEREST_RATE);
+        // The upfront fee accrues to the protocol
+        uint256 _upfrontFee = troveManager.get_upfront_fee(_amount, DEFAULT_ANNUAL_INTEREST_RATE);
 
-        // Pull all liquidity to make trove a zombie trove (with 0 debt)
+        // Pull all liquidity to make trove a zombie trove
         uint256 _amountToPull = _amount;
 
-        // Calculate expected collateral after redemption
-        uint256 _expectedCollateralAfterRedemption = _collateralNeeded - ((_amount + _expectedProfit) * ORACLE_PRICE_SCALE / priceOracle.get_price());
+        // Calculate expected collateral after the lender's redemption and the protocol fee claim
+        uint256 _expectedCollateralAfterRedemption = _collateralNeeded - (_amount * ORACLE_PRICE_SCALE / priceOracle.get_price())
+            - (_upfrontFee * ORACLE_PRICE_SCALE / priceOracle.get_price());
 
-        // Report profit
+        // Report profit. The upfront fee is excluded from the lender's profit
         (uint256 _profit, uint256 _loss) = IKeeper(lenderFactory.KEEPER()).report(address(lender));
 
         // Check return Values
-        assertEq(_profit, _expectedProfit, "E24");
+        assertEq(_profit, 0, "E24");
         assertEq(_loss, 0, "E25");
 
         // Cache the expected time because it will be skipped during the auction
         uint256 _expectedTime = block.timestamp;
 
-        // Pull liquidity from lender to make trove a zombie trove (with 0 debt)
+        // Pull liquidity from lender to make trove a zombie trove
         vm.startPrank(userLender);
         lender.redeem(_amountToPull, userLender, userLender);
         vm.stopPrank();
 
-        // Take the auction
+        // Claim the protocol fees, redeeming the zombie's remaining fee-debt so its debt hits 0
+        uint256 _minCollateralOut = _upfrontFee * ORACLE_PRICE_SCALE / priceOracle.get_price();
+        vm.prank(address(daddy));
+        troveManager.claim_protocol_fees(0, _minCollateralOut);
+
+        // Take both auctions
         takeAuction(0);
+        takeAuction(1);
 
         // Make sure lender got his funds
         assertApproxEqRel(borrowToken.balanceOf(address(userLender)), _amountToPull, 3e16, "E26"); // 3%. Slippage
@@ -397,6 +404,9 @@ contract CloseZombieTroveTests is Base {
         lender.redeem(_amountToPull, userLender, userLender);
 
         assertEq(uint256(troveManager.troves(_troveId).status), uint256(ITroveManager.Status.zombie), "E0");
+
+        // Wait out the repay cooldown
+        skip(1);
 
         // Approve operator
         vm.prank(userBorrower);

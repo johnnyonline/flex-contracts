@@ -4,6 +4,7 @@ pragma solidity 0.8.23;
 interface ITroveManager {
 
     function total_weighted_debt() external view returns (uint256);
+    function unclaimed_protocol_fees() external view returns (uint256);
     function sync_total_debt() external returns (uint256);
     function redeem(
         uint256 debt_amount,
