@@ -52,6 +52,9 @@ contract LenderFactory {
         _lender.setPendingManagement(DADDY);
         _lender.setPerformanceFeeRecipient(DADDY);
 
+        // Unlock profits over 4 days
+        _lender.setProfitMaxUnlockTime(4 days);
+
         // Return the address of the new Lender
         return address(_lender);
     }

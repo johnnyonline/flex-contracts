@@ -1,0 +1,6 @@
+# @version 0.4.3
+
+
+@external
+def troveCallback(trove_id: uint256, data: Bytes[10 ** 5]):
+    ...

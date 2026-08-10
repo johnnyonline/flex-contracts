@@ -44,14 +44,15 @@ contract TroveManagerTests is Base {
                 sorted_troves: address(sortedTroves),
                 borrow_token: address(borrowToken),
                 collateral_token: address(collateralToken),
-                minimum_debt: minimumDebt,
+                minimum_debt: minimumDebt * BORROW_TOKEN_PRECISION,
                 safe_collateral_ratio: safeCollateralRatio,
                 minimum_collateral_ratio: minimumCollateralRatio,
                 max_penalty_collateral_ratio: maxPenaltyCollateralRatio,
                 min_liquidation_fee: minLiquidationFee,
                 max_liquidation_fee: maxLiquidationFee,
                 upfront_interest_period: upfrontInterestPeriod,
-                interest_rate_adj_cooldown: interestRateAdjCooldown
+                interest_rate_adj_cooldown: interestRateAdjCooldown,
+                repay_cooldown: repayCooldown
             })
         );
     }

@@ -244,7 +244,7 @@ contract RepayTests is Base {
 
         vm.startPrank(userBorrower);
         borrowToken.approve(address(troveManager), type(uint256).max);
-        vm.expectRevert("same block");
+        vm.expectRevert("!repay_cooldown");
         troveManager.repay(_troveId, _amount / 2);
         vm.stopPrank();
     }
@@ -269,7 +269,7 @@ contract RepayTests is Base {
         troveManager.borrow(_troveId, _initialBorrow / 2, type(uint256).max, 0, 0);
 
         borrowToken.approve(address(troveManager), type(uint256).max);
-        vm.expectRevert("same block");
+        vm.expectRevert("!repay_cooldown");
         troveManager.repay(_troveId, _initialBorrow / 4);
         vm.stopPrank();
     }

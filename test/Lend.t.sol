@@ -102,10 +102,11 @@ contract LendTests is Base {
 
         // Skip some time, calculate expected interest
         uint256 _daysToSkip = 90 days;
-        uint256 _expectedProfit = _upfrontFee + _expectedDebt * DEFAULT_ANNUAL_INTEREST_RATE * _daysToSkip / 365 days / BORROW_TOKEN_PRECISION;
+        uint256 _expectedProfit = _expectedDebt * DEFAULT_ANNUAL_INTEREST_RATE * _daysToSkip / 365 days / BORROW_TOKEN_PRECISION;
 
         // Calculate expected collateral after redemption
-        uint256 _expectedCollateralAfterRedemption = _collateralNeeded - ((_amount + _expectedProfit) * ORACLE_PRICE_SCALE / priceOracle.get_price());
+        uint256 _expectedCollateralAfterRedemption =
+            _collateralNeeded - ((_amount + _expectedProfit + _upfrontFee) * ORACLE_PRICE_SCALE / priceOracle.get_price());
 
         // Sanity check
         assertGt(_expectedProfit, 0, "E25");
@@ -126,6 +127,13 @@ contract LendTests is Base {
         vm.prank(userLender);
         lender.redeem(_amount, userLender, userLender);
 
+        // Claim the protocol fees, redeeming the zombie's remaining fee-debt
+        {
+            uint256 _minCollateralOut = troveManager.unclaimed_protocol_fees() * ORACLE_PRICE_SCALE / priceOracle.get_price() * 9999 / 10_000;
+            vm.prank(address(daddy));
+            troveManager.claim_protocol_fees(0, _minCollateralOut);
+        }
+
         // Cache the expected time because it will be skipped during the auction
         uint256 _expectedTime = block.timestamp;
 
@@ -134,8 +142,9 @@ contract LendTests is Base {
         assertTrue(auction.is_active(_auctionId), "E28");
         assertGt(auction.get_available_amount(_auctionId), 0, "E29");
 
-        // Take the auction
+        // Take both auctions (the lender's redemption and the protocol fee claim)
         takeAuction(_auctionId);
+        takeAuction(1);
 
         // Auction should be empty now
         assertEq(auction.get_available_amount(_auctionId), 0, "E30");
@@ -410,9 +419,9 @@ contract LendTests is Base {
         uint256 _auctionId = 0;
         takeAuction(_auctionId);
 
-        // All 3 troves should be zombies
+        // All 3 troves should be zombies, with only the fee-debt backing the accrued protocol fees left behind
         assertEq(sortedTroves.size(), 0, "E2");
-        assertEq(troveManager.total_debt(), 0, "E3");
+        assertEq(troveManager.total_debt(), troveManager.unclaimed_protocol_fees(), "E3");
     }
 
     function test_setDepositLimit(

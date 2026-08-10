@@ -6,7 +6,6 @@ import "./Base.sol";
 contract EnsoSwapTests is Base {
 
     uint256 constant MAX_SLIPPAGE_BPS = 500; // 5%
-    uint256 constant BPS = 10_000;
 
     function setUp() public override {
         isLatestBlock = true;

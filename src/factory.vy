@@ -39,7 +39,7 @@ struct DeployParams:
     borrow_token: address  # address of the borrow token
     collateral_token: address  # address of the collateral token
     price_oracle: address  # address of the Price Oracle contract
-    minimum_debt: uint256  # minimum borrowable amount, e.g., `500` for 500 tokens
+    minimum_debt: uint256  # minimum borrowable amount in borrow token units, e.g., `500 * 10 ** 6` for 500 USDC
     safe_collateral_ratio: uint256  # target CR after partial liquidation, e.g., `115` for 115%
     minimum_collateral_ratio: uint256  # minimum CR to avoid liquidation, e.g., `110` for 110%
     max_penalty_collateral_ratio: uint256  # CR at which max liquidation fee applies, e.g., `105` for 105%
@@ -47,6 +47,7 @@ struct DeployParams:
     max_liquidation_fee: uint256  # maximum liquidation fee in hundredths of a percent, e.g., `500` for 5%
     upfront_interest_period: uint256  # duration for upfront interest charges, e.g., `7 * 24 * 60 * 60` for 7 days
     interest_rate_adj_cooldown: uint256  # cooldown between rate adjustments, e.g., `7 * 24 * 60 * 60` for 7 days
+    repay_cooldown: uint256  # cooldown after a debt increase before repaying/closing, e.g., `10 * 60` for 10 minutes
     minimum_price_buffer_percentage: uint256  # auction minimum price buffer, e.g. `WAD - 5 * 10 ** 16` for 5% below oracle price
     starting_price_buffer_percentage: uint256  # auction starting price buffer, e.g. `WAD + 1 * 10 ** 16` for 1% above oracle price. must be >= max oracle deviation from market price to ensure the starting auction price is always above market price, preventing value extraction from oracle lag
     re_kick_starting_price_buffer_percentage: uint256  # auction re-kick price buffer, e.g. `WAD + 5 * 10 ** 16` for 5% above oracle price
@@ -69,11 +70,12 @@ AUCTION: public(immutable(address))
 LENDER_FACTORY: public(immutable(ILenderFactory))
 
 # Version
-VERSION: public(constant(String[28])) = "1.0.0"
+VERSION: public(constant(String[28])) = "1.1.0"
 
 # Validation constants
 _MIN_TOKEN_DECIMALS: constant(uint256) = 6
 _MAX_TOKEN_DECIMALS: constant(uint256) = 18
+_MAX_REPAY_COOLDOWN: constant(uint256) = 60 * 60  # 1 hour
 _ONE_HUNDRED_PCT: constant(uint256) = 100
 _BPS: constant(uint256) = 10_000
 _WAD: constant(uint256) = 10 ** 18
@@ -169,6 +171,7 @@ def deploy(params: DeployParams) -> (address, address, address, address, address
         max_liquidation_fee=params.max_liquidation_fee,
         upfront_interest_period=params.upfront_interest_period,
         interest_rate_adj_cooldown=params.interest_rate_adj_cooldown,
+        repay_cooldown=params.repay_cooldown,
     ))
 
     # Initialize the Sorted Troves contract
@@ -249,6 +252,7 @@ def _validate_params(params: DeployParams):
     # Interest
     assert params.upfront_interest_period > 0, "!upfront_interest_period"
     assert params.interest_rate_adj_cooldown > 0, "!interest_rate_adj_cooldown"
+    assert params.repay_cooldown <= _MAX_REPAY_COOLDOWN, "!repay_cooldown"
 
     # Auction
     assert params.step_decay_rate < _BPS, "!step_decay_rate"

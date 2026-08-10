@@ -8,5 +8,11 @@ def keeper() -> address:
 
 
 @external
+@view
+def performanceFeeRecipient() -> address:
+    ...
+
+
+@external
 def disableHealthCheck():
     ...

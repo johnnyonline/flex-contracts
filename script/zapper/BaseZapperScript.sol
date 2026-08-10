@@ -21,7 +21,6 @@ abstract contract BaseZapperScript is Script {
     ITroveManager public constant TROVE_MANAGER = ITroveManager(0xd82DB9893751E9C90E2a6C3bE31183048E8E2e49);
 
     // Periphery (prod from script/README.md)
-    address public constant AUCTION_TAKER = 0x1Ee35C67f8031291AEf79e2aBC87b904B9c47f07;
     ILeverageZapper public constant LEVERAGE_ZAPPER = ILeverageZapper(0xbF3E996821D43ac3b6069Ae74Efa101ffc6137E0);
 
     // Common math / slippage

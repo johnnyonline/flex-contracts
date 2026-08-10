@@ -17,7 +17,7 @@ abstract contract BaseInvariant is StdInvariant, Base {
         mintAndDepositIntoLender(userLender, minimumDebt * 10 * BORROW_TOKEN_PRECISION);
 
         // Deploy handler
-        handler = new Handler(troveManager, priceOracle, borrowToken, collateralToken, address(lender));
+        handler = new Handler(troveManager, priceOracle, borrowToken, collateralToken, address(lender), userLender);
 
         // Target handler
         targetContract(address(handler));

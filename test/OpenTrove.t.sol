@@ -973,7 +973,7 @@ contract OpenTroveTests is Base {
         address _owner
     ) public {
         _amount = bound(_amount, troveManager.min_debt(), maxFuzzAmount);
-        vm.assume(_owner != address(0) && _owner != address(troveManager));
+        vm.assume(_owner != address(0) && _owner != address(troveManager) && _owner != address(lender));
         mintAndDepositIntoLender(userLender, _amount);
 
         uint256 _collateral = (_amount * DEFAULT_TARGET_COLLATERAL_RATIO / BORROW_TOKEN_PRECISION) * ORACLE_PRICE_SCALE / priceOracle.get_price();

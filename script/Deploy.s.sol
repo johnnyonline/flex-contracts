@@ -4,7 +4,6 @@ pragma solidity 0.8.23;
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/ERC20.sol";
 import {IERC20Metadata} from "@openzeppelin/contracts/token/ERC20/extensions/IERC20Metadata.sol";
 
-import {IAuctionTaker} from "./interfaces/IAuctionTaker.sol";
 import {ICatFactory} from "./interfaces/ICatFactory.sol";
 import {IDaddy} from "./interfaces/IDaddy.sol";
 import {IDebtInFrontHelper} from "./interfaces/IDebtInFrontHelper.sol";
@@ -51,7 +50,6 @@ contract Deploy is Script {
     IDebtInFrontHelper public debtInFrontHelper;
     ISwapExecutor public swapExecutor;
     ILeverageZapper public leverageZapper;
-    IAuctionTaker public auctionTaker;
 
     // Daddy
     IDaddy public daddy;
@@ -66,6 +64,10 @@ contract Deploy is Script {
     // IERC20 public collateralToken = IERC20(0x2260FAC5E5542a773Aa44fBCfeDf7C193bc2C599); // WBTC
     IERC20 public collateralToken = IERC20(0xAc37729B76db6438CE62042AE1270ee574CA7571); // yvWETH-2
     // IERC20 public collateralToken = IERC20(0xBF319dDC2Edc1Eb6FDf9910E39b37Be221C8805F); // yvcrvUSD-2
+
+    // Existing contracts
+    IDaddy public constant DADDY = IDaddy(0x4e8341C77c94cCE982AB96d92BB28D69f4638290);
+    IRegistry public constant REGISTRY = IRegistry(0x9117440a7D03238905d1C8908157Bd7a547c77c8);
 
     // CREATE2 salt
     bytes32 public constant SALT = bytes32(uint256(555));
@@ -89,14 +91,17 @@ contract Deploy is Script {
         // Deploy original contracts using CREATE2
         deployOriginalContracts();
 
-        // Deploy daddy using CREATE2
-        deployDaddy();
+        // Use the existing daddy and registry, or deploy fresh ones for tests
+        if (isTest) {
+            deployDaddy();
+            deployRegistry();
+        } else {
+            daddy = DADDY;
+            registry = REGISTRY;
+        }
 
         // Deploy factories using CREATE2
         deployFactories();
-
-        // Deploy registry using CREATE2
-        deployRegistry();
 
         // Deploy periphery using CREATE2
         deployPeriphery();
@@ -114,7 +119,6 @@ contract Deploy is Script {
             vm.label({account: address(debtInFrontHelper), newLabel: "DebtInFrontHelper"});
             vm.label({account: address(swapExecutor), newLabel: "SwapExecutor"});
             vm.label({account: address(leverageZapper), newLabel: "LeverageZapper"});
-            vm.label({account: address(auctionTaker), newLabel: "AuctionTaker"});
         } else {
             console2.log("---------------------------------");
             console2.log("Original Auction: ", originalAuction);
@@ -129,7 +133,6 @@ contract Deploy is Script {
             console2.log("Debt In Front Helper: ", address(debtInFrontHelper));
             console2.log("Swap Executor: ", address(swapExecutor));
             console2.log("Leverage Zapper: ", address(leverageZapper));
-            console2.log("Auction Taker: ", address(auctionTaker));
             console2.log("---------------------------------");
         }
 
@@ -180,8 +183,6 @@ contract Deploy is Script {
                 abi.encodePacked(vm.getCode("leverage_zapper"), abi.encode(address(daddy), address(registry), address(swapExecutor)))
             )
         );
-        auctionTaker =
-            IAuctionTaker(DEPLOYER.deployCreate2(keccak256(abi.encode(SALT, "auctionTaker")), abi.encodePacked(vm.getCode("yv_auction_taker"))));
     }
 
 }

@@ -6,6 +6,8 @@ import {ITokenizedStrategy} from "@tokenized-strategy/interfaces/ITokenizedStrat
 
 import {ILender} from "../src/lender/interfaces/ILender.sol";
 
+import {IMorphoOracleFactory} from "../script/interfaces/IMorphoOracleFactory.sol";
+
 import {IAuction} from "./interfaces/IAuction.sol";
 import {IDutchDesk} from "./interfaces/IDutchDesk.sol";
 import {IKeeper} from "./interfaces/IKeeper.sol";
@@ -46,6 +48,7 @@ abstract contract Base is Deploy, Test {
     uint256 public maxLiquidationFee = 500; // 5%
     uint256 public upfrontInterestPeriod = 7 days; // 7 days
     uint256 public interestRateAdjCooldown = 7 days; // 7 days
+    uint256 public repayCooldown = 0; // no cooldown
     uint256 public minimumPriceBufferPercentage = 1e18 - 5e16; // 95%
     uint256 public startingPriceBufferPercentage = 1e18 + 1e16; // 101%
     uint256 public reKickStartingPriceBufferPercentage = 1e18 + 10e16; // 110%
@@ -64,6 +67,12 @@ abstract contract Base is Deploy, Test {
 
     uint256 public constant ORACLE_PRICE_SCALE = 1e36;
     uint256 public constant WAD = 1e18;
+    uint256 public constant BPS = 10_000;
+
+    // Morpho oracle factory and Chainlink feeds
+    address public constant MORPHO_ORACLE_FACTORY = 0x3A7bB36Ee3f3eE32A60e9f2b33c1e5f2E83ad766;
+    address public constant ETH_USD_PRICE_FEED = 0x5f4eC3Df9cbd43714FE2740f5E3616155c5b8419;
+    address public constant USDC_USD_PRICE_FEED = 0x8fFfFfd4AfB6115b954Bd326cbe7B4BA576818f6;
 
     function setUp() public virtual {
         // Notify deployment script that this is a test
@@ -81,8 +90,22 @@ abstract contract Base is Deploy, Test {
         // Deploy factories, daddy, and registry
         run();
 
-        // Deploy price oracle
-        priceOracle = IPriceOracle(deployCode("yvweth2_to_usdc_oracle"));
+        // Deploy a Morpho oracle for yvWETH-2/USDC and wrap it in the Flex adapter
+        address _morphoOracle = IMorphoOracleFactory(MORPHO_ORACLE_FACTORY)
+            .createMorphoChainlinkOracleV2(
+                address(collateralToken), // baseVault: yvWETH-2
+                1e18, // baseVaultConversionSample
+                ETH_USD_PRICE_FEED, // baseFeed1
+                address(0), // baseFeed2
+                18, // baseTokenDecimals: WETH
+                address(0), // quoteVault
+                1, // quoteVaultConversionSample
+                USDC_USD_PRICE_FEED, // quoteFeed1
+                address(0), // quoteFeed2
+                6, // quoteTokenDecimals: USDC
+                bytes32(0) // salt
+            );
+        priceOracle = IPriceOracle(deployCode("morpho_oracle", abi.encode(_morphoOracle, address(borrowToken), address(collateralToken))));
 
         // Deploy market
         (address _troveManager, address _sortedTroves, address _dutchDesk, address _auction, address _lender) = catFactory.deploy(
@@ -90,7 +113,7 @@ abstract contract Base is Deploy, Test {
                 borrow_token: address(borrowToken),
                 collateral_token: address(collateralToken),
                 price_oracle: address(priceOracle),
-                minimum_debt: minimumDebt,
+                minimum_debt: minimumDebt * 10 ** IERC20Metadata(address(borrowToken)).decimals(),
                 safe_collateral_ratio: safeCollateralRatio,
                 minimum_collateral_ratio: minimumCollateralRatio,
                 max_penalty_collateral_ratio: maxPenaltyCollateralRatio,
@@ -98,6 +121,7 @@ abstract contract Base is Deploy, Test {
                 max_liquidation_fee: maxLiquidationFee,
                 upfront_interest_period: upfrontInterestPeriod,
                 interest_rate_adj_cooldown: interestRateAdjCooldown,
+                repay_cooldown: repayCooldown,
                 minimum_price_buffer_percentage: minimumPriceBufferPercentage,
                 starting_price_buffer_percentage: startingPriceBufferPercentage,
                 re_kick_starting_price_buffer_percentage: reKickStartingPriceBufferPercentage,

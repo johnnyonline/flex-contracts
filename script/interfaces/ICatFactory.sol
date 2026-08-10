@@ -19,6 +19,7 @@ interface ICatFactory {
         uint256 max_liquidation_fee;
         uint256 upfront_interest_period;
         uint256 interest_rate_adj_cooldown;
+        uint256 repay_cooldown;
         uint256 minimum_price_buffer_percentage;
         uint256 starting_price_buffer_percentage;
         uint256 re_kick_starting_price_buffer_percentage;
