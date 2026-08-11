@@ -70,7 +70,7 @@ contract Deploy is Script {
     IRegistry public constant REGISTRY = IRegistry(0x9117440a7D03238905d1C8908157Bd7a547c77c8);
 
     // CREATE2 salt
-    bytes32 public constant SALT = bytes32(uint256(555));
+    bytes32 public constant SALT = bytes32(uint256(5555));
 
     // CREATE2 deployer
     IDeployer public DEPLOYER = IDeployer(0xba5Ed099633D3B313e4D5F7bdc1305d3c28ba5Ed);
