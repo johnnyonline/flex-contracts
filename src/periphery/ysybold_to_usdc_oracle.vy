@@ -126,7 +126,7 @@ def set_depeg_mode(depeg_mode: bool):
     @dev Only callable by Daddy
     @param depeg_mode Whether the price is allowed below the floor
     """
-    assert msg.sender == DADDY, "!daddy"
+    assert msg.sender == DADDY, "bad daddy"
     self.depeg_mode = depeg_mode
     log DepegModeSet(depeg_mode=depeg_mode)
 
@@ -167,4 +167,3 @@ def _get_price(scaled: bool = True) -> uint256:
 
     # Scale price to the required format if needed and return
     return price * _ORACLE_SCALE_FACTOR // _WAD if scaled else price
-
