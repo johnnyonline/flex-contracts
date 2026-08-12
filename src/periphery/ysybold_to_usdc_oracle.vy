@@ -41,13 +41,13 @@ event DepegModeSet:
 
 # Contracts
 DADDY: public(constant(address)) = 0x4e8341C77c94cCE982AB96d92BB28D69f4638290
-CURVE_POOL: public(constant(address)) = 0xEFc6516323FbD28e80B85A497B65A86243a54B3E  # BOLD/USDC
+CURVE_POOL: public(constant(ICurveStableSwapNG)) = ICurveStableSwapNG(0xEFc6516323FbD28e80B85A497B65A86243a54B3E)  # BOLD/USDC
 
 # Tokens
-YSYBOLD: public(constant(address)) = 0x23346B04a7f55b8760E5860AA5A77383D63491cD
-YBOLD: public(constant(address)) = 0x9F4330700a36B29952869fac9b33f45EEdd8A3d8
 BOLD: public(constant(address)) = 0x6440f144b7e50D6a8439336510312d2F54beB01D
 USDC: public(constant(address)) = 0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48
+YBOLD: public(constant(IERC4626)) = IERC4626(0x9F4330700a36B29952869fac9b33f45EEdd8A3d8)
+YSYBOLD: public(constant(IERC4626)) = IERC4626(0x23346B04a7f55b8760E5860AA5A77383D63491cD)
 
 # Bounds on the BOLD/USDC price
 _UPPER_BOUND: constant(uint256) = 101 * 10 ** 16  # 1.01
@@ -78,13 +78,13 @@ def __init__():
     @notice Initialize the contract
     """
     # Make sure the vault chain and the pool composition line up
-    assert staticcall IERC4626(YSYBOLD).asset() == YBOLD, "!ybold"
-    assert staticcall IERC4626(YBOLD).asset() == BOLD, "!bold"
-    assert staticcall ICurveStableSwapNG(CURVE_POOL).coins(0) == BOLD, "!coin0"
-    assert staticcall ICurveStableSwapNG(CURVE_POOL).coins(1) == USDC, "!coin1"
+    assert staticcall YSYBOLD.asset() == YBOLD.address, "!ybold"
+    assert staticcall YBOLD.asset() == BOLD, "!bold"
+    assert staticcall CURVE_POOL.coins(0) == BOLD, "!coin0"
+    assert staticcall CURVE_POOL.coins(1) == USDC, "!coin1"
 
     # Make sure the pool returns a sane price
-    assert staticcall ICurveStableSwapNG(CURVE_POOL).price_oracle(0) > 0, "!curve_pool"
+    assert staticcall CURVE_POOL.price_oracle(0) > 0, "!curve_pool"
 
 
 # ============================================================================================
@@ -146,18 +146,18 @@ def _get_price(scaled: bool = True) -> uint256:
     @return Price scaled to the required format
     """
     # BOLD/USDC from the Curve EMA. `price_oracle(0)` is USDC priced in BOLD, so invert
-    bold_price: uint256 = _WAD * _WAD // (staticcall ICurveStableSwapNG(CURVE_POOL).price_oracle(0))
+    bold_price: uint256 = _WAD * _WAD // (staticcall CURVE_POOL.price_oracle(0))
 
     # Cap the price, and unless in depeg mode, floor it
-    if bold_price > _UPPER_BOUND:
-        bold_price = _UPPER_BOUND
-    if bold_price < _LOWER_BOUND and not self.depeg_mode:
-        bold_price = _LOWER_BOUND
+    bold_price = min(bold_price, _UPPER_BOUND)
+    if not self.depeg_mode:
+        bold_price = max(bold_price, _LOWER_BOUND)
 
-    # ysyBOLD --> yBOLD --> BOLD
-    bold_per_share: uint256 = staticcall IERC4626(YBOLD).convertToAssets(
-        staticcall IERC4626(YSYBOLD).convertToAssets(_WAD)
-    )
+    # ysyBOLD --> yBOLD
+    ybold_per_share: uint256 = staticcall YSYBOLD.convertToAssets(_WAD)
+
+    # yBOLD --> BOLD
+    bold_per_share: uint256 = staticcall YBOLD.convertToAssets(ybold_per_share)
 
     # ysyBOLD price in USDC
     price: uint256 = bold_per_share * bold_price // _WAD
