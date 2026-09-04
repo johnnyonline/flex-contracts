@@ -19,7 +19,10 @@ contract DeployMarket is Script {
 
     // Parameters
     address public constant BORROW_TOKEN = address(0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48); // USDC
-    address public constant COLLATERAL_TOKEN = address(0xBF319dDC2Edc1Eb6FDf9910E39b37Be221C8805F); // yvcrvUSD-2
+    address public constant COLLATERAL_TOKEN = address(0xDBDC1Ef57537E34680B898E1FEBD3D68c7389bCB); // siUSD
+
+    // Price oracle, reused from the v1 siUSD/USDC market
+    address public constant PRICE_ORACLE = 0x38cAe071526C57f95BBBb41eB12661FBf749A15a;
 
     // Deployed contracts
     ICatFactory public constant FACTORY = ICatFactory(0xfFc787AD990dA8f73dDA2B971Dce31C0D9d2501F);
@@ -34,15 +37,12 @@ contract DeployMarket is Script {
 
         vm.startBroadcast(_pk);
 
-        // Deploy the yvcrvUSD/USDC price oracle
-        address _priceOracle = deployCode("yvcrvusd_to_usdc_oracle");
-
         // Deploy market
         (address _troveManager, address _sortedTroves, address _dutchDesk, address _auction, address _lender) = FACTORY.deploy(
             ICatFactory.DeployParams({
                 borrow_token: BORROW_TOKEN,
                 collateral_token: COLLATERAL_TOKEN,
-                price_oracle: _priceOracle,
+                price_oracle: PRICE_ORACLE,
                 minimum_debt: 500 * 10 ** IERC20Metadata(BORROW_TOKEN).decimals(), // 500 tokens
                 safe_collateral_ratio: 120, // 120%
                 minimum_collateral_ratio: 110, // 110%
@@ -51,7 +51,7 @@ contract DeployMarket is Script {
                 max_liquidation_fee: 500, // 5%
                 upfront_interest_period: 1 days,
                 interest_rate_adj_cooldown: 7 days,
-                repay_cooldown: 1 hours, // the max, so it's hard to arb the oracle price via borrows
+                repay_cooldown: 10 minutes,
                 minimum_price_buffer_percentage: 1e18 - 1e16, // 99%
                 starting_price_buffer_percentage: 1e18, // 100%
                 re_kick_starting_price_buffer_percentage: 1e18 + 1e15, // 100.1%
@@ -69,7 +69,7 @@ contract DeployMarket is Script {
         // DADDY.execute(address(REGISTRY), abi.encodeWithSelector(IRegistry.endorse.selector, _troveManager), 0, true);
 
         console2.log("---------------------------------");
-        console2.log("Price Oracle: ", _priceOracle);
+        console2.log("Price Oracle: ", PRICE_ORACLE);
         console2.log("Trove Manager: ", _troveManager);
         console2.log("Sorted Troves: ", _sortedTroves);
         console2.log("Dutch Desk: ", _dutchDesk);
