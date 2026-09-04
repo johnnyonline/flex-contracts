@@ -7,7 +7,6 @@ import {ITokenizedStrategy} from "@tokenized-strategy/interfaces/ITokenizedStrat
 
 import {ICatFactory} from "./interfaces/ICatFactory.sol";
 import {IDaddy} from "./interfaces/IDaddy.sol";
-import {IMorphoOracleFactory} from "./interfaces/IMorphoOracleFactory.sol";
 import {IRegistry} from "./interfaces/IRegistry.sol";
 
 import "forge-std/Script.sol";
@@ -20,13 +19,15 @@ contract DeployMarket is Script {
 
     // Parameters
     address public constant BORROW_TOKEN = address(0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48); // USDC
-    address public constant COLLATERAL_TOKEN = address(0x696d02Db93291651ED510704c9b286841d506987); // yvUSD
+    address public constant COLLATERAL_TOKEN = address(0xDBDC1Ef57537E34680B898E1FEBD3D68c7389bCB); // siUSD
+
+    // Price oracle, reused from the v1 siUSD/USDC market
+    address public constant PRICE_ORACLE = 0x38cAe071526C57f95BBBb41eB12661FBf749A15a;
 
     // Deployed contracts
     ICatFactory public constant FACTORY = ICatFactory(0xfFc787AD990dA8f73dDA2B971Dce31C0D9d2501F);
     IDaddy public constant DADDY = IDaddy(0x4e8341C77c94cCE982AB96d92BB28D69f4638290);
     IRegistry public constant REGISTRY = IRegistry(0x9117440a7D03238905d1C8908157Bd7a547c77c8);
-    IMorphoOracleFactory public constant MORPHO_ORACLE_FACTORY = IMorphoOracleFactory(0x3A7bB36Ee3f3eE32A60e9f2b33c1e5f2E83ad766);
 
     function run() public {
         uint256 _pk = vm.envUint("DEPLOYER_PRIVATE_KEY");
@@ -36,28 +37,12 @@ contract DeployMarket is Script {
 
         vm.startBroadcast(_pk);
 
-        // Deploy a Morpho oracle for yvUSD/USDC (vault conversion only) and wrap it in the Flex adapter
-        address _morphoOracle = MORPHO_ORACLE_FACTORY.createMorphoChainlinkOracleV2(
-            COLLATERAL_TOKEN, // baseVault: yvUSD
-            1e6, // baseVaultConversionSample
-            address(0), // baseFeed1
-            address(0), // baseFeed2
-            6, // baseTokenDecimals: USDC
-            address(0), // quoteVault
-            1, // quoteVaultConversionSample
-            address(0), // quoteFeed1
-            address(0), // quoteFeed2
-            6, // quoteTokenDecimals: USDC
-            bytes32(0) // salt
-        );
-        address _priceOracle = deployCode("morpho_oracle", abi.encode(_morphoOracle, BORROW_TOKEN, COLLATERAL_TOKEN));
-
         // Deploy market
         (address _troveManager, address _sortedTroves, address _dutchDesk, address _auction, address _lender) = FACTORY.deploy(
             ICatFactory.DeployParams({
                 borrow_token: BORROW_TOKEN,
                 collateral_token: COLLATERAL_TOKEN,
-                price_oracle: _priceOracle,
+                price_oracle: PRICE_ORACLE,
                 minimum_debt: 500 * 10 ** IERC20Metadata(BORROW_TOKEN).decimals(), // 500 tokens
                 safe_collateral_ratio: 120, // 120%
                 minimum_collateral_ratio: 110, // 110%
@@ -84,8 +69,7 @@ contract DeployMarket is Script {
         // DADDY.execute(address(REGISTRY), abi.encodeWithSelector(IRegistry.endorse.selector, _troveManager), 0, true);
 
         console2.log("---------------------------------");
-        console2.log("Morpho Oracle: ", _morphoOracle);
-        console2.log("Price Oracle: ", _priceOracle);
+        console2.log("Price Oracle: ", PRICE_ORACLE);
         console2.log("Trove Manager: ", _troveManager);
         console2.log("Sorted Troves: ", _sortedTroves);
         console2.log("Dutch Desk: ", _dutchDesk);
